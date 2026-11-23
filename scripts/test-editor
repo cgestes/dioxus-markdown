@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Run native Live editing workflows and write a self-contained visual report."""
+import argparse
+import base64
+import html
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+from datetime import datetime
+from macos_window import run_window
+
+ROOT = Path(__file__).resolve().parents[1]
+OUTPUT = ROOT / "target" / "editor-tests"
+
+def generate_report(run, log, passed, results):
+    failed_cards, passed_cards = [], []
+    checkpoints = [(path, json.loads(path.read_text())) for path in sorted(run.glob("*/*.json"))]
+    for path, item in checkpoints:
+        image = path.with_suffix(".png")
+        state = item["state"]
+        actions = "\n".join(f"{n}. {s}" for n, s in enumerate(item["actions"], 1))
+        heading = html.escape(item["case"] + " / " + item["checkpoint"])
+        preview = "<p>Window screenshot unavailable.</p>"
+        if image.is_file():
+            png = base64.b64encode(image.read_bytes()).decode("ascii")
+            preview = f'<img loading="lazy" alt="Native editor at {heading}" src="data:image/png;base64,{png}">'
+        focus = html.escape(str(state["focused"] or "No focus"))
+        offsets = html.escape(str(state["markdown_bytes"]))
+        error = f'<pre class="error">{html.escape(item["error"])}</pre>' if item["error"] else ""
+        before = ""
+        if "before_markdown" in item:
+            before = "<h4>Before the key</h4><pre>" + html.escape(item["before_markdown"]) + "</pre>"
+        cards = failed_cards if item["error"] else passed_cards
+        cards.append(f'''<article><h3>{heading}</h3>
+<p class="field">{focus} · Markdown bytes {offsets} · {state["scale"]:g}×</p>{error}
+{preview}
+<details><summary>Inputs and Markdown</summary><pre>{html.escape(actions)}</pre>
+{before}<h4>Observed Markdown</h4><pre>{html.escape(item["markdown"])}</pre></details></article>''')
+    outcome = "Passed" if passed else "Failed"
+    outcomes = "".join(f'<li><span>{html.escape(driver)}</span><strong class="{"ok" if result == "Passed" else "issue"}">{html.escape(result)}</strong></li>'
+                       for driver, result in results)
+    theme = (ROOT / "assets/theme.css").read_text()
+    report_css = (ROOT / "scripts/report.css").read_text()
+    fonts = []
+    for family, slug, weight in (("Instrument Serif", "instrument-serif", 400), ("DM Sans", "dm-sans", 400), ("DM Sans", "dm-sans", 600)):
+        data = (ROOT / "assets/fonts" / f"{slug}-latin-{weight}-normal.woff2").read_bytes()
+        encoded = base64.b64encode(data).decode("ascii")
+        fonts.append(f'@font-face{{font-family:"{family}";font-weight:{weight};src:url(data:font/woff2;base64,{encoded}) format("woff2")}}')
+    notices = "\n".join((ROOT / "assets/fonts" / f"{slug}-LICENSE.txt").read_text()
+                        for slug in ("dm-sans", "instrument-serif"))
+    failures = '<section><h2>Failed checks</h2>' + "".join(failed_cards) + '</section>' if failed_cards else ""
+    passed_section = (f'<details class="group"><summary>Passed checks <span>{len(passed_cards)}</span></summary>'
+                      + "".join(passed_cards) + "</details>") if passed_cards else ""
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{outcome} · Margin native editor tests</title>
+<style>{"".join(fonts)}{theme}{report_css}</style></head><body>
+<header><div class="brand"><span class="brandmark" aria-hidden="true"><i></i><i></i><i></i></span>Margin</div></header>
+<main><h1>Native Live editing</h1><p class="count">{len(checkpoints)} checkpoints · {len(failed_cards)} mismatches</p>
+<ul aria-label="Suite results">{outcomes}</ul>{failures}{passed_section}
+<details class="group"><summary>Test output</summary><pre>{html.escape(log)}</pre></details></main>
+<script type="text/plain" id="font-licenses">{notices}</script></body></html>'''
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--inspect", action="store_true", help="open a fresh native Live editor with field and caret diagnostics")
+    modes.add_argument("--headless", action="store_true", help="run the portable Dioxus input and rendering suite")
+    modes.add_argument("--mac-window", action="store_true", help="run only the macOS native window keyboard checks")
+    parser.add_argument("--seed", type=int, help="repeat the typing workflow with this unsigned 64-bit seed")
+    args = parser.parse_args()
+    if args.seed is not None and not 0 <= args.seed < 2**64:
+        parser.error("seed must fit in an unsigned 64-bit integer")
+    if args.seed is not None and (args.mac_window or args.inspect):
+        parser.error("--seed selects a typing workflow in the headless suite")
+    if args.mac_window and sys.platform != "darwin":
+        parser.error("--mac-window needs macOS")
+    os.chdir(ROOT)
+    env = dict(os.environ)
+    env.setdefault("CARGO_PROFILE_DEV_DEBUG", "0")
+    env.setdefault("CARGO_PROFILE_TEST_DEBUG", "0")
+    if args.inspect:
+        env.setdefault("MARGIN_REPORT_DIR", str(OUTPUT / "reports"))
+        print(f"F9 saves an inspection report to {env['MARGIN_REPORT_DIR']}", flush=True)
+        os.execvpe("cargo", ["cargo", "run", "--locked", "--features", "native", "--bin", "margin", "--", "--test-editor"], env)
+    if args.seed is not None:
+        env["MARGIN_TEST_SEED"] = str(args.seed)
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    run = Path(tempfile.mkdtemp(prefix=datetime.now().strftime("%Y%m%d-%H%M%S-"), dir=OUTPUT))
+    env["MARGIN_TEST_ARTIFACTS"] = str(run)
+    command = ["cargo", "test", "--locked", "--features", "native", "--bin", "margin", "tests::live_workflows::", "--", "--nocapture"]
+    lines = []
+    results = []
+    status = 0
+    if not args.mac_window:
+        with subprocess.Popen(command, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as proc:
+            for line in proc.stdout:
+                print(line, end="", flush=True)
+                lines.append(line)
+            status = proc.wait()
+        results.append(("Dioxus input and rendering", "Passed" if not status else "Failed"))
+    if sys.platform == "darwin" and not args.headless:
+        try:
+            ok = run_window(ROOT, run, env)
+            results.append(("macOS window", "Passed" if ok else "Failed"))
+            if not ok:
+                status = 1
+                lines.append("The macOS window produced an unexpected edit. See the corresponding checkpoint.\n")
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            status = 1
+            results.append(("macOS window", f"Could not finish. {error}"))
+            lines.append(f"macOS window check could not finish: {error}\n")
+            print(lines[-1], end="", flush=True)
+    page = generate_report(run, "".join(lines), status == 0, results)
+    (run / "index.html").write_text(page, encoding="utf-8")
+    with tempfile.NamedTemporaryFile(dir=OUTPUT, mode="w", encoding="utf-8", delete=False) as temp:
+        temp.write(page)
+    os.replace(temp.name, OUTPUT / "index.html")
+    print(f"\nReport: {run / 'index.html'}")
+    return status
+
+if __name__ == "__main__":
+    sys.exit(main())

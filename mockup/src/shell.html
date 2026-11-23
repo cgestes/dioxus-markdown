@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Margin — Listening walk</title>
+<style><!--FONTS-->
+<!--CSS--></style>
+</head>
+<body>
+<svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><!--ICONS--></svg>
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Notebook navigation">
+    <div class="brand"><span class="brandmark" aria-hidden="true"><i></i><i></i><i></i></span>Margin</div>
+    <div class="sidebar-body">
+      <button class="search-button" id="search"><svg class="icon"><use href="#i-search"/></svg><span>Find a note</span><kbd data-key="P">⌘ P</kbd></button>
+      <section class="files">
+        <div class="side-heading"><h2>Notebook</h2><button class="icon-button" id="new-note" aria-label="New Markdown note" title="New Markdown note"><svg class="icon"><use href="#i-plus"/></svg></button></div>
+        <button id="folder" class="folder" aria-expanded="true" aria-controls="notes"><svg class="icon twist"><use href="#i-chevron-down"/></svg><svg class="icon"><use href="#i-folder-open"/></svg>Fieldwork</button>
+        <nav id="notes" aria-label="Notes"></nav>
+      </section>
+      <section class="outline-group">
+        <div class="side-heading"><h2>On this page</h2></div>
+        <nav id="outline" aria-label="Document outline"></nav>
+      </section>
+    </div>
+    <div class="sidebar-foot"><svg class="icon"><use href="#i-hard-drive"/></svg><div><strong>Local notebook</strong><span id="storage">Opening storage…</span></div></div>
+  </aside>
+  <button id="scrim" class="scrim" aria-label="Close note navigation" hidden></button>
+  <div class="workbench">
+    <header class="topbar">
+      <button id="nav-toggle" class="icon-button" aria-label="Toggle notebook navigation" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#i-panel-left"/></svg></button>
+      <div class="crumb"><svg class="icon"><use href="#i-book-open"/></svg><span class="crumb-folder">Fieldwork</span><i>/</i><b id="file-name">Listening walk.md</b></div>
+      <div class="peer-wrap">
+        <button class="collaborate" id="collaborate" aria-expanded="false" aria-controls="peers"><svg class="icon"><use href="#i-users"/></svg><span>Collaborate</span><span class="peer-count" id="peer-count" hidden></span><svg class="icon down"><use href="#i-chevron-down"/></svg></button>
+        <div id="peers" class="popover" hidden>
+          <h2>In this note</h2><ul id="peer-list"></ul>
+          <p>Edit together in two tabs of this browser.</p>
+          <a id="open-peer" class="primary peer-link" target="_blank" rel="noopener">Open second editor<svg class="icon"><use href="#i-arrow-up-right"/></svg></a>
+        </div>
+      </div>
+    </header>
+    <main id="scroller" aria-label="Note">
+      <div class="sheet">
+        <div class="document-toolbar" role="toolbar" aria-label="Editor tools">
+          <div class="mode" role="group" aria-label="Markdown view">
+            <button id="live" aria-pressed="true"><svg class="icon"><use href="#i-square-pen"/></svg>Live edit</button>
+            <button id="split" aria-pressed="false"><svg class="icon"><use href="#i-panel-left"/></svg>Split</button>
+            <button id="source" aria-pressed="false"><svg class="icon"><use href="#i-code-xml"/></svg>Source</button>
+          </div>
+          <div class="edit-actions"><button id="insert-table" title="Insert Markdown table" aria-label="Insert Markdown table"><svg class="icon"><use href="#i-table-2"/></svg><span>Table</span></button><button id="ask" class="ask" title="Ask the inline agent about the selection or current line"><svg class="icon"><use href="#i-sparkles"/></svg>Ask inline <kbd data-key="J">⌘ J</kbd></button></div>
+        </div>
+        <div id="panes">
+          <div class="source-pane"><div class="pane-label" id="source-label" hidden>Markdown</div><div id="editor" aria-label="Markdown document"></div></div>
+          <section id="reading" aria-label="Formatted preview" hidden><div class="pane-label">Preview</div><div id="reading-page"></div></section>
+        </div>
+      </div>
+    </main>
+    <footer class="statusbar">
+      <span class="status-format"><i></i>Markdown</span><span class="footer-divider"></span><span id="word-count"></span>
+      <span id="marker-hint" class="marker-hint" hidden><span id="marker-help"></span><button id="marker-action" type="button"></button><kbd id="marker-shortcut"></kbd></span>
+      <span class="footer-right" id="position"></span><span class="footer-divider"></span>
+      <button id="download" title="Download this note as a Markdown file"><svg class="icon"><use href="#i-arrow-down-to-line"/></svg>Export .md</button>
+    </footer>
+  </div>
+</div>
+<dialog id="note-dialog">
+  <form id="note-form">
+    <div class="dialog-heading"><h2 id="dialog-title">Find a note</h2><button class="icon-button" id="dialog-close" type="button" aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button></div>
+    <input id="note-query" autocomplete="off" spellcheck="false" aria-labelledby="dialog-title">
+    <div id="results"></div><p id="dialog-error" class="dialog-error" role="status" hidden></p>
+    <button id="create" class="primary" type="submit" hidden>Create note</button>
+  </form>
+</dialog>
+<div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+<script type="text/plain" id="distribution-notices"><!--LICENSES--></script>
+<script><!--BUNDLE--></script>
+</body>
+</html>

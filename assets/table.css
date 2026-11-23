@@ -1,0 +1,246 @@
+/* Both live editors use these styles. Renderer-specific rules only lay out the cells and their text inputs. */
+.ledger {
+  --ledger-header: #294f45;
+  --ledger-header-ink: #f6f8ef;
+  --ledger-rule: #d6ddd1;
+  --ledger-foot-rule: #91a696;
+  --ledger-ring: #337760;
+  --ledger-selection: #dcece0;
+  --ledger-current: #c3decd;
+  --ledger-pad: 15px;
+  --ledger-row: 45px;
+  --ledger-head: 37px;
+  --ledger-rail: 24px;
+  --ledger-foot: 36px;
+  position: relative;
+  padding-right: var(--ledger-rail);
+  margin-right: calc(0px - var(--ledger-rail));
+  padding-bottom: var(--ledger-foot);
+}
+.ledger .ledger-cell {
+  --cell-paper: var(--page);
+  --cell-rule: var(--ledger-rule);
+  --cell-guide: transparent;
+  --cell-ring: var(--ledger-ring);
+  color: var(--ink);
+  background: var(--cell-paper);
+  border: 0;
+  border-bottom: 1px solid var(--cell-rule);
+  border-right: 1px solid var(--cell-guide);
+  font: 400 14px/20px var(--sans);
+}
+.ledger .ledger-cell:last-child { border-right: 0; }
+.ledger .ledger-last .ledger-cell { --cell-rule: var(--ledger-foot-rule); }
+.ledger .ledger-head {
+  --cell-paper: var(--ledger-header);
+  --cell-rule: var(--ledger-header);
+  --cell-guide: #48685b;
+  --cell-ring: #c0e3c6;
+  color: var(--ledger-header-ink);
+  font: 600 13px/18px var(--sans);
+}
+.ledger .ledger-label { font: 400 19px/24px var(--display); }
+.ledger .ledger-number { font: 400 13px/20px var(--mono); font-variant-numeric: tabular-nums; }
+.ledger:hover .ledger-data, .ledger:focus-within .ledger-data, .ledger.engaged .ledger-data { --cell-guide: #e2e7df; }
+.ledger .ledger-data.is-editing { --cell-paper: #f1f7ef; }
+.ledger .ledger-head.is-editing { --cell-paper: #355e50; }
+.ledger .ledger-cell.is-editing { outline: 2px solid var(--cell-ring); outline-offset: -2px; }
+.ledger .ledger-cell.range-cell {
+  --cell-paper: var(--ledger-selection);
+  --cell-rule: #c1d8c6;
+  --cell-guide: #c1d8c6;
+  color: var(--ink);
+}
+.ledger .ledger-cell.range-cell.is-editing { --cell-paper: var(--ledger-current); outline: 0; }
+.ledger .ledger-tools {
+  position: absolute;
+  left: 0;
+  right: var(--ledger-rail);
+  bottom: 0;
+  height: var(--ledger-foot);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 0;
+  pointer-events: none;
+}
+.ledger .ledger-tools button { pointer-events: auto; }
+.ledger .ledger-bar-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.ledger .ledger-bar-scope {
+  color: var(--muted);
+  font: 600 10.5px/16px var(--mono);
+  padding: 0 5px 0 2px;
+  white-space: nowrap;
+}
+.ledger .ledger-bar-tag {
+  color: var(--faint);
+  font: 600 10px/14px var(--sans);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 0 2px;
+}
+.ledger .ledger-bar-sep {
+  width: 1px;
+  height: 13px;
+  background: var(--line);
+  margin: 0 3px;
+  flex: 0 0 auto;
+}
+.ledger .ledger-mini {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  font: 600 11px/1 var(--sans);
+}
+.ledger .ledger-mini:hover, .ledger .ledger-mini:focus-visible { color: var(--accent-deep); background: var(--pale); }
+.ledger .ledger-mini.selected { color: var(--accent-deep); background: var(--pale); }
+.ledger .ledger-mini.remove:hover, .ledger .ledger-mini.remove:focus-visible { color: var(--alert); background: var(--alert-wash); }
+.ledger .ledger-chip {
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ink);
+  background: var(--wash);
+  font: 500 11px/1 var(--sans);
+}
+.ledger .ledger-chip:hover { color: var(--accent-deep); background: var(--pale); }
+.ledger .ledger-chip.remove:hover { color: var(--alert); background: var(--alert-wash); }
+.ledger .ledger-add-col {
+  width: 22px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+}
+.ledger .ledger-add-col:hover, .ledger .ledger-add-col:focus-visible {
+  color: var(--accent-deep);
+  background: var(--wash);
+}
+.ledger .ledger-add-row {
+  margin-left: auto;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  font: 500 11px/16px var(--sans);
+}
+.ledger .ledger-add-row:hover, .ledger .ledger-add-row:focus-visible {
+  color: var(--accent-deep);
+  background: var(--wash);
+}
+.ledger .ledger-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: 400 12px/16px var(--sans);
+}
+.ledger .ledger-actions:hover, .ledger .ledger-actions[aria-expanded="true"] {
+  color: var(--accent-deep);
+  background: var(--pale);
+}
+.ledger .cell-count { color: var(--accent-deep); font: 400 11px/16px var(--mono); }
+.ledger .ledger-grow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  color: var(--accent-deep);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--wash);
+  font: 600 11px/16px var(--sans);
+}
+.ledger .ledger-grow:hover, .ledger .ledger-grow:focus-visible { background: var(--pale); border-color: var(--ledger-ring); }
+.ledger .ledger-grow-row { width: 56px; height: 26px; }
+.ledger .ledger-grow-column { width: 26px; height: 36px; }
+.ledger .ledger-menu {
+  position: absolute;
+  z-index: 6;
+  left: 7px;
+  top: 100%;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 4px 18px #18362a22;
+}
+.ledger .ledger-scope {
+  display: block;
+  padding: 5px 9px 7px;
+  margin-bottom: 3px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font: 400 11px/15px var(--mono);
+}
+.ledger .ledger-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 29px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--ink);
+  background: transparent;
+  white-space: nowrap;
+  text-align: left;
+  font: 400 12px/17px var(--sans);
+}
+.ledger .ledger-menu button:hover, .ledger .ledger-menu button:focus-visible { color: var(--accent-deep); background: var(--wash); }
+.ledger .ledger-menu .remove:hover, .ledger .ledger-menu .remove:focus-visible { color: var(--alert); background: var(--alert-wash); }
+.ledger .ledger-menu button:disabled { opacity: .38; background: transparent; cursor: default; }
+.ledger .ledger-menu-cols { display: flex; gap: 6px; }
+.ledger .ledger-menu-group { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ledger .ledger-menu-group + .ledger-menu-group { border-left: 1px solid var(--line); padding-left: 6px; }
+.ledger .ledger-menu-title { padding: 3px 9px 2px; color: var(--faint); font: 600 10px/14px var(--sans); text-transform: uppercase; letter-spacing: .06em; }
+.ledger .ledger-align-row { display: flex; gap: 3px; padding: 2px 6px 4px; }
+.ledger .ledger-align-row button { flex: 1; justify-content: center; min-height: 24px; padding: 2px 4px; font-size: 11px; border: 1px solid var(--line); border-radius: 5px; }
+.ledger .ledger-align-row button.selected { background: var(--pale); border-color: var(--accent); color: var(--accent-deep); font-weight: 600; }
+@media (min-width: 700px) {
+  .ledger .ledger-menu.scope-actions {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    width: max-content;
+    max-width: calc(100% - var(--ledger-rail) - 12px);
+    padding: 4px;
+  }
+  .ledger .scope-actions .ledger-scope {
+    padding: 3px 10px 3px 7px;
+    margin: 0 3px 0 0;
+    border: 0;
+    border-right: 1px solid var(--line);
+  }
+}
+@media (max-width: 600px) {
+  .ledger { --ledger-pad: 9px; --ledger-row: 43px; --ledger-rail: 30px; }
+  .ledger .ledger-label { font-size: 19px; }
+}
+@media (max-width: 360px) {
+  .ledger .ledger-actions { width: 30px; gap: 0; font-size: 0; }
+  .ledger .ledger-actions .tool-caption { display: none; }
+}

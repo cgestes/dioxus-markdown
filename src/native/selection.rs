@@ -1,0 +1,202 @@
+//! The focused input projects part of the Markdown selection. Its anchor and
+//! moving end may be on opposite sides of a widget or hidden syntax.
+use super::{
+    ByteSelection, Field, Sections, Writing, document::BodyStart, report, selection,
+};
+use dioxus_native::prelude::*;
+
+impl Writing {
+    pub fn absolute_selection(self) -> Option<ByteSelection> {
+        if let Some(span) = *self.span.peek() {
+            return Some(span);
+        }
+        let field = (*self.active.peek())?;
+        let proj = self.projection(field);
+        let [a, b] = selection(self.root, field)?;
+        Some([proj.display_to_source(a), proj.display_to_source(b)])
+    }
+
+    pub fn open(mut self, field: Field, absolute: ByteSelection) {
+        self.quiet_cell.set(None);
+        self.keep_cells_in(field);
+        self.parked_selection.set(None);
+        let md = self.contents.read();
+        if matches!(field, Field::Body(_)) {
+            let parts = Sections::read(&md);
+            let origin = if parts.origin == BodyStart::AfterBlankLine && absolute[1] < parts.body {
+                BodyStart::AfterHeading
+            } else {
+                parts.origin
+            };
+            self.body.set(Some(origin));
+        } else {
+            self.body.set(None);
+        }
+        self.literal.set(None);
+        self.active.set(Some(field));
+        self.cursor_source.set(Some(absolute));
+        let range = self.range(field, &md);
+        let cross = absolute[0] != absolute[1]
+            && absolute
+                .iter()
+                .any(|i| !((range.start..=range.end).contains(i)));
+        self.span.set(cross.then_some(absolute));
+        let selected = if cross { [absolute[1]; 2] } else { absolute };
+        drop(md);
+        let proj = self.projection(field);
+        let local = selected.map(|i| proj.source_to_display(i));
+        self.focus.set(Some((field, local)));
+        self.note.peek().remember_selection(absolute);
+        self.track(absolute);
+    }
+
+    pub(super) fn history(mut self, source: bool, redo: bool) {
+        self.clear_cells();
+        self.table_menu.set(None);
+        let selected = if source {
+            super::selection(self.root, Field::Source)
+        } else {
+            self.absolute_selection()
+        };
+        if let Some(s) = selected {
+            self.note.peek().remember_selection(s);
+        }
+        let result = if redo {
+            self.note.write().redo()
+        } else {
+            self.note.write().undo()
+        };
+        if matches!(result, Ok(true)) {
+            let md = self.contents.read().clone();
+            let range = self
+                .note
+                .peek()
+                .take_history_selection()
+                .or(selected)
+                .unwrap_or([0; 2])
+                .map(|p| md.floor_char_boundary(p.min(md.len())));
+            if source {
+                self.focus.set(Some((Field::Source, range)));
+            } else {
+                self.body.set(None);
+                self.draft_table.set(None);
+                self.open(self.field_at(range[1]), range);
+            }
+        }
+        report(result, self.message);
+    }
+}
+
+/// An auto-sized prose field can be taller than the window. Scroll to the
+/// shaped caret inside it so the next line stays visible at every zoom level.
+pub(super) fn scroll_caret(doc: &mut blitz_dom::BaseDocument, id: dioxus_native::NodeId) {
+    if let Some(node) = doc.get_node_mut(id) {
+        let width = node.final_layout().content_box_width();
+        let height = node.final_layout().content_box_height();
+        if let Some(input) = node
+            .element_data_mut()
+            .and_then(|e| e.text_input_data_mut())
+        {
+            input.clamp_scroll_offset(width, height);
+        }
+    }
+    let Some(node) = doc.get_node(id) else { return };
+    let Some(input) = node.element_data().and_then(|e| e.text_input_data()) else {
+        return;
+    };
+    let Some(layout) = input.editor.try_layout() else {
+        return;
+    };
+    let Some(rect) = doc.get_client_bounding_rect(id) else {
+        return;
+    };
+    let l = node.final_layout();
+    let scale = f64::from(layout.scale());
+    let origin = rect.y
+        + f64::from(l.border.top + l.padding.top)
+        + node.text_input_v_centering_offset(scale)
+        - if input.is_multiline {
+            f64::from(input.scroll_offset)
+        } else {
+            0.0
+        };
+    let caret = input.editor.raw_selection().focus().geometry(layout, 0.0);
+    let top = origin + caret.y0 / scale;
+    let bottom = origin + caret.y1 / scale;
+    let height = f64::from(doc.viewport().logical_size().1);
+    let margin = (height * 0.14).min(52.0);
+    let dy = (top - margin).min(0.0) + (bottom - (height - margin)).max(0.0);
+    if dy != 0.0
+        && let Some(root) = doc.try_root_element().map(|n| n.id)
+    {
+        doc.scroll_by(root, 0.0, dy, blitz_dom::ScrollBehavior::Instant);
+    }
+}
+
+// This is only painted when the selection spans native fields. Parley supplies
+// the per-line, bidi-aware rectangles from exactly the layout used for typing.
+#[component]
+pub(super) fn SelectionInk(writing: Writing, field: Field) -> Element {
+    let Some([anchor, head]) = (writing.span)() else {
+        return rsx! {};
+    };
+    let md = writing.contents.read();
+    let bounds = writing.range(field, &md);
+    let start = anchor.min(head).max(bounds.start);
+    let end = anchor.max(head).min(bounds.end);
+    if start > end || start == end && !bounds.is_empty() {
+        return rsx! {};
+    }
+    let root = writing.root.read();
+    let Some(doc) = root.as_ref().map(|h| h.doc()) else {
+        return rsx! {};
+    };
+    let Some(node) = doc
+        .get_element_by_id(&field.id())
+        .and_then(|id| doc.get_node(id))
+    else {
+        return rsx! {};
+    };
+    let Some(input) = node.element_data().and_then(|e| e.text_input_data()) else {
+        return rsx! {};
+    };
+    let Some(layout) = input.editor.try_layout() else {
+        return rsx! {};
+    };
+    let proj = writing.projection(field);
+    let cursor = |p| {
+        parley::Cursor::from_byte_index(
+            layout,
+            proj.source_to_display(p),
+            parley::Affinity::Downstream,
+        )
+    };
+    let selected = parley::Selection::new(cursor(start), cursor(end));
+    let l = node.final_layout();
+    let scale = f64::from(layout.scale());
+    let x = f64::from(
+        l.padding.left + l.border.left
+            - if input.is_multiline {
+                0.0
+            } else {
+                input.scroll_offset
+            },
+    );
+    let y = f64::from(
+        l.padding.top + l.border.top
+            - if input.is_multiline {
+                input.scroll_offset
+            } else {
+                0.0
+            },
+    ) + node.text_input_v_centering_offset(scale);
+    let rects = if start == end {
+        vec![(cursor(start).geometry(layout, 3.0), 0)]
+    } else {
+        selected.geometry(layout)
+    };
+    rsx! { for (rect,_) in rects {
+        span { class: "selection-ink", aria_hidden: "true",
+            style: format!("left:{}px; top:{}px; width:{}px; height:{}px;",x+rect.x0/scale,y+rect.y0/scale,(rect.x1-rect.x0)/scale,(rect.y1-rect.y0)/scale) }
+    } }
+}

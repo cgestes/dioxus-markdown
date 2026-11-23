@@ -1,0 +1,56 @@
+/* The desktop window and the standalone notebook use the same paper and inks. */
+:root {
+  --page: #fcfbf8;
+  --rail: #f1f3ee;
+  --surface: #ffffff;
+  --ink: #222f2b;
+  --muted: #56655e;
+  --faint: #66756c;
+  --line: #d9e0d8;
+  --line-strong: #bccbc1;
+  --accent: #246253;
+  --accent-deep: #194b40;
+  --pale: #e1eee6;
+  --wash: #f0f6f1;
+  --toolbar: #213d34;
+  --toolbar-edge: #355348;
+  --toolbar-ink: #eff5ed;
+  --toolbar-hover: #476657;
+  --selected-text: rgba(105, 172, 145, .32);
+  --alert: #944a34;
+  --alert-wash: #f9eee8;
+  --sans: "DM Sans", system-ui, sans-serif;
+  --display: "Instrument Serif", Georgia, serif;
+  --mono: "IBM Plex Mono", monospace;
+  --body: "STIX Two Text", Georgia, serif;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font: 400 31px/1 var(--display);
+  white-space: nowrap;
+}
+.brandmark {
+  display: block;
+  position: relative;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-deep);
+}
+.brandmark i {
+  position: absolute;
+  top: 6px;
+  left: 14px;
+  width: 8px;
+  height: 14px;
+  border-radius: 1px 2px 2px 1px;
+  background: #f7f6de;
+  transform: skewY(-13deg);
+}
+.brandmark i:first-child { top: 9px; left: 6px; width: 2px; background: #a4cabb; }
+.brandmark i:nth-child(2) { top: 7.5px; left: 10px; width: 2px; background: #d1e3cf; }
