@@ -66,8 +66,36 @@ pub fn split_blocks(md: &str) -> Vec<Range<usize>> {
             continue;
         }
 
-        // 4. Paragraph / list / blockquote: collect consecutive non-blank lines
-        // until a blank line, table, heading, fence, or rule.
+        // 4a. Top-level list item (with any indented child/continuation lines attached).
+        if is_top_level_list_item(line_text) {
+            let block_start = pos;
+            let mut block_end = trim_eol(md, line_end);
+            let mut cursor = line_end;
+            while cursor < len {
+                if tables.iter().any(|t| t.range.start == cursor) {
+                    break;
+                }
+                let next_end = cursor + md[cursor..].find('\n').map_or(len - cursor, |n| n + 1);
+                let next_text = md[cursor..next_end].trim_end_matches(['\r', '\n']);
+                if next_text.trim().is_empty()
+                    || !next_text.starts_with([' ', '\t'])
+                    || is_atx_heading(next_text)
+                    || is_rule(next_text)
+                    || next_text.trim_start().starts_with("```")
+                    || next_text.trim_start().starts_with("~~~")
+                {
+                    break;
+                }
+                block_end = trim_eol(md, next_end);
+                cursor = next_end;
+            }
+            result.push(block_start..block_end);
+            pos = cursor;
+            continue;
+        }
+
+        // 4b. Paragraph / blockquote: collect consecutive non-blank lines
+        // until a blank line, table, heading, fence, rule, or top-level list item.
         let block_start = pos;
         let mut block_end = trim_eol(md, line_end);
         let mut cursor = line_end;
@@ -80,6 +108,7 @@ pub fn split_blocks(md: &str) -> Vec<Range<usize>> {
             if next_text.trim().is_empty()
                 || is_atx_heading(next_text)
                 || is_rule(next_text)
+                || is_top_level_list_item(next_text)
                 || next_text.trim_start().starts_with("```")
                 || next_text.trim_start().starts_with("~~~")
             {
@@ -125,6 +154,23 @@ fn is_rule(line: &str) -> bool {
     matches!(ch, b'-' | b'*' | b'_')
         && t.bytes().all(|b| b == ch || b == b' ' || b == b'\t')
         && t.bytes().filter(|b| *b == ch).count() >= 3
+}
+
+fn is_top_level_list_item(line: &str) -> bool {
+    if line.is_empty() || line.starts_with([' ', '\t']) || is_rule(line) {
+        return false;
+    }
+    if line.starts_with("- ") || line.starts_with("* ") || line.starts_with("+ ") {
+        return true;
+    }
+    let digits = line.bytes().take_while(u8::is_ascii_digit).count();
+    digits > 0
+        && digits <= 9
+        && (line[digits..].starts_with(". ") || line[digits..].starts_with(") "))
+}
+
+fn first_line(block: &str) -> &str {
+    block.split('\n').next().unwrap_or("").trim_end_matches('\r')
 }
 
 pub fn block_index_at(blocks: &[Range<usize>], pos: usize) -> Option<usize> {
@@ -177,16 +223,6 @@ pub fn move_block_to(
     let eol = table::eol(md);
     let blank = format!("{eol}{eol}");
     let mut texts: Vec<&str> = (lo..=hi).map(|i| &md[blocks[i].clone()]).collect();
-    let seps: Vec<&str> = (lo..hi)
-        .map(|i| {
-            let s = &md[blocks[i].end..blocks[i + 1].start];
-            if s.matches('\n').count() >= 2 {
-                s
-            } else {
-                blank.as_str()
-            }
-        })
-        .collect();
     let moved = texts.remove(from - lo);
     let dest = if to_slot < from { 0 } else { hi - lo };
     texts.insert(dest, moved);
@@ -198,8 +234,13 @@ pub fn move_block_to(
             caret = blocks[lo].start + replacement.len();
         }
         replacement.push_str(text);
-        if let Some(sep) = seps.get(i) {
-            replacement.push_str(sep);
+        if let Some(next) = texts.get(i + 1) {
+            if is_top_level_list_item(first_line(text)) && is_top_level_list_item(first_line(next))
+            {
+                replacement.push_str(eol);
+            } else {
+                replacement.push_str(&blank);
+            }
         }
     }
     Some((
@@ -208,7 +249,7 @@ pub fn move_block_to(
     ))
 }
 
-/// Duplicate block `idx` immediately below itself separated by a blank line.
+/// Duplicate block `idx` immediately below itself.
 pub fn duplicate_block(
     md: &str,
     blocks: &[Range<usize>],
@@ -217,8 +258,13 @@ pub fn duplicate_block(
     let r = blocks.get(idx)?;
     let eol = table::eol(md);
     let text = &md[r.clone()];
-    let insert = format!("{eol}{eol}{text}");
-    let caret = r.end + eol.len() * 2;
+    let sep = if is_top_level_list_item(first_line(text)) {
+        eol.to_owned()
+    } else {
+        format!("{eol}{eol}")
+    };
+    let insert = format!("{sep}{text}");
+    let caret = r.end + sep.len();
     Some((vec![Splice::new(r.end..r.end, insert)], caret))
 }
 

@@ -22,6 +22,15 @@ pub(super) struct BlockDrag {
     pub indicator_y: Option<f64>,
 }
 
+pub(super) type TrackedKey = (
+    Field,
+    ByteSelection,
+    u64,
+    super::projection::EditMode,
+    Option<(usize, usize)>,
+    Option<usize>,
+);
+
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct Writing {
     pub note: Signal<Note>,
@@ -29,9 +38,11 @@ pub(super) struct Writing {
     pub focus: FocusRequest,
     pub message: Signal<String>,
     pub contents: Memo<String>,
+    pub doc_rev: Memo<u64>,
     pub markers: Memo<Vec<Marker>>,
     pub tables: Memo<Vec<Table>>,
     pub blocks: Memo<Vec<Block>>,
+    pub logical_blocks: Memo<Vec<Range<usize>>>,
     pub goal_x: Signal<Option<f64>>,
     // A selection that extends beyond the focused input, in Markdown byte offsets.
     pub span: Signal<Option<ByteSelection>>,
@@ -42,15 +53,16 @@ pub(super) struct Writing {
     pub selected_text: Signal<Option<ByteSelection>>,
     pub format_position: Signal<Option<[i32; 2]>>,
     pub pressed_box: Signal<Option<usize>>,
-    pub hovered_box: Signal<Option<usize>>,
     pub mouse_box: Signal<Option<usize>>,
     pub edit_mode: Signal<super::projection::EditMode>,
     pub cursor_source: Signal<Option<ByteSelection>>,
     pub drag: Signal<Option<super::pointer::Drag>>,
     pub parsed: Memo<super::projection::ParsedMarkdown>,
     pub dom_dirty: Signal<bool>,
+    pub last_tracked: Signal<Option<TrackedKey>>,
     pub empty_line: Signal<Option<(Field, f32, f32)>>,
     pub slash_menu: Signal<Option<super::slash::SlashState>>,
+    pub slash_selected: Signal<usize>,
     pub block_menu: Signal<Option<usize>>,
     pub block_drag: Signal<Option<BlockDrag>>,
 
@@ -68,6 +80,10 @@ pub(super) struct Writing {
     pub marker: Signal<Option<usize>>,
     pub boxes: Signal<Vec<MarkerBox>>,
     pub literal: Signal<Option<(usize, usize)>>,
+    pub comments: Signal<Vec<super::comments::CommentThread>>,
+    pub comments_open: Signal<bool>,
+    pub active_comment: Signal<Option<usize>>,
+    pub draft_comment: Signal<Option<super::comments::DraftComment>>,
 }
 
 impl Writing {
@@ -340,12 +356,14 @@ impl Writing {
         self.selected_text.set(None);
         self.empty_line.set(None);
         self.slash_menu.set(None);
+        self.slash_selected.set(0);
         self.block_menu.set(None);
         self.block_drag.set(None);
+        self.draft_comment.set(None);
         self.caret.set(None);
         self.table_menu.set(None);
-        self.hovered_box.set(None);
         self.mouse_box.set(None);
+        *self.last_tracked.write_unchecked() = None;
         self.cursor_source.set(None);
         self.span.set(None);
         self.drag.set(None);
@@ -404,9 +422,32 @@ impl Writing {
         }
         self.refresh_empty_line();
         self.refresh_slash();
+        self.sync_active_comment_at(selected[1]);
     }
 
     pub fn track_field(mut self, field: Field) {
+        let rev = *self.doc_rev.read();
+        if self.focus.peek().is_none()
+            && *self.active.peek() == Some(field)
+            && self.draft_table.peek().is_none()
+            && self.drag.peek().is_none()
+            && let Some(raw_sel) = selection(self.root, field)
+        {
+            let key = (
+                field,
+                raw_sel,
+                rev,
+                *self.edit_mode.peek(),
+                *self.literal.peek(),
+                *self.mouse_box.peek(),
+            );
+            if *self.last_tracked.peek() == Some(key) {
+                return;
+            }
+            *self.last_tracked.write_unchecked() = Some(key);
+        } else {
+            *self.last_tracked.write_unchecked() = None;
+        }
         self.keep_cells_in(field);
         if *self.active.peek() != Some(field) {
             self.literal.set(None);
@@ -868,19 +909,32 @@ impl Writing {
     }
 
     pub fn key(mut self, field: Field, event: KeyboardEvent) {
+        if !event.is_composing() && self.slash_key(&event) {
+            return;
+        }
+        // Only clear `mouse_box` on navigation/editing keys that reveal or inspect the marker;
+        // clearing it on printable character KeyDown would shift `projection_peek` ahead of the
+        // native textarea buffer before `oninput` maps the typed character.
         if self.mouse_box.peek().is_some()
-            && !matches!(
+            && matches!(
                 event.key(),
-                Key::Named(NamedKey::Shift | NamedKey::Control | NamedKey::Meta | NamedKey::Alt)
+                Key::Named(
+                    NamedKey::ArrowLeft
+                        | NamedKey::ArrowRight
+                        | NamedKey::ArrowUp
+                        | NamedKey::ArrowDown
+                        | NamedKey::Home
+                        | NamedKey::End
+                        | NamedKey::Backspace
+                        | NamedKey::Delete
+                        | NamedKey::F2
+                )
             )
         {
             self.mouse_box.set(None);
         }
         self.track_field(field);
         if event.is_composing() {
-            return;
-        }
-        if self.slash_key(&event) {
             return;
         }
         if event.key() == Key::Named(NamedKey::Escape) && self.block_menu.peek().is_some() {

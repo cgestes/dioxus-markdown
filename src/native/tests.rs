@@ -693,11 +693,15 @@ fn editing_and_growing_a_native_grid_keeps_focus_and_round_trips_the_source() {
     assert_focus(&doc, "cell-0-1-1", ["été|🌿".len(); 2]);
     press(&mut doc, Key::Named(NamedKey::Tab), false);
     assert_focus(&doc, "cell-0-2-0", [0, 0]);
-    click(&mut doc, "add-column-0");
+    click(&mut doc, "cell-0-0-1");
+    click(&mut doc, "col-menu-btn-0-1");
+    click(&mut doc, "col-menu-insert-right-0-1");
     assert_focus(&doc, "cell-0-0-2", [0, 8]);
     click(&mut doc, "undo");
     assert!(doc.inner.borrow().get_element_by_id("cell-0-0-2").is_none());
-    click(&mut doc, "add-row-0");
+    click(&mut doc, "cell-0-2-0");
+    click(&mut doc, "row-menu-btn-0-2");
+    click(&mut doc, "row-menu-insert-below-0-2");
     assert_focus(&doc, "cell-0-3-0", [0; 2]);
     press(&mut doc, Key::Named(NamedKey::Escape), false);
     assert_focus(&doc, "note-body-1", [0; 2]);
@@ -962,25 +966,23 @@ fn grid_growth_controls_occupy_the_right_and_bottom_edges_only_on_engagement() {
     let mut doc = editor();
     let md = "# Note\n\n| A | B |\n| --- | --- |\n| one | two |\n\nBody";
     open_markdown(&mut doc, md, 2);
-    let visible = |d: &DioxusDocument, name: &str| {
-        let dom = d.inner.borrow();
-        let node = dom.get_node(id(d, name)).unwrap();
-        node.primary_styles().unwrap().clone_opacity() > 0.9
-    };
     click(&mut doc, "note-title");
-    assert!(!visible(&doc, "add-column-0"));
-    assert!(!visible(&doc, "add-row-0"));
+    // No floating toolbar or edge + buttons; column/row menus appear only when engaged.
+    assert!(doc.inner.borrow().get_element_by_id("add-column-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("add-row-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("move-col-left-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_none());
     let earlier = bounds(&doc, "note-body-1");
-    let table = bounds(&doc, "grid-scroll-0");
-    let column = bounds(&doc, "add-column-0");
-    let row = bounds(&doc, "add-row-0");
-    assert!(column[0] >= table[0] + table[2] - 1.0 && row[1] >= table[1] + table[3] - 1.0);
     press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
     press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
-    assert!(visible(&doc, "add-column-0") && visible(&doc, "add-row-0"));
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_some());
+    press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_some());
     assert_eq!(bounds(&doc, "note-body-1"), earlier);
     click(&mut doc, "note-title");
-    assert!(!visible(&doc, "add-column-0"));
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_none());
     assert_eq!(bounds(&doc, "note-body-1"), earlier);
 }
 
@@ -1601,10 +1603,15 @@ fn delete_selected_column_in_live_and_split_is_scoped_undoable_and_keeps_a_caret
         let remove = if split {
             format!("reading-delete-column-{start}")
         } else {
-            "delete-column-1".to_owned()
+            "col-menu-delete-1-1".to_owned()
         };
         assert!(doc.inner.borrow().get_element_by_id(&remove).is_none());
         click(&mut doc, &cell(1, 1));
+        if !split {
+            // Destructive delete lives in the column menu, not the floating bar.
+            assert!(doc.inner.borrow().get_element_by_id("delete-column-1").is_none());
+            click(&mut doc, "col-menu-btn-1-1");
+        }
         click(&mut doc, &remove);
         let expected = md
             .replace("| A | B | C |", "| A | C |")
@@ -1617,15 +1624,17 @@ fn delete_selected_column_in_live_and_split_is_scoped_undoable_and_keeps_a_caret
             assert_eq!(value(&doc, "markdown"), expected);
         } else {
             assert_focus(&doc, &cell(1, 1), [0, 1]);
+            click(&mut doc, "col-menu-btn-1-1");
         }
         click(&mut doc, &remove);
         if split {
             assert!(doc.inner.borrow().get_element_by_id(&remove).is_none());
         } else {
+            click(&mut doc, "col-menu-btn-1-0");
             assert_eq!(
                 doc.inner
                     .borrow()
-                    .get_node(id(&doc, &remove))
+                    .get_node(id(&doc, "col-menu-delete-1-0"))
                     .unwrap()
                     .attr("aria-disabled".into()),
                 Some("true")
@@ -1789,7 +1798,8 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     let mut doc = editor();
     let md = "# Grid\n\n| Stop | Take |\n| --- | --- |\n| Lock | 45 s |\n| Bridge | 30 s |\n\nTail";
     open_markdown(&mut doc, md, md.find("Lock").unwrap());
-    assert!(doc.inner.borrow().get_element_by_id("table-bar-0").is_some());
+    // Single-cell focus shows no useless "Cell xx" footer; only multi-cell ranges show table-bar-0.
+    assert!(doc.inner.borrow().get_element_by_id("table-bar-0").is_none());
     // Alt+Down moves row down directly from the keyboard!
     chord(&mut doc, Key::Named(NamedKey::ArrowDown), Modifiers::ALT);
     assert!(
@@ -1800,59 +1810,73 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     // Alt+Right moves column right directly from the keyboard!
     chord(&mut doc, Key::Named(NamedKey::ArrowRight), Modifiers::ALT);
     assert!(markdown(&doc).contains("| Take | Stop |"), "{}", markdown(&doc));
-    // Frameless flat inline controls on active column/row + per-header & per-row menus + quick deletes!
-    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_some());
+    // Only the hovered/active column & row show chevron menus (no floating toolbar or + buttons).
     assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-1").is_some());
-    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_none());
     assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-2").is_some());
-    // Active column flat inline buttons work in 1 click without opening a menu!
-    click(&mut doc, "move-col-left-0");
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("move-col-left-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("move-row-up-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("add-column-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("add-row-0").is_none());
+    // Column menu actions work cleanly!
+    click(&mut doc, "col-menu-btn-0-1");
+    click(&mut doc, "col-menu-move-left-0-1");
     assert!(markdown(&doc).contains("| Stop | Take |"));
-    click(&mut doc, "move-col-right-0");
+    click(&mut doc, "col-menu-btn-0-0");
+    click(&mut doc, "col-menu-move-right-0-0");
     assert!(markdown(&doc).contains("| Take | Stop |"));
-    click(&mut doc, "move-col-left-0");
+    click(&mut doc, "col-menu-btn-0-1");
+    click(&mut doc, "col-menu-move-left-0-1");
     assert!(markdown(&doc).contains("| Stop | Take |"));
+    // Alignment icons live inside the in-header chevron menu.
     click(&mut doc, "cell-0-1-1");
+    assert!(doc.inner.borrow().get_element_by_id("align-right-0").is_none());
+    click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-right-0");
     assert!(markdown(&doc).contains("| --- | ---: |"));
+    click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-center-0");
     assert!(markdown(&doc).contains("| --- | :---: |"));
+    click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-left-0");
     assert!(markdown(&doc).contains("| --- | :--- |"));
-    // Column popover menu works on any column (including insert right & delete).
     click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "col-menu-insert-right-0-1");
     assert!(markdown(&doc).contains("| Stop | Take | Column 3 |"));
     click(&mut doc, "col-menu-btn-0-2");
     click(&mut doc, "col-menu-delete-0-2");
     assert!(markdown(&doc).contains("| Stop | Take |"));
+    click(&mut doc, "cell-0-1-0");
     click(&mut doc, "col-menu-btn-0-0");
     click(&mut doc, "col-menu-insert-left-0-0");
     assert!(markdown(&doc).contains("| Column 3 | Stop | Take |"));
-    click(&mut doc, "delete-column-0");
+    assert!(doc.inner.borrow().get_element_by_id("delete-column-0").is_none());
+    click(&mut doc, "col-menu-btn-0-0");
+    click(&mut doc, "col-menu-delete-0-0");
     assert!(markdown(&doc).contains("| Stop | Take |"));
-    // Active row flat inline buttons + per-row menu + quick delete.
+    // Row chevron menu actions work cleanly!
     click(&mut doc, "cell-0-1-0");
-    click(&mut doc, "insert-row-above-0");
+    assert!(doc.inner.borrow().get_element_by_id("delete-row-0").is_none());
+    click(&mut doc, "row-menu-btn-0-1");
+    click(&mut doc, "row-menu-insert-above-0-1");
     assert!(markdown(&doc).contains("| --- | :--- |\n|  |  |\n| Bridge | 30 s |"));
     click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "row-menu-delete-0-1");
     assert!(!markdown(&doc).contains("|  |  |"));
-    click(&mut doc, "move-row-down-0");
+    click(&mut doc, "row-menu-btn-0-1");
+    click(&mut doc, "row-menu-move-down-0-1");
     assert!(markdown(&doc).contains("| Lock | 45 s |\n| Bridge | 30 s |"));
-    click(&mut doc, "move-row-up-0");
+    click(&mut doc, "row-menu-btn-0-2");
+    click(&mut doc, "row-menu-move-up-0-2");
     assert!(markdown(&doc).contains("| Bridge | 30 s |\n| Lock | 45 s |"));
     click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "row-menu-insert-below-0-1");
     assert!(markdown(&doc).contains("| Bridge | 30 s |\n|  |  |\n| Lock | 45 s |"));
-    // Quick delete button beside a non-active row deletes that row directly.
-    click(&mut doc, "row-delete-0-1");
+    click(&mut doc, "cell-0-1-0");
+    click(&mut doc, "row-menu-btn-0-1");
+    click(&mut doc, "row-menu-delete-0-1");
     assert!(!markdown(&doc).contains("| Bridge | 30 s |"));
-    // Unified flat + Add column and + Add row buttons work directly.
-    click(&mut doc, "add-column-0");
-    assert!(markdown(&doc).contains("| Stop | Take | Column 3 |"));
-    click(&mut doc, "add-row-0");
-    assert_eq!(table::tables(&markdown(&doc))[0].rows.len(), 4);
 }
 
 #[test]
@@ -1898,9 +1922,9 @@ fn rich_mode_has_no_global_toolbar_and_empty_line_shows_inline_icons() {
 
 #[test]
 fn live_mode_displays_bold_edits_striked_and_paints_visible_caret() {
-    // Both IBM Plex Mono and DM Sans must register weight 400 and 600 under their CSS family names.
+    // Both JetBrains Mono and Geist must register weight 400 and 600 under their CSS family names.
     let mut fonts = crate::typefaces::notebook_fonts();
-    for name in ["IBM Plex Mono", "DM Sans"] {
+    for name in ["JetBrains Mono", "Geist"] {
         let id = fonts
             .collection
             .family_id(name)
@@ -2055,6 +2079,50 @@ fn slash_menu_filters_and_inserts_blocks_and_block_handle_reorders_blocks() {
     click(&mut doc, "undo");
     click(&mut doc, "undo");
     assert_eq!(markdown(&doc), md2);
+
+    // Dragging a table and individual checklist items works even if the pointer drifts
+    // outside `#paper` into the left window margin (full-window drag tracking).
+    let md3 = "# Notes\n\n## Section\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n- [ ] First task\n- [x] Second task";
+    open_markdown(&mut doc, md3, md3.find("First").unwrap());
+    // Blocks: 0=# Notes, 1=## Section, 2=table, 3=- [ ] First task, 4=- [x] Second task.
+    assert!(doc.inner.borrow().get_element_by_id("block-handle-2").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("block-handle-3").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("block-handle-4").is_some());
+    // Drag second checklist item (4) above first checklist item (3), drifting to x = 4.0 (left margin).
+    let h4 = bounds(&doc, "block-handle-4");
+    let h3b = bounds(&doc, "block-handle-3");
+    let h4x = (h4[0] + h4[2] * 0.5) as f32;
+    let h4y = (h4[1] + h4[3] * 0.5) as f32;
+    let above_h3 = (h3b[1] - 2.0) as f32;
+    doc.handle_ui_event(UiEvent::PointerDown(make_ptr(&doc, h4x, h4y, true)));
+    render(&mut doc);
+    doc.handle_ui_event(UiEvent::PointerMove(make_ptr(&doc, 4.0, above_h3, true)));
+    render(&mut doc);
+    assert!(doc.inner.borrow().get_element_by_id("block-drop-line").is_some());
+    doc.handle_ui_event(UiEvent::PointerUp(make_ptr(&doc, 4.0, above_h3, false)));
+    render(&mut doc);
+    assert_eq!(
+        markdown(&doc),
+        "# Notes\n\n## Section\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n- [x] Second task\n- [ ] First task"
+    );
+    // Drag table (2) above ## Section (1), drifting to x = 4.0 (left margin).
+    let ht = bounds(&doc, "block-handle-2");
+    let hs = bounds(&doc, "block-handle-1");
+    let htx = (ht[0] + ht[2] * 0.5) as f32;
+    let hty = (ht[1] + ht[3] * 0.5) as f32;
+    let above_hs = (hs[1] - 4.0) as f32;
+    doc.handle_ui_event(UiEvent::PointerDown(make_ptr(&doc, htx, hty, true)));
+    render(&mut doc);
+    doc.handle_ui_event(UiEvent::PointerMove(make_ptr(&doc, 4.0, above_hs, true)));
+    render(&mut doc);
+    assert!(doc.inner.borrow().get_element_by_id("block-drop-line").is_some());
+    doc.handle_ui_event(UiEvent::PointerUp(make_ptr(&doc, 4.0, above_hs, false)));
+    render(&mut doc);
+    assert!(
+        markdown(&doc).starts_with("# Notes\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n## Section"),
+        "expected table moved above section, got: {}",
+        markdown(&doc)
+    );
 }
 
 #[test]
@@ -2192,13 +2260,17 @@ fn table_buttons_work_at_retina_and_hover() {
         send_ptr(d, cx + 0.5, cy + 0.5, "up");
     };
 
-    // 1. Click cell-0-1-1, then verify real jittery clicks work on active inline controls,
-    //    popover menu items, and + add-column / + add-row buttons at 2x Retina!
+    // 1. Click cell-0-1-1, then verify real jittery clicks work on in-header chevron & menu items at 2x Retina!
     real_click(&mut doc, "cell-0-1-1");
-    real_click(&mut doc, "move-col-left-0");
+    real_click(&mut doc, "col-menu-btn-0-1");
+    assert!(
+        doc.inner.borrow().get_element_by_id("col-menu-0-1").is_some(),
+        "real click on col-menu-btn-0-1 must open popover"
+    );
+    real_click(&mut doc, "col-menu-move-left-0-1");
     assert!(
         markdown(&doc).contains("| Listen for | Stop | Take |"),
-        "real click on move-col-left-0 failed: {}",
+        "real click on col-menu-move-left-0-1 failed: {}",
         markdown(&doc)
     );
     real_click(&mut doc, "col-menu-btn-0-0");
@@ -2211,10 +2283,178 @@ fn table_buttons_work_at_retina_and_hover() {
         markdown(&doc).contains("| Stop | Listen for | Take |"),
         "real click on col-menu-move-right-0-0 failed"
     );
-    real_click(&mut doc, "add-column-0");
+    // 2. Hovering a different cell moves the header chevron + row chevron without clicking!
+    let b = bounds(&doc, "slot-0-2-2");
+    send_ptr(
+        &mut doc,
+        (b[0] + b[2] * 0.5) as f32,
+        (b[1] + b[3] * 0.5) as f32,
+        "move",
+    );
+    assert!(
+        doc.inner.borrow().get_element_by_id("col-menu-btn-0-2").is_some(),
+        "hovering col 2 must reveal its in-header chevron"
+    );
+    assert!(
+        doc.inner.borrow().get_element_by_id("col-menu-btn-0-1").is_none(),
+        "hovering col 2 must hide col 1's chevron"
+    );
+    assert!(
+        doc.inner.borrow().get_element_by_id("row-menu-btn-0-2").is_some(),
+        "hovering row 2 must reveal row 2's chevron"
+    );
+    assert!(
+        doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_none(),
+        "hovering row 2 must hide row 1's chevron"
+    );
+    real_click(&mut doc, "col-menu-btn-0-2");
+    real_click(&mut doc, "col-menu-insert-right-0-2");
     assert!(markdown(&doc).contains("| Stop | Listen for | Take | Column 4 |"));
-    real_click(&mut doc, "add-row-0");
+    real_click(&mut doc, "cell-0-2-0");
+    real_click(&mut doc, "row-menu-btn-0-2");
+    real_click(&mut doc, "row-menu-insert-below-0-2");
     assert_eq!(table::tables(&markdown(&doc))[0].rows.len(), 4);
+}
+
+#[test]
+fn slash_menu_arrow_navigation_is_fast() {
+    let mut doc = editor();
+    open_markdown(&mut doc, "# Title\n\n\n\n## Section\n\n| A | B |\n| --- | --- |\n| 1 | 2 |", 9);
+    press(&mut doc, Key::Character("/".into()), false);
+    assert!(doc.inner.borrow().get_element_by_id("slash-menu").is_some());
+    let start = std::time::Instant::now();
+    for _ in 0..40 {
+        press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
+    }
+    let elapsed = start.elapsed();
+    let per_step_ms = elapsed.as_secs_f64() * 1000.0 / 40.0;
+    eprintln!("slash menu ArrowDown: {per_step_ms:.2} ms/step (40 steps in {elapsed:?})");
+    assert!(
+        per_step_ms < 25.0,
+        "slash menu navigation too slow: {per_step_ms:.2} ms/step"
+    );
+}
+
+#[test]
+fn anchored_comments_create_reply_apply_undo_and_resolve() {
+    let mut doc = editor();
+    let sample = super::SAMPLE;
+    open_markdown(&mut doc, sample, 0);
+
+    // 1. Seed demo comments and verify Loro Cursor anchors survive edits above them.
+    doc.vdom.in_scope(ScopeId::APP, || {
+        let mut w = consume_context::<Writing>();
+        let seeded = comments::seed_sample_comments(&w.note.peek());
+        assert_eq!(seeded.len(), 2);
+        w.comments.set(seeded);
+        w.active_comment.set(Some(1));
+        w.comments_open.set(true);
+    });
+    render(&mut doc);
+    assert!(doc.inner.borrow().get_element_by_id("comments-pane").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("comment-thread-1").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("comment-hl-1").is_some());
+
+    // Insert text above the table — Loro cursors keep seeded anchors pointing to the exact phrases.
+    let insert_at = sample.find("Recorder").unwrap();
+    doc.vdom.in_scope(ScopeId::APP, || {
+        let mut w = consume_context::<Writing>();
+        w.note
+            .write()
+            .replace(insert_at..insert_at, "Prefix line.\n\n")
+            .unwrap();
+    });
+    render(&mut doc);
+    // Apply seeded thread 1 proposal (inside table cell) even after the prefix shift!
+    click(&mut doc, "comment-apply-1-1001");
+    assert!(
+        markdown(&doc).contains("| North lock | Water through the gate (XY stereo, 80 Hz HPF) | 45 s |"),
+        "applying cell proposal after doc edit above must hit exact cell: {}",
+        markdown(&doc)
+    );
+    assert!(
+        doc.inner.borrow().get_element_by_id("comment-undo-1-1001").is_some(),
+        "applied proposal must stay visible with Undo button"
+    );
+
+    // Undo the applied proposal — restores original table cell cleanly.
+    click(&mut doc, "comment-undo-1-1001");
+    assert!(
+        markdown(&doc).contains("| North lock | Water through the gate | 45 s |"),
+        "undoing proposal must restore original text: {}",
+        markdown(&doc)
+    );
+
+    // 2. Select text in prose and click Comment in the floating FormatBar.
+    let body_text = {
+        let dom = doc.inner.borrow();
+        let node = dom.get_node(id(&doc, "note-body")).unwrap();
+        node.element_data()
+            .unwrap()
+            .text_input_data()
+            .unwrap()
+            .editor
+            .raw_text()
+            .to_owned()
+    };
+    let start = body_text.find("Rain cover ready").expect("phrase in note-body");
+    let end = start + "Rain cover ready".len();
+    click(&mut doc, "note-body");
+    select(&doc, "note-body", [start, end]);
+    send_key(&mut doc, Key::Named(NamedKey::Shift), KeyState::Released, false);
+    assert!(doc.inner.borrow().get_element_by_id("format-comment").is_some());
+    click(&mut doc, "format-comment");
+    assert!(doc.inner.borrow().get_element_by_id("new-comment-card").is_some());
+
+    // Type a comment instruction in #new-comment-input and submit with Post.
+    click(&mut doc, "new-comment-input");
+    for ch in "replace with Rain cover sealed".chars() {
+        press(&mut doc, Key::Character(ch.to_string()), false);
+    }
+    click(&mut doc, "new-comment-post");
+    assert!(doc.inner.borrow().get_element_by_id("new-comment-card").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("comment-thread-3").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("comment-hl-3").is_some());
+
+    // Apply the AI proposal from thread 3.
+    click(&mut doc, "comment-apply-3-1003");
+    assert!(
+        markdown(&doc).contains("Rain cover sealed"),
+        "new comment AI proposal must update Markdown: {}",
+        markdown(&doc)
+    );
+
+    // Reply in thread 3 -> appends follow-up message + new AI proposal.
+    click(&mut doc, "comment-reply-3");
+    for ch in "Shorten".chars() {
+        press(&mut doc, Key::Character(ch.to_string()), false);
+    }
+    click(&mut doc, "comment-send-3");
+    let msg_count = doc.vdom.in_scope(ScopeId::APP, || {
+        consume_context::<Writing>()
+            .comments
+            .read()
+            .iter()
+            .find(|t| t.id == 3)
+            .unwrap()
+            .messages
+            .len()
+    });
+    assert_eq!(msg_count, 4, "reply must append user + Claude messages");
+
+    // Resolve thread 3 -> moves to Resolved tab, clears inline highlight when inactive.
+    click(&mut doc, "comment-resolve-3");
+    assert!(doc.inner.borrow().get_element_by_id("comment-thread-3").is_none());
+    click(&mut doc, "filter-comments-resolved");
+    assert!(doc.inner.borrow().get_element_by_id("comment-thread-3").is_some());
+    click(&mut doc, "comment-delete-3");
+    assert!(doc.inner.borrow().get_element_by_id("comment-thread-3").is_none());
+
+    // Close and re-open via #toggle-comments.
+    click(&mut doc, "toggle-comments");
+    assert!(doc.inner.borrow().get_element_by_id("comments-pane").is_none());
+    click(&mut doc, "toggle-comments");
+    assert!(doc.inner.borrow().get_element_by_id("comments-pane").is_some());
 }
 
 #[path = "tests/live_workflows.rs"]

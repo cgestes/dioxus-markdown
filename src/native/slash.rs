@@ -9,7 +9,6 @@ pub struct SlashState {
     pub query: String,
     pub x: f32,
     pub y: f32,
-    pub selected: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -146,7 +145,22 @@ pub fn matching_items(query: &str) -> Vec<&'static SlashItem> {
 impl Writing {
     pub fn refresh_slash(mut self) {
         let next = self.compute_slash();
-        if *self.slash_menu.peek() != next {
+        let prev = self.slash_menu.peek().clone();
+        if prev != next {
+            match (&prev, &next) {
+                (Some(p), Some(n)) if p.slash_source == n.slash_source => {
+                    let count = matching_items(&n.query).len().max(1);
+                    let sel = (*self.slash_selected.peek()).min(count - 1);
+                    if *self.slash_selected.peek() != sel {
+                        self.slash_selected.set(sel);
+                    }
+                }
+                _ => {
+                    if *self.slash_selected.peek() != 0 {
+                        self.slash_selected.set(0);
+                    }
+                }
+            }
             self.slash_menu.set(next);
         }
     }
@@ -211,24 +225,17 @@ impl Writing {
         } else {
             above_y
         } as f32;
-        let prev_sel = self
-            .slash_menu
-            .peek()
-            .as_ref()
-            .filter(|s| s.slash_source == line_start)
-            .map_or(0, |s| s.selected.min(matches.len() - 1));
         Some(SlashState {
             field,
             slash_source: line_start,
             query: query.to_owned(),
             x,
             y,
-            selected: prev_sel,
         })
     }
 
     pub fn slash_key(mut self, event: &KeyboardEvent) -> bool {
-        let Some(mut state) = self.slash_menu.peek().clone() else {
+        let Some(state) = self.slash_menu.peek().clone() else {
             return false;
         };
         if event.is_composing()
@@ -243,6 +250,7 @@ impl Writing {
             self.slash_menu.set(None);
             return false;
         }
+        let sel = (*self.slash_selected.peek()).min(matches.len() - 1);
         match event.key() {
             Key::Named(NamedKey::Escape) => {
                 event.prevent_default();
@@ -253,25 +261,23 @@ impl Writing {
             Key::Named(NamedKey::ArrowDown) => {
                 event.prevent_default();
                 event.stop_propagation();
-                state.selected = (state.selected + 1) % matches.len();
-                self.slash_menu.set(Some(state));
+                self.slash_selected.set((sel + 1) % matches.len());
                 true
             }
             Key::Named(NamedKey::ArrowUp) => {
                 event.prevent_default();
                 event.stop_propagation();
-                state.selected = if state.selected == 0 {
+                self.slash_selected.set(if sel == 0 {
                     matches.len() - 1
                 } else {
-                    state.selected - 1
-                };
-                self.slash_menu.set(Some(state));
+                    sel - 1
+                });
                 true
             }
             Key::Named(NamedKey::Enter | NamedKey::Tab) => {
                 event.prevent_default();
                 event.stop_propagation();
-                let item = matches[state.selected.min(matches.len() - 1)];
+                let item = matches[sel];
                 self.execute_slash(item.kind);
                 true
             }
@@ -327,7 +333,7 @@ pub fn SlashMenu(writing: Writing) -> Element {
     if matches.is_empty() {
         return rsx! {};
     }
-    let active_idx = state.selected.min(matches.len() - 1);
+    let active_idx = (writing.slash_selected)().min(matches.len() - 1);
     rsx! {
         div {
             id: "slash-menu",
@@ -349,12 +355,8 @@ pub fn SlashMenu(writing: Writing) -> Element {
                     aria_selected: if i == active_idx { "true" } else { "false" },
                     onpointerenter: move |_| {
                         let mut w = writing;
-                        let current = w.slash_menu.peek().clone();
-                        if let Some(mut s) = current
-                            && s.selected != i
-                        {
-                            s.selected = i;
-                            w.slash_menu.set(Some(s));
+                        if *w.slash_selected.peek() != i {
+                            w.slash_selected.set(i);
                         }
                     },
                     onclick: move |_| writing.execute_slash(item.kind),

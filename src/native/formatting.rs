@@ -91,7 +91,7 @@ impl Writing {
                 bottom = table.y + table.height;
             }
         }
-        let bar_w = 190.;
+        let bar_w = 276.;
         Some([
             (x + line_x / scale - bar_w / 2.)
                 .clamp(8., (f64::from(w) - bar_w - 8.).max(8.))
@@ -157,6 +157,11 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
         let selection = InlineSelection::read(&writing.contents.read(), range)?;
         Some(Style::ALL.map(|style| selection.active(style)))
     });
+    let comment_tip = if cfg!(target_os = "macos") {
+        "Comment on selection (⌘⇧M)"
+    } else {
+        "Comment on selection (Ctrl+Shift+M)"
+    };
     let (Some(active), Some([x, y])) = (styles(), (writing.format_position)()) else {
         return rsx! {};
     };
@@ -167,6 +172,16 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
             for (i,style) in Style::ALL.into_iter().enumerate() {
                 EditorButton { key:"{i}", id:format!("format-{i}"), label:style.label(), tip:tips[i], icon:[ToolIcon::Bold,ToolIcon::Italic,ToolIcon::Strike,ToolIcon::Code,ToolIcon::Link][i], selected:active[i],
                     onactivate:move |_| { writing.format(style); } }
+            }
+            span { class: "format-bar-sep", aria_hidden: "true" }
+            EditorButton {
+                id: "format-comment".to_owned(),
+                class: "format-comment-btn",
+                label: "Add comment",
+                glyph: "Comment",
+                tip: comment_tip,
+                icon: ToolIcon::Comment,
+                onactivate: move |_| { writing.start_comment_from_selection(); }
             }
         }
     }

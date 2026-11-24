@@ -19,10 +19,10 @@
   --selected-text: rgba(105, 172, 145, .32);
   --alert: #944a34;
   --alert-wash: #f9eee8;
-  --sans: "DM Sans", system-ui, sans-serif;
-  --display: "Instrument Serif", Georgia, serif;
-  --mono: "IBM Plex Mono", monospace;
-  --body: "STIX Two Text", Georgia, serif;
+  --sans: "Geist", -apple-system, system-ui, sans-serif;
+  --display: "Geist", -apple-system, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --body: "Geist", -apple-system, system-ui, sans-serif;
 }
 
 .brand {
@@ -30,7 +30,8 @@
   align-items: center;
   gap: 10px;
   color: var(--ink);
-  font: 400 31px/1 var(--display);
+  font: 600 22px/1 var(--display);
+  letter-spacing: -0.03em;
   white-space: nowrap;
 }
 .brandmark {

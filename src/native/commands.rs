@@ -132,6 +132,12 @@ impl Writing {
             }
         }
         if primary && let Key::Character(k) = &key {
+            if mods.shift() && k.eq_ignore_ascii_case("m") {
+                self.start_comment_from_selection();
+                e.prevent_default();
+                e.stop_propagation();
+                return true;
+            }
             use margin_editor_core::format::Style;
             let style = match (k.to_ascii_lowercase().as_str(), mods.shift()) {
                 ("b", false) => Some(Style::Bold),

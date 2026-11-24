@@ -3,15 +3,15 @@
 .split-layout { display: flex; align-items: stretch; gap: 18px; }
 .split-layout .split-source { flex: 1 1 0; min-width: 0; }
 .split-preview { flex: 1 1 0; min-width: 0; }
-.pane-label { font: 600 12px system-ui,sans-serif; color: #5c6958; margin-bottom: 8px; }
-.split-layout #markdown { width: 100%; height: calc(100vh - 112px); padding: 12px; background: #f2f2ea; border: 1px solid #d7dacf; border-radius: 6px; font: 13px monospace; line-height: 20px; }
+.pane-label { font: 600 12px var(--sans); color: #5c6958; margin-bottom: 8px; }
+.split-layout #markdown { width: 100%; height: calc(100vh - 112px); padding: 12px; background: #f2f2ea; border: 1px solid #d7dacf; border-radius: 6px; font: 13px/21px var(--mono); }
 .split-layout #markdown:focus { outline: 1px solid #a3af99; }
 .reading-page { height: calc(100vh - 112px); overflow-y: auto; background: #fffef9; border: 1px solid #dedfd4; border-radius: 6px; padding: 16px 34px 28px 16px; cursor: text; }
-.read-line, .read-cell { font: 15px system-ui,sans-serif; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.read-line, .read-cell { font: 14.5px/1.6 var(--sans); white-space: pre-wrap; overflow-wrap: anywhere; }
 .read-line.blank { height: 12px; }
-.read-line.h1, .read-line.h2, .read-line.h3, .read-line.h4, .read-line.h5, .read-line.h6 { font-family: Georgia,serif; font-weight: 500; line-height: 1.17; }
-.read-line.h1 { font-size: 32px; } .read-line.h2 { font-size: 24px; } .read-line.h3 { font-size: 21px; }
-.read-line.h4,.read-line.h5,.read-line.h6 { font-size: 18px; }
+.read-line.h1, .read-line.h2, .read-line.h3, .read-line.h4, .read-line.h5, .read-line.h6 { font-family: var(--display); font-weight: 600; letter-spacing: -0.025em; line-height: 1.22; }
+.read-line.h1 { font-size: 28px; } .read-line.h2 { font-size: 21px; } .read-line.h3 { font-size: 18px; }
+.read-line.h4,.read-line.h5,.read-line.h6 { font-size: 15.5px; }
 .read-line.quote { border-left: 3px solid #b2bea8; padding-left: 8px; color: #616e58; }
 .read-line.rule { border-top: 1px solid #c6cebf; margin: 8px 0; }
 .read-line.pre { background: #f1f0e8; }

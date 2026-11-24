@@ -79,6 +79,7 @@ impl Writing {
         let proj = self.projection_peek(field);
         let local = selected.map(|i| proj.source_to_display(i));
         self.focus.set(Some((field, local)));
+        *self.last_tracked.write_unchecked() = None;
         self.note.peek().remember_selection(absolute);
         self.track(absolute);
     }

@@ -90,17 +90,6 @@ impl Writing {
         self.focus_cell(t, grid.rows.len(), col);
     }
 
-    fn add_column(mut self, t: usize) {
-        self.clear_cells();
-        self.table_menu.set(None);
-        let grid = self.tables.read()[t].clone();
-        report(
-            self.note.write().splice(&grid.append_column()),
-            self.message,
-        );
-        self.focus_cell(t, 0, grid.width());
-    }
-
     fn insert_row_at(mut self, t: usize, at: usize, col: usize) {
         self.clear_cells();
         self.table_menu.set(None);
@@ -570,15 +559,15 @@ pub fn Heading(writing: Writing, field: Field) -> Element {
         _ => 0,
     };
     let min_h = if main {
-        66
+        44
     } else {
         match level {
-            1 => 62,
-            2 => 44,
-            3 => 37,
-            4 => 33,
-            5 => 29,
-            _ => 26,
+            1 => 42,
+            2 => 34,
+            3 => 28,
+            4 => 25,
+            5 => 23,
+            _ => 21,
         }
     };
     let measured = writing
@@ -590,15 +579,21 @@ pub fn Heading(writing: Writing, field: Field) -> Element {
     let height = measured.max(min_h);
     let style = format!("height: {height}px;");
     let is_focused = *writing.active.read() == Some(field);
-    let md_snapshot = writing.contents.read().clone();
-    let logical_blocks = super::blocks::split_blocks(&md_snapshot);
-    let block_pos = writing.range(field, &md_snapshot).start;
+    let block_pos = writing.range(field, &writing.contents.read()).start;
+    let logical_blocks = writing.logical_blocks.read();
     let block_idx = super::blocks::block_index_at(&logical_blocks, block_pos);
     let total_blocks = logical_blocks.len();
+    drop(logical_blocks);
+    let dragging_this = block_idx.is_some_and(|b| {
+        writing
+            .block_drag
+            .read()
+            .is_some_and(|d| d.dragging && d.from == b)
+    });
     rsx! {
-        div { class: "title-row block-wrap", class: if !main { "section-heading" }, class: if is_focused { "is-active-block" },
+        div { class: "title-row block-wrap", class: if !main { "section-heading" }, class: if is_focused { "is-active-block" }, class: if dragging_this { "is-dragging-source" },
             if let Some(bidx) = block_idx {
-                BlockHandle { writing, block_idx: bidx, total: total_blocks, top: if main { 18 } else { 8 } }
+                BlockHandle { writing, block_idx: bidx, total: total_blocks, top: if main { 10 } else { 5 } }
             }
             textarea { id, class: "note-title h{level}", class: if !main { "section-title" },
                 aria_label: label, placeholder: if main { "Untitled" } else { "" }, value: "{title}", style,
@@ -614,6 +609,7 @@ pub fn Heading(writing: Writing, field: Field) -> Element {
                 "{title}"
             }
             {(writing.ink)().into_iter().filter(|ink| ink.field == field).map(|ink| ink.draw())}
+            super::comments::CommentInk { writing, field }
             SelectionInk { writing, field }
             super::markdown::CaretOverlay { writing, field }
         }
@@ -633,19 +629,17 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
         .max(body.split('\n').count() * 26)
         .max(min_h);
     let style = format!("height: {height}px; min-height: {min_h}px;");
-    let hovered_open = *writing.hovered_box.read();
     let boxes: Vec<_> = (writing.boxes)()
         .into_iter()
         .filter(|b| b.field == field && !b.revealed)
         .collect();
-    let over_box = hovered_open.is_some_and(|open| boxes.iter().any(|b| b.open == open));
     let is_focused = *writing.active.read() == Some(field);
-    let md_snapshot = writing.contents.read().clone();
-    let field_range = writing.range(field, &md_snapshot);
-    let logical_blocks = super::blocks::split_blocks(&md_snapshot);
+    let md_ref = writing.contents.read();
+    let field_range = writing.range(field, &md_ref);
+    let logical_blocks = writing.logical_blocks.read();
     let total_blocks = logical_blocks.len();
     let proj = writing.projection(field);
-    let root_handle = writing.root.peek().clone();
+    let root_handle = writing.root.read().clone();
     let prose_handles: Vec<(usize, i32)> = logical_blocks
         .iter()
         .enumerate()
@@ -664,23 +658,25 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
                 let scale = layout.scale();
                 let y = (cluster.line().metrics().block_min_coord / scale - input.scroll_offset)
                     .round() as i32;
-                Some(y + 2)
+                Some(y + 1)
             });
-            let fallback_top = (md_snapshot[field_range.start..start]
+            let fallback_top = (md_ref[field_range.start..start]
                 .bytes()
                 .filter(|b| *b == b'\n')
                 .count() as i32)
-                * 26
-                + 2;
+                * 25
+                + 1;
             (bidx, measured_top.unwrap_or(fallback_top).max(0))
         })
         .collect();
+    drop(logical_blocks);
+    drop(md_ref);
     rsx! {
         div { class: "prose-wrap block-wrap", class: if is_focused { "is-active-block" },
             for (bidx, top) in prose_handles {
                 BlockHandle { key: "bh-{bidx}", writing, block_idx: bidx, total: total_blocks, top }
             }
-            div { class: "prose-block", class: if over_box { "over-checkbox" },
+            div { class: "prose-block",
                 textarea {
                     id: field.id(), class: "body-editor", aria_label: "Edit note body", value: "{body}", style,
                     aria_describedby: (writing.marker)().map(|_| "marker-hint"),
@@ -699,7 +695,8 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
                     "{body}"
                 }
                 {(writing.ink)().into_iter().filter(|ink| ink.field == field).map(|ink| ink.draw())}
-                {boxes.into_iter().map(|b| b.draw(writing, hovered_open == Some(b.open)))}
+                {boxes.into_iter().map(|b| b.draw(writing))}
+                super::comments::CommentInk { writing, field }
                 SelectionInk { writing, field }
                 super::markdown::CaretOverlay { writing, field }
                 EmptyLineBar { writing, field }
@@ -721,10 +718,6 @@ pub fn BlockHandle(writing: Writing, block_idx: usize, total: usize, top: i32) -
             class: if open { "menu-open" },
             class: if is_dragging { "is-dragging" },
             style: "top:{top}px;",
-            onpointerdown: move |e| {
-                e.prevent_default();
-                e.stop_propagation();
-            },
             button {
                 id: format!("block-handle-{block_idx}"),
                 class: "block-handle",
@@ -753,6 +746,10 @@ pub fn BlockHandle(writing: Writing, block_idx: usize, total: usize, top: i32) -
             }
             if open {
                 div { id: "block-menu", class: "block-menu", role: "menu", aria_label: "Block menu",
+                    onpointerdown: move |e| {
+                        e.prevent_default();
+                        e.stop_propagation();
+                    },
                     button { id: "block-move-up", role: "menuitem", disabled: block_idx == 0,
                         onclick: move |_| writing.move_block_dir(block_idx, false),
                         span { class: "bm-glyph", "↑" } "Move up"
@@ -854,11 +851,242 @@ fn scope_label(rect: table::CellRect) -> String {
 }
 
 #[component]
+fn HeaderMenuBtn(
+    writing: Writing,
+    index: usize,
+    col: usize,
+    right_aligned: bool,
+    hovered_col: Signal<Option<usize>>,
+    open_col: Option<usize>,
+    single_active_col: Option<usize>,
+    multi_active: bool,
+) -> Element {
+    let target_col = if multi_active {
+        None
+    } else {
+        open_col.or_else(|| *hovered_col.read()).or(single_active_col)
+    };
+    if target_col != Some(col) {
+        return rsx! {};
+    }
+    let head_menu_cls = if open_col == Some(col) {
+        "ledger-head-menu-btn open"
+    } else {
+        "ledger-head-menu-btn"
+    };
+    let wrap_cls = if right_aligned {
+        "ledger-head-menu-wrap align-left"
+    } else {
+        "ledger-head-menu-wrap"
+    };
+    rsx! {
+        div {
+            class: wrap_cls,
+            onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
+            EditorButton {
+                id: format!("col-menu-btn-{index}-{col}"),
+                class: head_menu_cls,
+                label: "Column menu",
+                tip: "Column menu & alignment",
+                icon: super::ToolIcon::ChevronDown,
+                onactivate: move |_| {
+                    let mut w = writing;
+                    let target = super::writing::TableMenu::Column(index, col);
+                    let next = (*w.table_menu.peek() != Some(target)).then_some(target);
+                    w.table_menu.set(next);
+                },
+            }
+        }
+    }
+}
+
+#[component]
+fn ColStrip(
+    writing: Writing,
+    index: usize,
+    mut hovered: Signal<bool>,
+    mut hovered_col: Signal<Option<usize>>,
+    mut hovered_row: Signal<Option<usize>>,
+    weights: Vec<usize>,
+    alignments: Vec<Alignment>,
+    width_count: usize,
+    active_row: usize,
+    open_col: Option<usize>,
+) -> Element {
+    let Some(c) = open_col.filter(|&c| c < width_count) else {
+        return rsx! {};
+    };
+    let col_align = alignments.get(c).copied().unwrap_or(Alignment::None);
+    let col_rect = table::CellRect {
+        anchor: [active_row, c],
+        head: [active_row, c],
+    };
+    let col_right_aligned = col_align == Alignment::Right;
+    let weight_c = weights.get(c).copied().unwrap_or(12);
+    let align_start = col_right_aligned && (c + 1 < width_count || width_count == 1)
+        || (c == 0 && !col_right_aligned && width_count > 1 && weight_c < 14);
+    let align_end = !align_start;
+    rsx! {
+        div {
+            id: format!("col-strip-{index}"),
+            class: "ledger-col-strip",
+            onpointerenter: move |_| { if !*hovered.peek() { hovered.set(true); } },
+            for (slot_c, &weight) in weights.iter().enumerate() {
+                div {
+                    key: "{slot_c}",
+                    class: "ledger-col-slot",
+                    flex_grow: weight.to_string(),
+                    if slot_c == c {
+                        div {
+                            id: format!("col-menu-{index}-{c}"),
+                            class: "ledger-axis-menu col-menu",
+                            class: if align_start { "align-start" },
+                            class: if align_end { "align-end" },
+                            role: "menu",
+                            aria_label: format!("Column {} menu", c + 1),
+                            onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
+                            div { class: "ledger-axis-align",
+                                EditorButton { id: format!("align-left-{index}"), class: "ledger-mini", label: "Align left", tip: "Align left", icon: super::ToolIcon::AlignLeft, selected: matches!(col_align, Alignment::Left | Alignment::None),
+                                    onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
+                                EditorButton { id: format!("align-center-{index}"), class: "ledger-mini", label: "Align center", tip: "Align center", icon: super::ToolIcon::AlignCenter, selected: col_align == Alignment::Center,
+                                    onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
+                                EditorButton { id: format!("align-right-{index}"), class: "ledger-mini", label: "Align right", tip: "Align right", icon: super::ToolIcon::AlignRight, selected: col_align == Alignment::Right,
+                                    onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
+                            }
+                            button { id: format!("col-menu-move-left-{index}-{c}"), role: "menuitem", disabled: c == 0,
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, false); },
+                                span { class: "bm-glyph", "←" } "Move left"
+                            }
+                            button { id: format!("col-menu-move-right-{index}-{c}"), role: "menuitem", disabled: c + 1 >= width_count,
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, true); },
+                                span { class: "bm-glyph", "→" } "Move right"
+                            }
+                            button { id: format!("col-menu-insert-left-{index}-{c}"), role: "menuitem",
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c); },
+                                span { class: "bm-glyph", "+" } "Insert left"
+                            }
+                            button { id: format!("col-menu-insert-right-{index}-{c}"), role: "menuitem",
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c + 1); },
+                                span { class: "bm-glyph", "+" } "Insert right"
+                            }
+                            button { id: format!("col-menu-delete-{index}-{c}"), class: "remove", role: "menuitem", disabled: width_count <= 1, aria_disabled: if width_count <= 1 { "true" } else { "false" },
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.remove_axis(index, col_rect, true); },
+                                span { class: "bm-glyph", "×" } "Delete column"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn RowStrip(
+    writing: Writing,
+    index: usize,
+    mut hovered: Signal<bool>,
+    mut hovered_col: Signal<Option<usize>>,
+    mut hovered_row: Signal<Option<usize>>,
+    row_count: usize,
+    active_col: usize,
+    single_active_row: Option<usize>,
+    multi_active: bool,
+    open_row: Option<usize>,
+) -> Element {
+    let hover_r = (*hovered_row.read()).filter(|&r| r > 0 && r < row_count);
+    let target_row = if multi_active {
+        None
+    } else {
+        open_row.or(hover_r).or(single_active_row)
+    };
+    rsx! {
+        div {
+            id: format!("row-strip-{index}"),
+            class: "ledger-row-strip",
+            onpointerenter: move |_| { if !*hovered.peek() { hovered.set(true); } },
+            for r in 1..row_count {
+                {
+                    let row_open = open_row == Some(r);
+                    let is_target_row = target_row == Some(r);
+                    let row_rect = table::CellRect { anchor: [r, active_col], head: [r, active_col] };
+                    let row_menu_cls = if row_open {
+                        "ledger-row-btn open"
+                    } else {
+                        "ledger-row-btn"
+                    };
+                    rsx! {
+                        div {
+                            key: "{r}",
+                            class: "ledger-row-slot",
+                            class: if is_target_row || row_open { "active" },
+                            if is_target_row {
+                                div {
+                                    class: "ledger-axis-group",
+                                    onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
+                                    EditorButton {
+                                        id: format!("row-menu-btn-{index}-{r}"),
+                                        class: row_menu_cls,
+                                        label: "Row menu",
+                                        tip: "Row menu",
+                                        icon: super::ToolIcon::ChevronDown,
+                                        onactivate: move |_| {
+                                            let mut w = writing;
+                                            let target = super::writing::TableMenu::Row(index, r);
+                                            let next = (*w.table_menu.peek() != Some(target)).then_some(target);
+                                            w.table_menu.set(next);
+                                        },
+                                    }
+                                }
+                            }
+                            if row_open {
+                                div {
+                                    id: format!("row-menu-{index}-{r}"),
+                                    class: "ledger-axis-menu row-menu",
+                                    role: "menu",
+                                    aria_label: format!("Row {} menu", r + 1),
+                                    onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
+                                    button { id: format!("row-menu-move-up-{index}-{r}"), role: "menuitem", disabled: r <= 1,
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_row_dir(index, r, active_col, false); },
+                                        span { class: "bm-glyph", "↑" } "Move up"
+                                    }
+                                    button { id: format!("row-menu-move-down-{index}-{r}"), role: "menuitem", disabled: r + 1 >= row_count,
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_row_dir(index, r, active_col, true); },
+                                        span { class: "bm-glyph", "↓" } "Move down"
+                                    }
+                                    button { id: format!("row-menu-insert-above-{index}-{r}"), role: "menuitem",
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_row_at(index, r, active_col); },
+                                        span { class: "bm-glyph", "+" } "Insert above"
+                                    }
+                                    button { id: format!("row-menu-insert-below-{index}-{r}"), role: "menuitem",
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_row_at(index, r + 1, active_col); },
+                                        span { class: "bm-glyph", "+" } "Insert below"
+                                    }
+                                    button { id: format!("row-menu-delete-{index}-{r}"), class: "remove", role: "menuitem",
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.remove_axis(index, row_rect, false); },
+                                        span { class: "bm-glyph", "×" } "Delete row"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
 fn GridRow(
     writing: Writing,
     index: usize,
     row: usize,
     last: bool,
+    open_col: Option<usize>,
+    single_active_col: Option<usize>,
+    multi_active: bool,
+    mut hovered_col: Signal<Option<usize>>,
+    mut hovered_row: Signal<Option<usize>>,
     values: Vec<(String, &'static str, usize)>,
 ) -> Element {
     rsx! {
@@ -870,6 +1098,7 @@ fn GridRow(
                     let selected = selected_rect.is_some();
                     let active = *writing.active.read() == Some(field) && writing.span.read().is_none();
                     let whole_cell = selected && active && !*writing.cell_editing.read();
+                    let right_aligned = alignment == "right";
                     rsx! {
                         div { key: "{col}", id: "slot-{index}-{row}-{col}", class: "cell-slot ledger-cell align-{alignment}",
                             class: if row == 0 { "ledger-head" } else { "ledger-data" },
@@ -878,6 +1107,18 @@ fn GridRow(
                             class: if selected { "range-cell" }, class: if active { "is-editing" },
                             class: if whole_cell { "range-target" },
                             aria_selected:selected.to_string(), flex_grow: weight.to_string(), role: if row == 0 { "columnheader" } else { "cell" },
+                            onpointerenter: move |_| {
+                                if *hovered_col.peek() != Some(col) {
+                                    hovered_col.set(Some(col));
+                                }
+                                let next_row = (row > 0).then_some(row);
+                                if *hovered_row.peek() != next_row {
+                                    hovered_row.set(next_row);
+                                }
+                            },
+                            if row == 0 && right_aligned {
+                                HeaderMenuBtn { writing, index, col, right_aligned: true, hovered_col, open_col, single_active_col, multi_active }
+                            }
                             div { class: "cell-field",
                                 // A Blitz single-line input has an unconstrained Parley layout. Size its
                                 // frame to the shaped text for alignment; let long values scroll normally.
@@ -895,8 +1136,12 @@ fn GridRow(
                                     oninput: move |e| writing.cell_input(index, row, col, &e.value()),
                                 }
                                 {(writing.ink)().into_iter().filter(|ink| ink.field == field).map(|ink| ink.draw())}
+                                super::comments::CommentInk { writing, field }
                                 SelectionInk { writing, field }
                                 super::markdown::CaretOverlay { writing, field }
+                            }
+                            if row == 0 && !right_aligned {
+                                HeaderMenuBtn { writing, index, col, right_aligned: false, hovered_col, open_col, single_active_col, multi_active }
                             }
                             if let Some(s) = selected_rect {
                                 span { class:"range-outline", aria_hidden:"true",
@@ -916,6 +1161,8 @@ fn GridRow(
 pub fn Grid(writing: Writing, index: usize) -> Element {
     let mut writing = writing;
     let mut hovered = use_signal(|| false);
+    let mut hovered_col = use_signal(|| None::<usize>);
+    let mut hovered_row = use_signal(|| None::<usize>);
     let mut within = use_signal(|| false);
     // Fit columns when the grid opens or its column count changes. Ordinary
     // typing must never move the cell underneath a stationary pointer.
@@ -936,6 +1183,18 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                 longest.max(7) + 5
             })
             .collect::<Vec<_>>()
+    });
+    // Reset hovered column/row whenever active focus moves (e.g. Tab, arrows, reorder)
+    // so hover state from an earlier click never fights keyboard or button navigation.
+    use_effect(move || {
+        writing.active.read();
+        writing.cells.read();
+        if hovered_col.peek().is_some() {
+            hovered_col.set(None);
+        }
+        if hovered_row.peek().is_some() {
+            hovered_row.set(None);
+        }
     });
     // Programmatic caret restoration updates Blitz focus directly, including
     // when a key crosses into a grid. Normal focusin/out cover pointer and Tab.
@@ -999,18 +1258,36 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
     } else {
         "Delete row"
     };
-    let md_snapshot = writing.contents.read().clone();
-    let logical_blocks = super::blocks::split_blocks(&md_snapshot);
+    let logical_blocks = writing.logical_blocks.read();
     let table_block_idx = super::blocks::block_index_at(&logical_blocks, grid.range.start);
     let total_blocks = logical_blocks.len();
+    drop(logical_blocks);
     let weights_vec = weights.read().clone();
+    let alignments_vec = grid.align.clone();
     let width_count = grid.width();
     let row_count = grid.rows.len();
     let active_row = selected.map_or(0, |(r, _)| r);
     let active_col = selected.map_or(0, |(_, c)| c);
     let single_active = rect.filter(|r| r.count() == 1);
+    let single_active_col = single_active.map(|rc| rc.head[1]);
+    let single_active_row = single_active.map(|rc| rc.head[0]).filter(|&r| r > 0);
+    let multi_active = rect.is_some_and(|r| r.count() > 1);
+    let open_col = match active_menu {
+        Some(super::writing::TableMenu::Column(t, c)) if t == index && c < width_count => Some(c),
+        _ => None,
+    };
+    let open_row = match active_menu {
+        Some(super::writing::TableMenu::Row(t, r)) if t == index && r < row_count => Some(r),
+        _ => None,
+    };
+    let dragging_this = table_block_idx.is_some_and(|b| {
+        writing
+            .block_drag
+            .read()
+            .is_some_and(|d| d.dragging && d.from == b)
+    });
     rsx! {
-        div { id: "grid-{index}", class: "grid-block ledger block-wrap", class: if rect.is_some() || hovered() || within() || menu_in_table { "engaged is-active-block" },
+        div { id: "grid-{index}", class: "grid-block ledger block-wrap", class: if rect.is_some() || hovered() || within() || menu_in_table { "engaged is-active-block" }, class: if dragging_this { "is-dragging-source" },
             onkeydown:move |e| {
                 if menu_in_table && e.key()==Key::Named(NamedKey::Escape) {
                     e.prevent_default(); e.stop_propagation(); writing.table_menu.set(None);
@@ -1028,281 +1305,41 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                     writing.table_menu.set(Some(next));
                 }
             },
-            onpointerenter: move |_| hovered.set(true), onpointerleave: move |_| hovered.set(false),
-            onfocusin: move |_| within.set(true), onfocusout: move |_| within.set(false),
+            onpointerenter: move |_| { if !*hovered.peek() { hovered.set(true); } },
+            onpointerleave: move |_| {
+                if *hovered.peek() { hovered.set(false); }
+                if hovered_col.peek().is_some() { hovered_col.set(None); }
+                if hovered_row.peek().is_some() { hovered_row.set(None); }
+            },
+            onfocusin: move |_| { if !*within.peek() { within.set(true); } },
+            onfocusout: move |_| { if *within.peek() { within.set(false); } },
             if let Some(bidx) = table_block_idx {
                 BlockHandle { writing, block_idx: bidx, total: total_blocks, top: 6 }
             }
-            // Flat per-column header strip: small menu + quick delete above every column header.
-            div {
-                id: format!("col-strip-{index}"),
-                class: "ledger-col-strip",
-                onpointerenter: move |_| hovered.set(true),
-                for (c, &weight) in weights_vec.iter().enumerate() {
-                    {
-                        let col_open = active_menu == Some(super::writing::TableMenu::Column(index, c));
-                        let is_active_col = single_active.is_some_and(|rc| rc.head[1] == c);
-                        let col_align = grid.align.get(c).copied().unwrap_or(Alignment::None);
-                        let col_rect = table::CellRect { anchor: [active_row, c], head: [active_row, c] };
-                        let del_id = if is_active_col {
-                            format!("delete-column-{index}")
-                        } else {
-                            format!("col-delete-{index}-{c}")
-                        };
-                        let align_start = c == 0;
-                        let align_end = c + 1 == width_count && width_count > 1;
-                        let menu_cls = if col_open {
-                            "ledger-axis-btn open"
-                        } else {
-                            "ledger-axis-btn"
-                        };
-                        rsx! {
-                            div {
-                                key: "{c}",
-                                class: "ledger-col-slot",
-                                class: if is_active_col || col_open { "active" },
-                                flex_grow: weight.to_string(),
-                                div {
-                                    class: "ledger-axis-group",
-                                    onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                                    if is_active_col {
-                                        EditorButton { id: format!("move-col-left-{index}"), class: "ledger-mini", label: "Move column left", tip: "Move column left (⌥←)", glyph: "←",
-                                            disabled: c == 0, onactivate: move |_| writing.move_column_dir(index, active_row, c, false) }
-                                        EditorButton { id: format!("move-col-right-{index}"), class: "ledger-mini", label: "Move column right", tip: "Move column right (⌥→)", glyph: "→",
-                                            disabled: c + 1 >= width_count, onactivate: move |_| writing.move_column_dir(index, active_row, c, true) }
-                                        span { class: "ledger-bar-sep", aria_hidden: "true" }
-                                        EditorButton { id: format!("align-left-{index}"), class: "ledger-mini", label: "Align left", glyph: "L", selected: matches!(col_align, Alignment::Left | Alignment::None),
-                                            onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
-                                        EditorButton { id: format!("align-center-{index}"), class: "ledger-mini", label: "Align center", glyph: "C", selected: col_align == Alignment::Center,
-                                            onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
-                                        EditorButton { id: format!("align-right-{index}"), class: "ledger-mini", label: "Align right", glyph: "R", selected: col_align == Alignment::Right,
-                                            onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
-                                        span { class: "ledger-bar-sep", aria_hidden: "true" }
-                                        EditorButton { id: format!("insert-col-left-{index}"), class: "ledger-mini", label: "Insert column left", tip: "Insert column left", glyph: "+←",
-                                            onactivate: move |_| writing.insert_column_at(index, active_row, c) }
-                                    }
-                                    EditorButton {
-                                        id: format!("col-menu-btn-{index}-{c}"),
-                                        class: menu_cls,
-                                        label: "Column menu",
-                                        tip: "Column actions",
-                                        glyph: "⋯",
-                                        onactivate: move |_| {
-                                            let mut w = writing;
-                                            let target = super::writing::TableMenu::Column(index, c);
-                                            let next = (*w.table_menu.peek() != Some(target)).then_some(target);
-                                            w.table_menu.set(next);
-                                        },
-                                    }
-                                    EditorButton {
-                                        id: del_id,
-                                        class: "ledger-axis-btn remove",
-                                        label: "Delete column",
-                                        tip: "Delete column",
-                                        glyph: "×",
-                                        disabled: width_count <= 1,
-                                        onactivate: move |_| writing.remove_axis(index, col_rect, true),
-                                    }
-                                }
-                                if col_open {
-                                    div {
-                                        id: format!("col-menu-{index}-{c}"),
-                                        class: "ledger-axis-menu",
-                                        class: if align_start { "align-start" },
-                                        class: if align_end { "align-end" },
-                                        role: "menu",
-                                        aria_label: format!("Column {} menu", c + 1),
-                                        onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                                        div { class: "ledger-axis-align",
-                                            EditorButton { id: format!("col-menu-align-left-{index}-{c}"), class: "ledger-mini", label: "Align left", glyph: "L", selected: matches!(col_align, Alignment::Left | Alignment::None),
-                                                onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
-                                            EditorButton { id: format!("col-menu-align-center-{index}-{c}"), class: "ledger-mini", label: "Align center", glyph: "C", selected: col_align == Alignment::Center,
-                                                onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
-                                            EditorButton { id: format!("col-menu-align-right-{index}-{c}"), class: "ledger-mini", label: "Align right", glyph: "R", selected: col_align == Alignment::Right,
-                                                onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
-                                        }
-                                        button { id: format!("col-menu-move-left-{index}-{c}"), role: "menuitem", disabled: c == 0,
-                                            onclick: move |_| writing.move_column_dir(index, active_row, c, false),
-                                            span { class: "bm-glyph", "←" } "Move left"
-                                        }
-                                        button { id: format!("col-menu-move-right-{index}-{c}"), role: "menuitem", disabled: c + 1 >= width_count,
-                                            onclick: move |_| writing.move_column_dir(index, active_row, c, true),
-                                            span { class: "bm-glyph", "→" } "Move right"
-                                        }
-                                        button { id: format!("col-menu-insert-left-{index}-{c}"), role: "menuitem",
-                                            onclick: move |_| writing.insert_column_at(index, active_row, c),
-                                            span { class: "bm-glyph", "+" } "Insert left"
-                                        }
-                                        button { id: format!("col-menu-insert-right-{index}-{c}"), role: "menuitem",
-                                            onclick: move |_| writing.insert_column_at(index, active_row, c + 1),
-                                            span { class: "bm-glyph", "+" } "Insert right"
-                                        }
-                                        button { id: format!("col-menu-delete-{index}-{c}"), class: "remove", role: "menuitem", disabled: width_count <= 1,
-                                            onclick: move |_| writing.remove_axis(index, col_rect, true),
-                                            span { class: "bm-glyph", "×" } "Delete column"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                div {
-                    class: "ledger-col-add-slot",
-                    onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                    EditorButton {
-                        id: format!("add-column-{index}"),
-                        class: "ledger-axis-btn ledger-axis-add",
-                        label: "Add column",
-                        tip: "Add column",
-                        glyph: "+",
-                        onactivate: move |_| writing.add_column(index),
-                    }
-                }
-            }
-            // Flat per-row strip: small menu + quick delete beside every data row, plus flat `+` at the bottom.
-            div {
-                id: format!("row-strip-{index}"),
-                class: "ledger-row-strip",
-                onpointerenter: move |_| hovered.set(true),
-                for r in 1..row_count {
-                    {
-                        let row_open = active_menu == Some(super::writing::TableMenu::Row(index, r));
-                        let is_active_row = single_active.is_some_and(|rc| rc.head[0] == r);
-                        let row_rect = table::CellRect { anchor: [r, active_col], head: [r, active_col] };
-                        let del_id = if is_active_row {
-                            format!("delete-row-{index}")
-                        } else {
-                            format!("row-delete-{index}-{r}")
-                        };
-                        let menu_cls = if row_open {
-                            "ledger-axis-btn open"
-                        } else {
-                            "ledger-axis-btn"
-                        };
-                        let row_menu_cls = if is_active_row {
-                            if row_open {
-                                "ledger-row-btn open"
-                            } else {
-                                "ledger-row-btn"
-                            }
-                        } else {
-                            menu_cls
-                        };
-                        let row_del_cls = if is_active_row {
-                            "ledger-row-btn remove"
-                        } else {
-                            "ledger-axis-btn remove"
-                        };
-                        rsx! {
-                            div {
-                                key: "{r}",
-                                class: "ledger-row-slot",
-                                class: if is_active_row || row_open { "active" },
-                                div {
-                                    class: if is_active_row { "ledger-axis-group row-inline" } else { "ledger-axis-group" },
-                                    onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                                    if is_active_row {
-                                        EditorButton { id: format!("move-row-up-{index}"), class: "ledger-row-btn", label: "Move row up", tip: "Move row up (⌥↑)", glyph: "↑",
-                                            disabled: r <= 1, onactivate: move |_| writing.move_row_dir(index, r, active_col, false) }
-                                        EditorButton { id: format!("move-row-down-{index}"), class: "ledger-row-btn", label: "Move row down", tip: "Move row down (⌥↓)", glyph: "↓",
-                                            disabled: r + 1 >= row_count, onactivate: move |_| writing.move_row_dir(index, r, active_col, true) }
-                                        EditorButton { id: format!("insert-row-above-{index}"), class: "ledger-row-btn", label: "Insert row above", tip: "Insert row above", glyph: "+",
-                                            onactivate: move |_| writing.insert_row_at(index, r, active_col) }
-                                    }
-                                    EditorButton {
-                                        id: format!("row-menu-btn-{index}-{r}"),
-                                        class: row_menu_cls,
-                                        label: "Row menu",
-                                        tip: "Row actions",
-                                        glyph: "⋯",
-                                        onactivate: move |_| {
-                                            let mut w = writing;
-                                            let target = super::writing::TableMenu::Row(index, r);
-                                            let next = (*w.table_menu.peek() != Some(target)).then_some(target);
-                                            w.table_menu.set(next);
-                                        },
-                                    }
-                                    EditorButton {
-                                        id: del_id,
-                                        class: row_del_cls,
-                                        label: "Delete row",
-                                        tip: "Delete row",
-                                        glyph: "×",
-                                        onactivate: move |_| writing.remove_axis(index, row_rect, false),
-                                    }
-                                }
-                                if row_open {
-                                    div {
-                                        id: format!("row-menu-{index}-{r}"),
-                                        class: "ledger-axis-menu row-menu",
-                                        role: "menu",
-                                        aria_label: format!("Row {} menu", r + 1),
-                                        onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                                        button { id: format!("row-menu-move-up-{index}-{r}"), role: "menuitem", disabled: r <= 1,
-                                            onclick: move |_| writing.move_row_dir(index, r, active_col, false),
-                                            span { class: "bm-glyph", "↑" } "Move up"
-                                        }
-                                        button { id: format!("row-menu-move-down-{index}-{r}"), role: "menuitem", disabled: r + 1 >= row_count,
-                                            onclick: move |_| writing.move_row_dir(index, r, active_col, true),
-                                            span { class: "bm-glyph", "↓" } "Move down"
-                                        }
-                                        button { id: format!("row-menu-insert-above-{index}-{r}"), role: "menuitem",
-                                            onclick: move |_| writing.insert_row_at(index, r, active_col),
-                                            span { class: "bm-glyph", "+" } "Insert above"
-                                        }
-                                        button { id: format!("row-menu-insert-below-{index}-{r}"), role: "menuitem",
-                                            onclick: move |_| writing.insert_row_at(index, r + 1, active_col),
-                                            span { class: "bm-glyph", "+" } "Insert below"
-                                        }
-                                        button { id: format!("row-menu-delete-{index}-{r}"), class: "remove", role: "menuitem",
-                                            onclick: move |_| writing.remove_axis(index, row_rect, false),
-                                            span { class: "bm-glyph", "×" } "Delete row"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                div {
-                    class: "ledger-row-add-slot",
-                    onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                    EditorButton {
-                        id: format!("add-row-{index}"),
-                        class: "ledger-axis-btn ledger-axis-add",
-                        label: "Add row",
-                        tip: "Add row",
-                        glyph: "+",
-                        onactivate: move |_| writing.add_row(index, 0),
-                    }
-                }
-            }
+            ColStrip { writing, index, hovered, hovered_col, hovered_row, weights: weights_vec.clone(), alignments: alignments_vec, width_count, active_row, open_col }
+            RowStrip { writing, index, hovered, hovered_col, hovered_row, row_count, active_col, single_active_row, multi_active, open_row }
             div { id: "grid-scroll-{index}", class: "grid-scroll", role: "table", aria_label: "Markdown table",
                 for (r, _) in grid.rows.iter().enumerate() {
-                    GridRow { key: "{r}", writing, index, row: r, last: r + 1 == grid.rows.len(),
+                    GridRow { key: "{r}", writing, index, row: r, last: r + 1 == grid.rows.len(), open_col, single_active_col, multi_active, hovered_col, hovered_row,
                         values: weights_vec.iter().enumerate().map(|(c, &weight)| (writing.projection(Field::Cell(index, r, c)).display, align(grid, c), weight)).collect()
                     }
                 }
             }
             div { class: "table-bar ledger-tools",
-                if let Some(rect) = rect {
+                if let Some(rect) = rect.filter(|r| r.count() > 1) {
                     {
-                        let multi = rect.count() > 1;
                         let [r, c] = rect.head;
                         rsx! {
                             div { id: "table-bar-{index}", class: "ledger-bar-group",
                                 onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
                                 span { class: "ledger-bar-scope", "{scope_label(rect)}" }
-                                if multi {
-                                    span { class: "cell-count", "{rect.count()} cells" }
-                                    EditorButton { id: format!("clear-cells-{index}"), class: "ledger-chip", label: "Clear selected cells", glyph: "Clear",
-                                        onactivate: move |_| { writing.clear_or_fill(index, rect, "", r, c); } }
-                                    EditorButton { id: format!("delete-row-{index}"), class: "ledger-chip remove", label: row_label, glyph: "Del rows",
-                                        disabled: rect.rows().start == 0, onactivate: move |_| writing.remove_axis(index, rect, false) }
-                                    EditorButton { id: format!("delete-column-{index}"), class: "ledger-chip remove", label: col_label, glyph: "Del cols",
-                                        disabled: rect.cols().len() >= grid.width(), onactivate: move |_| writing.remove_axis(index, rect, true) }
-                                }
+                                span { class: "cell-count", "{rect.count()} cells" }
+                                EditorButton { id: format!("clear-cells-{index}"), class: "ledger-chip", label: "Clear selected cells", glyph: "Clear",
+                                    onactivate: move |_| { writing.clear_or_fill(index, rect, "", r, c); } }
+                                EditorButton { id: format!("delete-row-{index}"), class: "ledger-chip remove", label: row_label, glyph: "Del rows",
+                                    disabled: rect.rows().start == 0, onactivate: move |_| writing.remove_axis(index, rect, false) }
+                                EditorButton { id: format!("delete-column-{index}"), class: "ledger-chip remove", label: col_label, glyph: "Del cols",
+                                    disabled: rect.cols().len() >= grid.width(), onactivate: move |_| writing.remove_axis(index, rect, true) }
                             }
                         }
                     }

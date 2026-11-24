@@ -304,7 +304,8 @@ fn table_pointer_edit_tab_delete_and_undo() {
             "cell-0-1-0",
             [edited.find("old").unwrap(), edited.find("old").unwrap() + 3],
         );
-        s.button("delete-column-0");
+        s.button("col-menu-btn-0-0");
+        s.button("col-menu-delete-0-0");
         let one = "# Table\n\n| B |\n| --- |\n| s!ix |\n\nTail";
         let keep = one.find("s!ix").unwrap();
         s.expect(one, "cell-0-1-0", [keep, keep + 4]);
@@ -318,12 +319,15 @@ fn table_pointer_edit_tab_delete_and_undo() {
             .push("Click the right rail beside the column button".into());
         click_at(&mut s.doc, "grid-scroll-0", Some((width as f32 + 9., 8.)));
         s.expect(&edited, "cell-0-0-1", [edited.find("B |").unwrap() + 1; 2]);
-        s.button("add-column-0");
+        s.button("col-menu-btn-0-1");
+        s.button("col-menu-insert-right-0-1");
         let wider =
             "# Table\n\n| A | B | Column 3 |\n| --- | --- | --- |\n| old | s!ix |  |\n\nTail";
         let col = wider.find("Column 3").unwrap();
         s.expect(wider, "cell-0-0-2", [col, col + 8]);
-        s.button("add-row-0");
+        s.click_at_text("cell-0-1-0", 0);
+        s.button("row-menu-btn-0-1");
+        s.button("row-menu-insert-below-0-1");
         let taller = wider.replace("\n\nTail", "\n|  |  |  |\n\nTail");
         assert_eq!(s.markdown(), taller);
         assert_eq!(s.state().focused.as_deref(), Some("cell-0-2-0"));
@@ -715,5 +719,88 @@ fn ux_polish_showcase_renders_rich_markdown_and_table_controls() {
         s.button("rich-mode");
         open_body_at(&mut s.doc, [blank; 2]);
         s.capture("rich-mode-empty-line-icons");
+        s.button("live-mode");
+        s.writing(|mut w| {
+            let mut seeded = comments::seed_sample_comments(&w.note.peek());
+            if seeded.is_empty() {
+                let md = w.note.peek().markdown();
+                if let Some(at) = md.find("**Water** through the gate") {
+                    let r = at..at + "**Water** through the gate".len();
+                    seeded.push(comments::CommentThread {
+                        id: 1,
+                        anchor: w.note.peek().anchor_range(r),
+                        quote: "**Water** through the gate".into(),
+                        resolved: false,
+                        messages: vec![
+                            comments::CommentMessage {
+                                id: 101,
+                                author: "You".into(),
+                                is_ai: false,
+                                body: "Specify the mic setup so this take is reproducible?".into(),
+                                proposal: None,
+                            },
+                            comments::CommentMessage {
+                                id: 102,
+                                author: "Claude".into(),
+                                is_ai: true,
+                                body: "Good call — noting the stereo pattern and high-pass filter keeps the log actionable:".into(),
+                                proposal: Some(comments::EditProposal {
+                                    id: 1001,
+                                    label: "Update table cell".into(),
+                                    old_text: "**Water** through the gate".into(),
+                                    new_text: "**Water** through the gate (XY stereo, 80 Hz HPF)".into(),
+                                    applied: false,
+                                }),
+                            },
+                        ],
+                    });
+                }
+            } else {
+                // Also anchor thread 1 to "**Water** through the gate" if showcase has bold Water.
+                let md = w.note.peek().markdown();
+                if !seeded.iter().any(|t| t.id == 1)
+                    && let Some(at) = md.find("**Water** through the gate")
+                {
+                    let r = at..at + "**Water** through the gate".len();
+                    seeded.insert(
+                        0,
+                        comments::CommentThread {
+                            id: 1,
+                            anchor: w.note.peek().anchor_range(r),
+                            quote: "**Water** through the gate".into(),
+                            resolved: false,
+                            messages: vec![
+                                comments::CommentMessage {
+                                    id: 101,
+                                    author: "You".into(),
+                                    is_ai: false,
+                                    body: "Specify the mic setup so this take is reproducible?".into(),
+                                    proposal: None,
+                                },
+                                comments::CommentMessage {
+                                    id: 102,
+                                    author: "Claude".into(),
+                                    is_ai: true,
+                                    body: "Good call — noting the stereo pattern and high-pass filter keeps the log actionable:".into(),
+                                    proposal: Some(comments::EditProposal {
+                                        id: 1001,
+                                        label: "Update table cell".into(),
+                                        old_text: "**Water** through the gate".into(),
+                                        new_text: "**Water** through the gate (XY stereo, 80 Hz HPF)".into(),
+                                        applied: false,
+                                    }),
+                                },
+                            ],
+                        },
+                    );
+                }
+            }
+            let first = seeded.first().map(|t| t.id);
+            w.comments.set(seeded);
+            w.active_comment.set(first);
+            w.comments_open.set(true);
+        });
+        render(&mut s.doc);
+        s.capture("live-comments-pane");
     });
 }

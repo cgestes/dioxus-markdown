@@ -26,7 +26,7 @@ impl MarkerBox {
         .then_some(self.open)
     }
 
-    pub fn draw(self, writing: Writing, hovered: bool) -> Element {
+    pub fn draw(self, writing: Writing) -> Element {
         let Self {
             field,
             open,
@@ -47,7 +47,7 @@ impl MarkerBox {
                     e.stop_propagation();
                     writing.click_checkbox(field, open, e);
                 },
-                span { class: "marker-face", class: if checked { "checked" }, class: if selected { "selected" }, class: if hovered { "hovered" } }
+                span { class: "marker-face", class: if checked { "checked" }, class: if selected { "selected" } }
                 if checked { span { class: "marker-tick" } }
             }
         }
@@ -148,13 +148,16 @@ impl Writing {
                 let right = (a + first.advance()).max(b + last.advance());
                 let line = first.line();
                 let metrics = line.metrics();
+                let left_px = (left / scale).round();
+                let right_px = (right / scale).floor();
+                let width_px = (right_px - left_px).max(15.0);
                 Some(MarkerBox {
                     field,
                     open: token.open,
                     checked: token.checked,
-                    left: left / scale,
+                    left: left_px,
                     top: (metrics.block_min_coord - top) / scale,
-                    width: (right - left) / scale,
+                    width: width_px,
                     height: (metrics.block_max_coord - metrics.block_min_coord) / scale,
                     revealed: token.revealed,
                     selected: node.is_focussed()

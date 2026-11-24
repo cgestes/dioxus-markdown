@@ -34,11 +34,9 @@
   - Quiet footer in normal flex flow (`margin-top: auto`; never `position: fixed` so it never overlaps bottom table controls).
   - Shows word count, contextual hints (`Space or X toggles` / `Edit as text · F2` / `Press Enter or type to edit`), caret `Ln / Col`, and total line count.
 - **Typography & Bundled Fonts (`src/native/typefaces.rs`):**
-  - Every bundled `.woff2` font is registered with an explicit `FontInfoOverride` (`family_name`, `weight`, `style`) so CSS font matching never splits weights into separate families:
-    - `Instrument Serif` (`400 Normal`) — headings & table first-column labels
-    - `DM Sans` (`400 Normal`, `600 Normal`) — UI controls & table body/headers
-    - `IBM Plex Mono` (`400 Normal`, `600 Normal`, `400 Italic`) — Live mode prose, code, Source mode, numeric table columns
-  - Rich mode prose uses editorial serif (`var(--body)`).
+  - Modern Claude-inspired pairing — every bundled `.woff2` font is registered with an explicit `FontInfoOverride` (`family_name`, `weight`, `style`) so CSS font matching never splits weights into separate families:
+    - `Geist` (`400 Normal`, `500 Normal`, `600 Normal`, `400 Italic`) — headings (`600`, tight `-0.03em` tracking), Rich mode prose (`15.5px/26px`), UI controls, menus, and table labels/headers/body
+    - `JetBrains Mono` (`400 Normal`, `500 Normal`, `600 Normal`, `400 Italic`) — Live mode prose (`14px/25px`), inline code, code blocks, Source mode, numeric table columns, and status hints
 
 ---
 
@@ -53,7 +51,7 @@
   - **`Alt+Click`** on a checkbox reveals its brackets for direct keyboard editing.
 
 ### 3.2 Rich Mode (`EditMode::Rich` — Traditional)
-- Editorial serif prose (`16px/27px`).
+- Clean modern sans prose (`Geist`, `15.5px/26px`) with `JetBrains Mono` inline code.
 - Inline Markdown delimiters **never** reveal on cursor entry; edits inside a styled span stay styled, and deleting all visible characters of a styled span cleans up its hidden delimiters automatically.
 - Checkboxes always remain visual toggleboxes.
 - No global formatting toolbar: formatting uses the floating selection `FormatBar`, inline empty-line block icons, and keyboard shortcuts.
@@ -74,7 +72,7 @@
     - Supports: `Heading 1`, `Heading 2`, `Heading 3`, `Bullet list`, `Checklist`, `Blockquote`, `Code block`, `Table`, `Divider`, `Image` (`![alt](url)`).
 - **Left Block Handle (`⋮⋮`, `.block-handle`) & Drag-and-Drop Reordering:**
   - Every top-level block (headings, individual paragraphs, blockquotes, rules, lists, code blocks, tables) renders its own subtle `⋮⋮` grip handle in the left margin (`cursor: grab`).
-  - **Drag** any block's `⋮⋮` handle vertically to reorder it to any position in the document with a crisp accent-green drop indicator line (`#block-drop-line`); releasing commits one byte-exact, undoable Loro edit.
+  - **Drag** any block's `⋮⋮` handle (headings, paragraphs, blockquotes, dividers, tables, fenced code blocks, and individual top-level list/checklist items) vertically to reorder it to any position in the document with full-window pointer tracking, source dimming, and a crisp accent-green drop indicator line (`#block-drop-line`); releasing commits one byte-exact, undoable Loro edit. Zero dead hover gap between block content and handle.
   - **Click** `⋮⋮` to open the compact block menu (`#block-menu`) with **Move Up**, **Move Down**, **Duplicate**, and **Delete**.
   - **Keyboard:** `⌥⇧↑` / `⌥⇧↓` (`Alt+Shift+ArrowUp/Down`) moves the current block up or down directly.
 - **Floating Selection FormatBar (`#format-bar`):**
@@ -123,19 +121,13 @@
 ## 7. Tables
 
 - **Visual Design:**
-  - Pine header, subtle row rules, steady column widths while typing (no jitter), aligned cell hit areas (`left`, `center`, `right`).
-  - No ugly floating bordered `+` / `+ Row` pills and no detached popup menu.
-- **Unified Flat Axis Bars (Frameless Active Controls + Per-Header/Per-Row Menus & Delete):**
-  - All table controls are **flat and frameless** (no surrounding card border, background, or drop shadow — transparent ghost buttons on `--page` with soft hover tints) and appear only when the table is hovered or focused.
-  - **Top column bar (`#col-strip-{t}`):**
-    - The **active column** shows its flat frameless inline bar directly above the header (`←`, `→`, `L`, `C`, `R`, `+←`, `⋯`, `×`).
-    - **Every other column header** shows a compact flat `⋯` menu trigger (`L / C / R` alignment, Move Left/Right, Insert Left/Right, Delete Column) + quick `×` delete.
-    - A coherent flat `+` button sits at the right end of the bar to append a column.
-  - **Left row bar (`#row-strip-{t}`):**
-    - The **active data row** shows its flat frameless inline micro-controls beside the row (`↑`, `↓`, `+`, `⋯`, `×`).
-    - **Every other data row** shows a compact flat `⋯` menu trigger (Move Up/Down, Insert Above/Below, Delete Row) + quick `×` delete.
-    - A coherent flat `+` button sits at the bottom end of the bar to append a row.
-  - **Bottom scope strip (`#table-bar-{t}`):** Shows only the minimal flat cell/range scope label (`Cell B2`, or `B2 – C3 · N cells  Clear  Del rows  Del cols` when a rectangular range is selected).
+  - Pine header with `6px` rounded corners, subtle interior row hairlines, no stray bottom line on the last row (with matching `6px` rounded bottom corners), steady column widths while typing (no jitter), aligned cell hit areas (`left`, `center`, `right`).
+  - No floating column/row toolbars, no edge `+` column/row buttons, and no `"Cell xx"` single-cell footer clutter.
+- **Minimal Menu-Only Controls (Hovered/Active Column & Row Only):**
+  - Controls appear **only for the currently hovered (or focused/menu-open) column and row** — keeping all other columns and rows completely clean.
+  - **Column header menu (`⌄` inside header cell):** The hovered/active column header displays a subtle downward chevron icon (`ToolIcon::ChevronDown`) directly inside the pine header bar (right side for left/center columns, left side for right-aligned columns). Clicking it opens the column menu anchored directly under the chevron with **alignment icons (`AlignLeft` / `AlignCenter` / `AlignRight`)**, Move Left/Right, Insert Left/Right, and Delete Column.
+  - **Row menu (`⌄` beside data row):** The hovered/active data row displays a single downward chevron icon (`ToolIcon::ChevronDown`) to its left. Clicking it opens the row menu with Move Up/Down, Insert Above/Below, and Delete Row.
+  - **Bottom range strip (`#table-bar-{t}`):** Hidden for single-cell editing; appears only when a multi-cell rectangular range is selected (`B2 – C3 · N cells  Clear  Del rows  Del cols`).
 - **Keyboard & Pointer:**
   - `Tab` / `Shift+Tab` move horizontally (growing a new row at the last cell); `Enter` / `Shift+Enter` move vertically.
   - `Alt+ArrowUp` / `Alt+ArrowDown` move the current row; `Alt+ArrowLeft` / `Alt+ArrowRight` move the current column.
@@ -158,13 +150,32 @@
   - Non-render paths use `projection_peek` (reading `Memo`s via `.read()` so dirty memos recompute, while reading `Signal`s via `.peek()` to avoid reactive subscriptions).
 - **Quality Bar:**
   - `cargo check --locked --features native --bin margin` must pass with **0 warnings**.
-  - `cargo test --locked --features native` must pass 100% (currently 79 tests: 17 core + 62 native).
+  - `cargo test --locked --features native` must pass 100%.
   - Visual changes must be verified by inspecting rendered PNG screenshots from `MARGIN_TEST_ARTIFACTS`.
 
 ---
 
-## 9. Upcoming Rules & Additions (Backlog)
+## 9. Anchored Inline Comments & Scoped LLM Actions
 
+- **CRDT-Anchored Storage (Zero Markdown Pollution):**
+  - Comment threads live in memory (`Writing::comments`) anchored via Loro `Cursor` pairs (`Note::anchor_range` / `Note::resolve_anchor`), so editing prose above or around an anchor keeps highlights and replacement ranges accurate without modifying literal Markdown.
+  - Desktop launches seed 2 realistic in-memory demo threads on `SAMPLE`; tests start with comments closed and empty unless opened/created.
+- **Inline Highlights (`CommentInk`):**
+  - Anchored spans in headings, prose blocks, and table cells render warm amber underlines/washes (stronger when active, hidden once resolved unless selected).
+- **Triggers & Right-Hand Drawer (`CommentsPane`):**
+  - Select text and click **Comment** (`#format-comment`) in `FormatBar`, or press `⌘⇧M` / `Ctrl+Shift+M`, to open a new comment composer anchored to the selection (falls back to the current line if collapsed).
+  - Toggle the `304px` right-hand Comments drawer from `#toggle-comments` in `#mode-bar` (with an amber badge dot when open threads exist).
+  - Filter by `Open`, `Resolved`, or `All`; click any thread's quoted anchor to jump & select it in the document; `Resolve` / `Reopen` or `Delete` threads.
+- **Interactive Mock LLM Replies & Actionable Diffs:**
+  - Submitting a new comment or replying in an active thread (or tapping quick chips like `Shorten`, `Polish`, `Try another`) appends a mock Claude response with a reviewable inline diff (`- old` / `+ new`).
+  - **Apply to doc** commits the replacement to Loro Markdown (safely encoding table cell pipes/newlines), re-anchors the thread to the new span, and switches the button to **✓ Applied · Undo** (plus a quick **Resolve** button) for one-click reversal.
+
+---
+
+## 10. Upcoming Rules & Additions (Backlog)
+
+- Global right-hand AI Chat tab & real LLM provider backend
+- Persistent sidecar storage for comments alongside `.md` files
 - Open / save real `.md` files + workspace file sidebar
 - Heading outline panel
 - Dark mode theme toggle

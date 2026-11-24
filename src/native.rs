@@ -2,6 +2,8 @@
 mod blocks;
 #[path = "native/commands.rs"]
 mod commands;
+#[path = "native/comments.rs"]
+mod comments;
 #[path = "native/document.rs"]
 mod document;
 #[path = "native/formatting.rs"]
@@ -56,6 +58,8 @@ const CSS: &str = concat!(
     include_str!("native/split.css"),
     "\n",
     include_str!("native/inspector.css"),
+    "\n",
+    include_str!("native/comments.css"),
 );
 
 fn main() {
@@ -92,6 +96,11 @@ enum ToolIcon {
     Rule,
     Image,
     Grip,
+    ChevronDown,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
+    Comment,
     Bug,
     Table,
     Undo,
@@ -100,6 +109,20 @@ enum ToolIcon {
 
 impl ToolIcon {
     fn draw(self) -> Element {
+        if self == Self::Grip {
+            return rsx! {
+                span { class: "tool-icon", aria_hidden: "true",
+                    svg { width: "16", height: "16", view_box: "0 0 24 24", fill: "currentColor",
+                        circle { cx: "9", cy: "6", r: "1.6" }
+                        circle { cx: "15", cy: "6", r: "1.6" }
+                        circle { cx: "9", cy: "12", r: "1.6" }
+                        circle { cx: "15", cy: "12", r: "1.6" }
+                        circle { cx: "9", cy: "18", r: "1.6" }
+                        circle { cx: "15", cy: "18", r: "1.6" }
+                    }
+                }
+            };
+        }
         let path = match self {
             Self::Bold => "M6 4h8a4 4 0 0 1 0 8H6zm0 8h9a4 4 0 0 1 0 8H6z",
             Self::Italic => "M19 4h-9m4 16H5M15 4 9 20",
@@ -116,6 +139,11 @@ impl ToolIcon {
             Self::Rule => "M4 12h16",
             Self::Image => "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3.5 5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM21 15l-5-5L5 21",
             Self::Grip => "M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01",
+            Self::ChevronDown => "m6 9 6 6 6-6",
+            Self::AlignLeft => "M4 6h16M4 12h10M4 18h14",
+            Self::AlignCenter => "M4 6h16M7 12h10M5 18h14",
+            Self::AlignRight => "M4 6h16M10 12h10M6 18h14",
+            Self::Comment => "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
             Self::Bug => "m8 2 1.88 1.88M14.12 3.88 16 2M9 7.13v-1a3.003 3.003 0 1 1 6 0v1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6ZM12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4",
             Self::Table => {
                 "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM3 9h18M9 3v18"
@@ -309,6 +337,7 @@ fn app() -> Element {
             "# Input check\n\nabcd\nefgh\nijkl\nmnop\n\n| A | B |\n| --- | --- |\n| one | two |\n| three | four |",
             View::Live,
             true,
+            false,
         );
     }
     let mode = if std::env::args().any(|arg| arg == "--split") {
@@ -316,20 +345,38 @@ fn app() -> Element {
     } else {
         View::Live
     };
-    notebook_view(
-        SAMPLE,
-        mode,
-        std::env::args().any(|arg| arg == "--test-editor"),
-    )
+    let inspect = std::env::args().any(|arg| arg == "--test-editor");
+    notebook_view(SAMPLE, mode, inspect, !inspect)
 }
 
 #[cfg(test)]
 fn notebook(initial: &'static str) -> Element {
-    notebook_view(initial, View::Live, false)
+    notebook_view(initial, View::Live, false, false)
 }
 
-fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> Element {
+fn notebook_view(
+    initial: &str,
+    initial_view: View,
+    inspect_at_start: bool,
+    seed_comments: bool,
+) -> Element {
     let note = use_signal(|| Note::new(initial));
+    let comments = use_signal(move || {
+        if seed_comments {
+            comments::seed_sample_comments(&note.peek())
+        } else {
+            Vec::new()
+        }
+    });
+    let mut comments_open = use_signal(move || seed_comments && initial_view == View::Live);
+    let active_comment = use_signal(move || {
+        if seed_comments {
+            comments.peek().first().map(|t| t.id)
+        } else {
+            None
+        }
+    });
+    let draft_comment = use_signal(|| None);
     let mut view = use_signal(|| initial_view);
     let source = move || view() != View::Live;
     let message = use_signal(String::new);
@@ -343,6 +390,12 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
     };
     let mut focus = use_signal(|| initial_field.map(|field| (field, [0; 2])));
     let contents = use_memo(move || note.read().markdown());
+    let mut rev_counter = 0u64;
+    let doc_rev = use_memo(move || {
+        contents.read();
+        rev_counter += 1;
+        rev_counter
+    });
     let index = use_memo(move || markdown_markers(&contents.read()));
     let draft_table = use_signal(|| None);
     let tables = use_memo(move || {
@@ -358,10 +411,12 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
         focus,
         message,
         contents,
+        doc_rev,
         markers: index,
         draft_table,
         tables,
         blocks: use_memo(move || document::blocks(&contents.read(), &tables.read())),
+        logical_blocks: use_memo(move || blocks::split_blocks(&contents.read())),
         goal_x: use_signal(|| None),
         span: use_signal(|| None),
         cells: use_signal(|| None),
@@ -372,14 +427,15 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
         format_position: use_signal(|| None),
         drag: use_signal(|| None),
         pressed_box: use_signal(|| None),
-        hovered_box: use_signal(|| None),
         mouse_box: use_signal(|| None),
         edit_mode: use_signal(|| projection::EditMode::Markdown),
         cursor_source: use_signal(|| None),
         parsed: use_memo(move || projection::parse_markdown(&contents.read())),
         dom_dirty: use_signal(|| true),
+        last_tracked: use_signal(|| None),
         empty_line: use_signal(|| None),
         slash_menu: use_signal(|| None),
+        slash_selected: use_signal(|| 0),
         block_menu: use_signal(|| None),
         block_drag: use_signal(|| None),
         heights: use_signal(Vec::new),
@@ -394,6 +450,10 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
         marker: use_signal(|| None),
         boxes: use_signal(Vec::new),
         literal: use_signal(|| None),
+        comments,
+        comments_open,
+        active_comment,
+        draft_comment,
     };
     #[cfg(test)]
     use_context_provider(|| writing);
@@ -478,9 +538,7 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
     use_effect(move || {
         writing.contents.read();
         writing.ink.read();
-        writing.caret.read();
         writing.boxes.read();
-        writing.hovered_box.read();
         writing.format_position.read();
         writing.empty_line.read();
         writing.slash_menu.read();
@@ -490,6 +548,10 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
         writing.cells.read();
         writing.span.read();
         writing.edit_mode.read();
+        writing.comments.read();
+        writing.comments_open.read();
+        writing.active_comment.read();
+        writing.draft_comment.read();
         view.read();
         let dirty = writing.dom_dirty;
         *dirty.write_unchecked() = true;
@@ -565,8 +627,11 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
     };
     rsx! {
         style { "{CSS}" }
-        main { class: "notebook", class: if view()==View::Split { "split-view" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" },
+        main { class: "notebook", class: if view()==View::Split { "split-view" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
             onpointerdown: move |event| { writing.clear_goal(); writing.dismiss_menu_at(event.client_coordinates().x,event.client_coordinates().y); },
+            onpointermove: move |e| writing.pointer_move(e),
+            onpointerup: move |_| writing.end_drag(),
+            onpointercancel: move |_| writing.end_drag(),
             oninput: move |_| reveal_input.set(true),
             onmounted: move |event| root.set(event.downcast::<NodeHandle>().cloned()),
             onkeydown: move |e| {
@@ -612,6 +677,38 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
                         EditorButton { id: "undo", class: "dock-icon-btn", label: "Undo", tip: undo_tip, icon: ToolIcon::Undo, disabled: !note.read().can_undo(), onactivate: move |_| writing.history(source(), false) }
                         EditorButton { id: "redo", class: "dock-icon-btn", label: "Redo", tip: redo_tip, icon: ToolIcon::Redo, disabled: !note.read().can_redo(), onactivate: move |_| writing.history(source(), true) }
                     }
+                    {
+                        let open_comments = writing.comments.read().iter().filter(|t| !t.resolved).count();
+                        let panel_open = (writing.comments_open)() && !source();
+                        let tip = if cfg!(target_os = "macos") {
+                            "Toggle comments (⌘⇧M to comment on selection)"
+                        } else {
+                            "Toggle comments (Ctrl+Shift+M to comment on selection)"
+                        };
+                        rsx! {
+                            button {
+                                id: "toggle-comments",
+                                class: "dock-icon-btn dock-comments-btn",
+                                class: if panel_open { "selected" },
+                                aria_label: "Comments",
+                                title: tip,
+                                aria_pressed: if panel_open { "true" } else { "false" },
+                                onclick: move |_| {
+                                    if source() {
+                                        change_view(View::Live);
+                                        comments_open.set(true);
+                                    } else {
+                                        let next = !*comments_open.peek();
+                                        comments_open.set(next);
+                                    }
+                                },
+                                {ToolIcon::Comment.draw()}
+                                if open_comments > 0 {
+                                    span { class: "dock-comments-dot", aria_hidden: "true" }
+                                }
+                            }
+                        }
+                    }
                     EditorButton { id: "toggle-debug", class: "dock-icon-btn", label: "Debug display", tip: "Toggle debug display (F8)", icon: ToolIcon::Bug, selected: inspecting() && !source(), onactivate: move |_| toggle_debug() }
                 }
             }
@@ -623,13 +720,11 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
             if source() {
                 split::DocumentEditor { writing, split: view()==View::Split }
             } else {
-                div { class: "paper", id: "paper",
+                div { class: "editor-shell",
+                    div { class: "editor-main",
+                        div { class: "paper", id: "paper",
                     class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
                     onpointerdown: move |e| writing.pointer_down(e),
-                    onpointermove: move |e| writing.pointer_move(e),
-                    onpointerup: move |_| writing.end_drag(),
-                    onpointercancel: move |_| writing.end_drag(),
-                    onpointerleave: move |_| writing.clear_hover(),
                     if let Some(y) = writing.block_drag.read().filter(|d| d.dragging).and_then(|d| d.indicator_y) {
                         div { id: "block-drop-line", class: "block-drop-line", aria_hidden: "true", style: "top:{y:.1}px;",
                             span { class: "block-drop-dot" }
@@ -699,6 +794,9 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
                         }
                     }
                 }
+                }
+                    }
+                    comments::CommentsPane { writing }
                 }
                 formatting::FormatBar { writing }
                 slash::SlashMenu { writing }

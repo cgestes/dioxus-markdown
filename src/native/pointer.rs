@@ -317,6 +317,8 @@ impl Writing {
     pub(super) fn pointer_move(mut self, e: PointerEvent) {
         let active_bd = *self.block_drag.peek();
         if let Some(mut bd) = active_bd {
+            e.prevent_default();
+            e.stop_propagation();
             if !e
                 .held_buttons()
                 .contains(dioxus_html::input_data::MouseButton::Primary)
@@ -325,7 +327,7 @@ impl Writing {
                 return;
             }
             let y = e.client_coordinates().y;
-            if !bd.dragging && (y - bd.start_y).abs() < 5.0 {
+            if !bd.dragging && (y - bd.start_y).abs() < 4.0 {
                 return;
             }
             if !bd.dragging {
@@ -342,17 +344,6 @@ impl Writing {
             return;
         }
         let Some(mut drag) = *self.drag.peek() else {
-            if self.boxes.peek().is_empty() {
-                if self.hovered_box.peek().is_some() {
-                    self.hovered_box.set(None);
-                }
-                return;
-            }
-            let p = e.client_coordinates();
-            let hovered = self.box_at_point(p.x, p.y);
-            if *self.hovered_box.peek() != hovered {
-                self.hovered_box.set(hovered);
-            }
             return;
         };
         if !e
@@ -424,40 +415,11 @@ impl Writing {
         self.open(hit.field, target_sel);
     }
 
-    fn box_at_point(self, client_x: f64, client_y: f64) -> Option<usize> {
-        let root = self.root.peek().clone()?;
-        let doc = root.doc();
-        for b in self.boxes.peek().iter() {
-            if b.revealed {
-                continue;
-            }
-            let Some(rect) = doc
-                .get_element_by_id(&b.field.id())
-                .and_then(|id| doc.get_client_bounding_rect(id))
-            else {
-                continue;
-            };
-            let (x, y) = ((client_x - rect.x) as f32, (client_y - rect.y) as f32);
-            if let Some(open) = b.visible_at(b.field, x, y) {
-                return Some(open);
-            }
-        }
-        None
-    }
-
-    pub(super) fn clear_hover(mut self) {
-        if self.hovered_box.peek().is_some() {
-            self.hovered_box.set(None);
-        }
-    }
-
     fn block_drop_target(self, client_y: f64) -> Option<(usize, f64)> {
         let handle = self.root.peek().clone()?;
         let doc = handle.doc();
         let paper = doc.get_client_bounding_rect(doc.get_element_by_id("paper")?)?;
-        let md = self.contents.read();
-        let total = super::blocks::split_blocks(&md).len();
-        drop(md);
+        let total = self.logical_blocks.read().len();
         if total == 0 {
             return None;
         }
@@ -478,12 +440,26 @@ impl Writing {
             return None;
         }
         present.sort_by(|a, b| a.1.total_cmp(&b.1));
-        let bottom_edge = doc
-            .get_element_by_id("body-surface")
-            .and_then(|id| doc.get_client_bounding_rect(id))
-            .map(|r| r.y + r.height)
-            .unwrap_or(paper.y + paper.height - 64.0)
-            .max(present.last().unwrap().1 + 28.0);
+        let last_idx = present.last().unwrap().0;
+        let last_top = present.last().unwrap().1;
+        // Estimate the visual bottom of the last block accurately (including tall tables).
+        let last_table_bottom = self
+            .tables
+            .read()
+            .iter()
+            .enumerate()
+            .find(|(_, t)| {
+                self.logical_blocks
+                    .read()
+                    .get(last_idx)
+                    .is_some_and(|r| r.start == t.range.start)
+            })
+            .and_then(|(ti, _)| {
+                doc.get_element_by_id(&format!("grid-scroll-{ti}"))
+                    .and_then(|id| doc.get_client_bounding_rect(id))
+                    .map(|r| r.y + r.height)
+            });
+        let bottom_edge = last_table_bottom.unwrap_or(last_top + 28.0);
         let mut slot = 0;
         for (pos, &(idx, top)) in present.iter().enumerate() {
             let next_top = present
@@ -497,7 +473,7 @@ impl Writing {
         let indicator_y = if slot == 0 {
             (present[0].1 - paper.y - 6.0).max(0.0)
         } else if slot >= total {
-            (bottom_edge - paper.y + 4.0).max(0.0)
+            (bottom_edge - paper.y + 6.0).max(0.0)
         } else {
             let before = present
                 .iter()

@@ -149,6 +149,42 @@ impl Note {
         Ok(())
     }
 
+    /// Capture a Loro CRDT cursor pair for a UTF-8 byte range so comment anchors
+    /// survive edits elsewhere in the document.
+    pub fn anchor_range(
+        &self,
+        range: Range<usize>,
+    ) -> Option<(loro::cursor::Cursor, loro::cursor::Cursor)> {
+        let md = self.markdown();
+        let start = md.floor_char_boundary(range.start.min(md.len()));
+        let end = md.floor_char_boundary(range.end.min(md.len()));
+        if start >= end {
+            return None;
+        }
+        let text = self.doc.get_text("markdown");
+        let start_u = text.convert_pos(start, PosType::Bytes, PosType::Unicode)?;
+        let end_u = text.convert_pos(end, PosType::Bytes, PosType::Unicode)?;
+        let a = text.get_cursor(start_u, loro::cursor::Side::Right)?;
+        let b = text.get_cursor(end_u, loro::cursor::Side::Left)?;
+        Some((a, b))
+    }
+
+    /// Resolve a Loro CRDT cursor pair back to current UTF-8 byte offsets.
+    pub fn resolve_anchor(
+        &self,
+        (a, b): &(loro::cursor::Cursor, loro::cursor::Cursor),
+    ) -> Option<Range<usize>> {
+        let md = self.markdown();
+        let text = self.doc.get_text("markdown");
+        let ra = self.doc.get_cursor_pos(a).ok()?.current.pos;
+        let rb = self.doc.get_cursor_pos(b).ok()?.current.pos;
+        let start = text.convert_pos(ra, PosType::Unicode, PosType::Bytes)?;
+        let end = text.convert_pos(rb, PosType::Unicode, PosType::Bytes)?;
+        let lo = md.floor_char_boundary(start.min(end).min(md.len()));
+        let hi = md.floor_char_boundary(start.max(end).min(md.len()));
+        (lo < hi).then_some(lo..hi)
+    }
+
     /// Capture both ends before an edit. Loro transforms them as part of its
     /// undo item, including changes made by another author.
     pub fn remember_selection(&self, [anchor, head]: [usize; 2]) {
