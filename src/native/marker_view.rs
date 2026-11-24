@@ -26,8 +26,9 @@ impl MarkerBox {
         .then_some(self.open)
     }
 
-    pub fn draw(self, hovered: bool) -> Element {
+    pub fn draw(self, writing: Writing, hovered: bool) -> Element {
         let Self {
+            field,
             open,
             checked,
             left,
@@ -42,6 +43,10 @@ impl MarkerBox {
                 key: "{open}", id: "checkbox-{open}", class: "marker-slot", role: "checkbox",
                 aria_checked: checked, aria_label: "Checkbox",
                 style: "left:{left}px; top:{top}px; width:{width}px; height:{height}px;",
+                onclick: move |e| {
+                    e.stop_propagation();
+                    writing.click_checkbox(field, open, e);
+                },
                 span { class: "marker-face", class: if checked { "checked" }, class: if selected { "selected" }, class: if hovered { "hovered" } }
                 if checked { span { class: "marker-tick" } }
             }
@@ -72,7 +77,7 @@ impl Writing {
             return Vec::new();
         };
         let md = self.contents.read();
-        let proj = self.projection(field);
+        let proj = self.projection_peek(field);
         let selection = edit.raw_selection().text_range();
         let markers = if edit.is_composing() {
             let body = self.range(field, &md).start;
@@ -174,7 +179,9 @@ impl Writing {
         let next = (0..=count)
             .flat_map(|i| self.measured_boxes(Field::Body(i)))
             .collect::<Vec<_>>();
-        if let Some(root) = self.root.peek().as_ref() {
+        if self.drag.peek().is_none()
+            && let Some(root) = self.root.peek().as_ref()
+        {
             let doc = root.doc();
             let measure = |field: Field| -> usize {
                 let Some(node) = doc
@@ -208,6 +215,45 @@ impl Writing {
         if *self.boxes.peek() != next {
             self.boxes.set(next);
         }
+        let caret = self.measured_caret();
+        if *self.caret.peek() != caret {
+            self.caret.set(caret);
+        }
+    }
+
+    pub fn click_checkbox(mut self, field: Field, open: usize, event: MouseEvent) {
+        if event
+            .modifiers()
+            .intersects(Modifiers::SHIFT | Modifiers::META | Modifiers::CONTROL)
+        {
+            self.pressed_box.set(None);
+            self.track_field(field);
+            return;
+        }
+        let pressed = self.pressed_box.take();
+        if pressed != Some(open) {
+            return;
+        }
+        if self.literal.peek().is_some() {
+            self.track_field(field);
+            return;
+        }
+        let inside = open + 1;
+        if event.modifiers().contains(Modifiers::ALT) {
+            // Alt+click reveals the Markdown brackets for direct editing.
+            self.mouse_box.set(None);
+            self.open(field, [inside; 2]);
+            return;
+        }
+        // Ordinary mouse click toggles the box in place and keeps it rendered as a togglebox!
+        self.mouse_box.set(Some(open));
+        report(
+            self.note
+                .write()
+                .edit_marker(inside..inside, Mode::Structured, Input::Type(' ')),
+            self.message,
+        );
+        self.open(field, [open + 3; 2]);
     }
 
     pub fn click_body(mut self, field: Field, event: MouseEvent) {
@@ -265,12 +311,10 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
             let Some(handle) = writing.root.peek().clone() else {
                 return;
             };
-            writing.refresh_format_position();
             let changed_size = std::mem::take(&mut resized);
             if changed_size {
                 handle.doc_mut().resolve(0.0);
             }
-            writing.position_table_menu();
             let doc = handle.doc();
             let current = doc.get_focussed_node_id().and_then(|id| {
                 let text = doc.get_node(id)?.element_data()?.text_input_data()?;
@@ -279,6 +323,16 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
             drop(doc);
             if changed_size || current != previous {
                 previous = current;
+                if writing.drag.peek().is_none() {
+                    if writing.focus.peek().is_none()
+                        && let Some(field) = *writing.active.peek()
+                    {
+                        writing.track_field(field);
+                    }
+                    writing.refresh_format_position();
+                    writing.refresh_empty_line();
+                    writing.refresh_slash();
+                }
                 writing.refresh_boxes();
             }
         }

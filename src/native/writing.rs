@@ -7,6 +7,21 @@ use margin_editor_core::checkbox::{Input, Marker, Mode};
 use margin_editor_core::note::{Note, text_change};
 use std::ops::Range;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum TableMenu {
+    Column(usize, usize),
+    Row(usize, usize),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct BlockDrag {
+    pub from: usize,
+    pub start_y: f64,
+    pub dragging: bool,
+    pub target: usize,
+    pub indicator_y: Option<f64>,
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct Writing {
     pub note: Signal<Note>,
@@ -22,8 +37,7 @@ pub(super) struct Writing {
     pub span: Signal<Option<ByteSelection>>,
     pub cells: Signal<Option<(usize, table::CellRect)>>,
     pub cell_editing: Signal<bool>,
-    pub table_menu: Signal<Option<usize>>,
-    pub table_menu_top: Signal<Option<i32>>,
+    pub table_menu: Signal<Option<TableMenu>>,
     pub quiet_cell: Signal<Option<Field>>,
     pub selected_text: Signal<Option<ByteSelection>>,
     pub format_position: Signal<Option<[i32; 2]>>,
@@ -33,6 +47,12 @@ pub(super) struct Writing {
     pub edit_mode: Signal<super::projection::EditMode>,
     pub cursor_source: Signal<Option<ByteSelection>>,
     pub drag: Signal<Option<super::pointer::Drag>>,
+    pub parsed: Memo<super::projection::ParsedMarkdown>,
+    pub dom_dirty: Signal<bool>,
+    pub empty_line: Signal<Option<(Field, f32, f32)>>,
+    pub slash_menu: Signal<Option<super::slash::SlashState>>,
+    pub block_menu: Signal<Option<usize>>,
+    pub block_drag: Signal<Option<BlockDrag>>,
 
     pub draft_table: Signal<Option<usize>>,
     pub heights: Signal<Vec<usize>>,
@@ -40,6 +60,7 @@ pub(super) struct Writing {
     pub caret_line_col: Signal<Option<[usize; 2]>>,
     pub syntax: Memo<Vec<super::markdown::Token>>,
     pub ink: Signal<Vec<super::markdown::Ink>>,
+    pub caret: Signal<Option<super::markdown::CaretInk>>,
     pub active: Signal<Option<Field>>,
     // Keep the origin of an open body stable when its first text becomes a heading.
     pub body: Signal<Option<BodyStart>>,
@@ -60,7 +81,11 @@ impl Writing {
     pub fn range(self, field: Field, md: &str) -> Range<usize> {
         let parts = self.sections(md);
         match field {
-            Field::Title => parts.title.unwrap_or(0..0),
+            Field::Title => match (parts.hashes, parts.title) {
+                (Some(h), Some(t)) => h.start..t.end,
+                (_, Some(t)) => t,
+                _ => 0..0,
+            },
             Field::TitleGap => {
                 let start = Sections::with_origin(md, BodyStart::AfterHeading).body;
                 start..start
@@ -70,7 +95,7 @@ impl Writing {
                 .read()
                 .get(i)
                 .and_then(|b| match &b.kind {
-                    BlockKind::Heading { title, .. } => Some(title.clone()),
+                    BlockKind::Heading { hashes, title } => Some(hashes.start..title.end),
                     _ => None,
                 })
                 .unwrap_or(md.len()..md.len()),
@@ -136,20 +161,57 @@ impl Writing {
         self.track_field(field);
     }
 
+    pub fn resolve_dom(self, handle: &NodeHandle) {
+        if *self.dom_dirty.peek() {
+            *self.dom_dirty.write_unchecked() = false;
+            handle.doc_mut().resolve(0.0);
+        }
+    }
+
     pub fn projection(self, field: Field) -> super::projection::Projection {
         let md = self.contents.read();
+        let parsed = self.parsed.read();
         let range = self.range(field, &md);
         let markers = self.markers.read();
         let mode = *self.edit_mode.read();
-        let active_sel = if *self.active.read() == Some(field) {
-            *self.cursor_source.read()
+        let is_heading = matches!(field, Field::Title | Field::Heading(_));
+        let drag = *self.drag.read();
+        let active_is_field = *self.active.read() == Some(field);
+        let span_covers = self.span.read().is_some_and(|[a, b]| {
+            let (lo, hi) = (a.min(b), a.max(b));
+            lo < range.end && hi > range.start
+        });
+        let (active_sel, mouse_box, literal) = if mode == super::projection::EditMode::Markdown {
+            if is_heading {
+                let dragging_from_other = drag.is_some_and(|d| d.field != field);
+                let show_prefix = !dragging_from_other
+                    && (active_is_field
+                        || span_covers
+                        || drag.is_some_and(|d| d.field == field));
+                if show_prefix {
+                    (
+                        (*self.cursor_source.read()).or(Some([range.start; 2])),
+                        *self.mouse_box.read(),
+                        *self.literal.read(),
+                    )
+                } else {
+                    (None, None, None)
+                }
+            } else if active_is_field {
+                (
+                    *self.cursor_source.read(),
+                    *self.mouse_box.read(),
+                    *self.literal.read(),
+                )
+            } else {
+                (None, None, None)
+            }
         } else {
-            None
+            (None, None, None)
         };
-        let mouse_box = *self.mouse_box.read();
-        let literal = *self.literal.read();
         super::projection::Projection::build(
             &md,
+            &parsed,
             range,
             &markers,
             mode,
@@ -161,11 +223,127 @@ impl Writing {
         )
     }
 
+    pub fn projection_peek(self, field: Field) -> super::projection::Projection {
+        let md = self.contents.read();
+        let parsed = self.parsed.read();
+        let range = self.range(field, &md);
+        let markers = self.markers.read();
+        let mode = *self.edit_mode.peek();
+        let is_heading = matches!(field, Field::Title | Field::Heading(_));
+        let drag = *self.drag.peek();
+        let active_is_field = *self.active.peek() == Some(field);
+        let span_covers = self.span.peek().is_some_and(|[a, b]| {
+            let (lo, hi) = (a.min(b), a.max(b));
+            lo < range.end && hi > range.start
+        });
+        let (active_sel, mouse_box, literal) = if mode == super::projection::EditMode::Markdown {
+            if is_heading {
+                let dragging_from_other = drag.is_some_and(|d| d.field != field);
+                let show_prefix = !dragging_from_other
+                    && (active_is_field
+                        || span_covers
+                        || drag.is_some_and(|d| d.field == field));
+                if show_prefix {
+                    (
+                        (*self.cursor_source.peek()).or(Some([range.start; 2])),
+                        *self.mouse_box.peek(),
+                        *self.literal.peek(),
+                    )
+                } else {
+                    (None, None, None)
+                }
+            } else if active_is_field {
+                (
+                    *self.cursor_source.peek(),
+                    *self.mouse_box.peek(),
+                    *self.literal.peek(),
+                )
+            } else {
+                (None, None, None)
+            }
+        } else {
+            (None, None, None)
+        };
+        super::projection::Projection::build(
+            &md,
+            &parsed,
+            range,
+            &markers,
+            mode,
+            active_sel,
+            mouse_box,
+            literal,
+            matches!(field, Field::Body(_)),
+            matches!(field, Field::Cell(..)),
+        )
+    }
+
+    pub fn refresh_empty_line(mut self) {
+        let next = self.compute_empty_line();
+        if *self.empty_line.peek() != next {
+            self.empty_line.set(next);
+        }
+    }
+
+    fn compute_empty_line(self) -> Option<(Field, f32, f32)> {
+        if self.span.peek().is_some()
+            || self.cells.peek().is_some()
+            || self.drag.peek().is_some()
+            || self.selected_text.peek().is_some()
+            || self.marker.peek().is_some()
+        {
+            return None;
+        }
+        let field = (*self.active.peek())?;
+        if !matches!(field, Field::Body(_) | Field::TitleGap) {
+            return None;
+        }
+        if field == Field::TitleGap {
+            return Some((field, 18.0, -1.0));
+        }
+        let [a, b] = self.absolute_selection()?;
+        if a != b {
+            return None;
+        }
+        let md = self.contents.read();
+        let head = md.floor_char_boundary(b.min(md.len()));
+        let line_start = md[..head].rfind('\n').map_or(0, |i| i + 1);
+        let line_end = head + md[head..].find('\n').unwrap_or(md.len() - head);
+        if !md[line_start..line_end].trim_end_matches('\r').is_empty() {
+            return None;
+        }
+        let handle = self.root.peek().clone()?;
+        let doc = handle.doc();
+        let id = doc.get_element_by_id(&field.id())?;
+        if doc.get_focussed_node_id() != Some(id) && self.focus.peek().is_none() {
+            return None;
+        }
+        let node = doc.get_node(id)?;
+        let input = node.element_data()?.text_input_data()?;
+        let layout = input.editor.try_layout()?;
+        let caret = input.editor.raw_selection().focus().geometry(layout, 0.0);
+        let scale = layout.scale();
+        let l = node.final_layout();
+        let left = (l.border.left + l.padding.left + caret.x0 as f32 / scale + 18.0).round();
+        let line_h = ((caret.y1 - caret.y0) as f32 / scale).max(24.0);
+        let top = (l.border.top + l.padding.top + caret.y0 as f32 / scale - input.scroll_offset
+            + (line_h - 24.0) / 2.0)
+            .round();
+        if top < -4.0 || top > l.content_box_height() + 4.0 {
+            return None;
+        }
+        Some((field, left, top))
+    }
+
     pub fn reset(mut self) {
         self.clear_cells();
         self.selected_text.set(None);
+        self.empty_line.set(None);
+        self.slash_menu.set(None);
+        self.block_menu.set(None);
+        self.block_drag.set(None);
+        self.caret.set(None);
         self.table_menu.set(None);
-        self.table_menu_top.set(None);
         self.hovered_box.set(None);
         self.mouse_box.set(None);
         self.cursor_source.set(None);
@@ -196,7 +374,7 @@ impl Writing {
     }
 
     pub(super) fn track(mut self, selected: ByteSelection) {
-        let md = self.contents.peek();
+        let md = self.contents.read();
         let head = md.floor_char_boundary(selected[1].min(md.len()));
         let before = &md[..head];
         let from = before.rfind('\n').map_or(0, |n| n + 1);
@@ -224,6 +402,8 @@ impl Writing {
         if *self.marker.peek() != marker {
             self.marker.set(marker);
         }
+        self.refresh_empty_line();
+        self.refresh_slash();
     }
 
     pub fn track_field(mut self, field: Field) {
@@ -257,11 +437,13 @@ impl Writing {
                 }
             }
         }
-        if let Some(range) = self.absolute_selection() {
-            let old_display = self.projection(field).display;
+        if self.focus.peek().is_none()
+            && let Some(range) = self.absolute_selection()
+        {
+            let old_display = self.projection_peek(field).display;
             if self.drag.peek().is_none() && *self.cursor_source.peek() != Some(range) {
                 self.cursor_source.set(Some(range));
-                let next_proj = self.projection(field);
+                let next_proj = self.projection_peek(field);
                 if next_proj.display != old_display && self.span.peek().is_none() {
                     let local = [
                         next_proj.source_to_display(range[0]),
@@ -301,13 +483,26 @@ impl Writing {
 
     /// Cmd/Ctrl+Enter toggles the checkbox on the current line (or adds `- [ ] `).
     pub fn toggle_line_task(mut self, field: Field) -> bool {
-        if !matches!(field, Field::Body(_)) {
+        if !matches!(field, Field::Body(_) | Field::TitleGap) {
             return false;
         }
         let Some(selected @ [anchor, head]) = self.absolute_selection() else {
             return false;
         };
         let md = self.contents.read().clone();
+        if field == Field::TitleGap {
+            let eol = table::eol(&md);
+            let insert = format!("{eol}- [ ] ");
+            let caret = head + insert.len();
+            self.note.peek().remember_selection(selected);
+            let result = self.note.write().replace(head..head, &insert);
+            if result.is_ok() {
+                self.body.set(None);
+                self.open(self.field_at(caret), [caret; 2]);
+            }
+            report(result, self.message);
+            return true;
+        }
         let line_start = md[..head].rfind('\n').map_or(0, |i| i + 1);
         let line_end = head + md[head..].find('\n').unwrap_or(md.len() - head);
         let marker = self
@@ -426,8 +621,19 @@ impl Writing {
                 return false;
             }
             let eol = table::eol(&md);
-            let prefix = format!("{} {eol}{eol}", "#".repeat(grow.clamp(1, 6)));
-            report(self.note.write().replace(0..0, &prefix), self.message);
+            if *self.edit_mode.peek() == super::projection::EditMode::Markdown {
+                let prefix = if grow > 0 && grow == input.len() {
+                    format!("{}{eol}{eol}", "#".repeat(grow.clamp(1, 6)))
+                } else {
+                    format!("{} {eol}{eol}", "#".repeat(grow.clamp(1, 6)))
+                };
+                let caret = prefix.len() - eol.len() * 2;
+                report(self.note.write().replace(0..0, &prefix), self.message);
+                self.open(Field::Title, [caret; 2]);
+            } else {
+                let prefix = format!("{} {eol}{eol}", "#".repeat(grow.clamp(1, 6)));
+                report(self.note.write().replace(0..0, &prefix), self.message);
+            }
             return true;
         };
         let count = hashes.len();
@@ -467,13 +673,26 @@ impl Writing {
         let Some(field) = *self.active.peek() else {
             return;
         };
-        if !matches!(field, Field::Body(_)) {
+        if !matches!(field, Field::Body(_) | Field::TitleGap) {
             return;
         }
         let Some(selected @ [anchor, head]) = self.absolute_selection() else {
             return;
         };
         let md = self.contents.read().clone();
+        if field == Field::TitleGap {
+            let eol = table::eol(&md);
+            let insert = format!("{eol}{prefix}");
+            let caret = head + insert.len();
+            self.note.peek().remember_selection(selected);
+            let result = self.note.write().replace(head..head, &insert);
+            if result.is_ok() {
+                self.body.set(None);
+                self.open(self.field_at(caret), [caret; 2]);
+            }
+            report(result, self.message);
+            return;
+        }
         let line_start = md[..head].rfind('\n').map_or(0, |i| i + 1);
         let line_end = head + md[head..].find('\n').unwrap_or(md.len() - head);
         let line = &md[line_start..line_end];
@@ -507,12 +726,142 @@ impl Writing {
             .absolute_selection()
             .or(*self.parked_selection.peek())
             .map_or(md.len(), |s| s[0].max(s[1]));
+        let start = md[..pos].rfind('\n').map_or(0, |i| i + 1);
         let end = pos + md[pos..].find('\n').unwrap_or(md.len() - pos);
         let eol = table::eol(&md);
-        let insert = format!("{eol}{eol}---{eol}{eol}");
+        let on_empty = md[start..end].trim().is_empty();
+        let insert = if on_empty {
+            format!("---{eol}{eol}")
+        } else {
+            format!("{eol}{eol}---{eol}{eol}")
+        };
         let caret = end + insert.len();
         let result = self.note.write().replace(end..end, &insert);
         if result.is_ok() {
+            self.open(self.field_at(caret), [caret; 2]);
+        }
+        report(result, self.message);
+    }
+
+    pub fn insert_code_block(mut self) {
+        let md = self.contents.read().clone();
+        let pos = self
+            .absolute_selection()
+            .or(*self.parked_selection.peek())
+            .map_or(md.len(), |s| s[0].max(s[1]));
+        let start = md[..pos].rfind('\n').map_or(0, |i| i + 1);
+        let end = pos + md[pos..].find('\n').unwrap_or(md.len() - pos);
+        let eol = table::eol(&md);
+        let on_empty = md[start..end].trim().is_empty();
+        let (insert, caret) = if on_empty {
+            (format!("```{eol}{eol}```"), end + 3 + eol.len())
+        } else {
+            (
+                format!("{eol}{eol}```{eol}{eol}```"),
+                end + eol.len() * 2 + 3 + eol.len(),
+            )
+        };
+        let result = self.note.write().replace(end..end, &insert);
+        if result.is_ok() {
+            self.open(self.field_at(caret), [caret; 2]);
+        }
+        report(result, self.message);
+    }
+
+    pub fn insert_image(mut self) {
+        let md = self.contents.read().clone();
+        let pos = self
+            .absolute_selection()
+            .or(*self.parked_selection.peek())
+            .map_or(md.len(), |s| s[0].max(s[1]));
+        let snippet = "![alt text](https://)";
+        let result = self.note.write().replace(pos..pos, snippet);
+        if result.is_ok() {
+            let sel = [pos + 2, pos + 2 + "alt text".len()];
+            self.open(self.field_at(sel[1]), sel);
+        }
+        report(result, self.message);
+    }
+
+    pub fn move_block_dir(mut self, block_idx: usize, down: bool) {
+        self.block_menu.set(None);
+        let md = self.contents.read().clone();
+        let list = super::blocks::split_blocks(&md);
+        let Some((splices, caret)) = super::blocks::move_block(&md, &list, block_idx, down) else {
+            return;
+        };
+        if let Some(sel) = self.absolute_selection() {
+            self.note.peek().remember_selection(sel);
+        }
+        let result = self.note.write().splice(&splices);
+        if result.is_ok() {
+            self.body.set(None);
+            self.open(self.field_at(caret), [caret; 2]);
+        }
+        report(result, self.message);
+    }
+
+    pub fn move_block_to_slot(mut self, from: usize, to_slot: usize) {
+        self.block_menu.set(None);
+        let md = self.contents.read().clone();
+        let list = super::blocks::split_blocks(&md);
+        let Some((splices, caret)) = super::blocks::move_block_to(&md, &list, from, to_slot) else {
+            return;
+        };
+        if let Some(sel) = self.absolute_selection() {
+            self.note.peek().remember_selection(sel);
+        }
+        let result = self.note.write().splice(&splices);
+        if result.is_ok() {
+            self.body.set(None);
+            self.open(self.field_at(caret), [caret; 2]);
+        }
+        report(result, self.message);
+    }
+
+    pub fn start_block_drag(mut self, block_idx: usize, client_y: f64) {
+        self.end_drag();
+        self.table_menu.set(None);
+        self.block_drag.set(Some(BlockDrag {
+            from: block_idx,
+            start_y: client_y,
+            dragging: false,
+            target: block_idx,
+            indicator_y: None,
+        }));
+    }
+
+    pub fn duplicate_block_at(mut self, block_idx: usize) {
+        self.block_menu.set(None);
+        let md = self.contents.read().clone();
+        let list = super::blocks::split_blocks(&md);
+        let Some((splices, caret)) = super::blocks::duplicate_block(&md, &list, block_idx) else {
+            return;
+        };
+        if let Some(sel) = self.absolute_selection() {
+            self.note.peek().remember_selection(sel);
+        }
+        let result = self.note.write().splice(&splices);
+        if result.is_ok() {
+            self.body.set(None);
+            self.open(self.field_at(caret), [caret; 2]);
+        }
+        report(result, self.message);
+    }
+
+    pub fn delete_block_at(mut self, block_idx: usize) {
+        self.block_menu.set(None);
+        let md = self.contents.read().clone();
+        let list = super::blocks::split_blocks(&md);
+        let Some((splices, caret)) = super::blocks::delete_block(&md, &list, block_idx) else {
+            return;
+        };
+        if let Some(sel) = self.absolute_selection() {
+            self.note.peek().remember_selection(sel);
+        }
+        let result = self.note.write().splice(&splices);
+        if result.is_ok() {
+            self.body.set(None);
             self.open(self.field_at(caret), [caret; 2]);
         }
         report(result, self.message);
@@ -529,6 +878,14 @@ impl Writing {
         }
         self.track_field(field);
         if event.is_composing() {
+            return;
+        }
+        if self.slash_key(&event) {
+            return;
+        }
+        if event.key() == Key::Named(NamedKey::Escape) && self.block_menu.peek().is_some() {
+            event.prevent_default();
+            self.block_menu.set(None);
             return;
         }
         if self.document_key(field, &event)
@@ -586,7 +943,10 @@ impl Writing {
                 return;
             }
         }
-        if matches!(field, Field::Title | Field::Heading(_))
+        let hidden_heading_prefix = matches!(field, Field::Title | Field::Heading(_))
+            && (*self.edit_mode.peek() == super::projection::EditMode::Rich
+                || (field == Field::Title && Sections::read(&self.contents.read()).title.is_none()));
+        if hidden_heading_prefix
             && !event
                 .modifiers()
                 .intersects(Modifiers::CONTROL | Modifiers::META | Modifiers::ALT)
@@ -663,6 +1023,7 @@ impl Writing {
                 let range = self.absolute_selection();
                 self.active.set(None);
                 self.marker.set(None);
+                self.caret.set(None);
                 self.refresh_boxes();
                 self.parked_selection.set(range);
                 if let Some(handle) = self.root.peek().as_ref() {
@@ -725,7 +1086,7 @@ impl Writing {
         let parts = self.sections(&md);
         let range = self.range(field, &md);
         let before = &md[range.clone()];
-        let proj = self.projection(field);
+        let proj = self.projection_peek(field);
         let projected_differs = proj.display != before;
         let (removed, inserted) = text_change(&proj.display, value);
         if removed.is_empty() && inserted.is_empty() {
@@ -754,9 +1115,33 @@ impl Writing {
             return;
         }
         if projected_differs && !matches!(field, Field::Title if parts.title.is_none()) {
-            let Some((splices, next_caret)) = proj.map_input(value) else {
+            let Some((mut splices, mut next_caret)) = proj.map_input(value) else {
                 return;
             };
+            if let Field::Body(i) = field
+                && i > 0
+                && !inserted.is_empty()
+                && let Some(first) = splices.first_mut()
+            {
+                let eol = table::eol(&md);
+                let blocks = self.blocks.read();
+                let previous = blocks.get(i - 1);
+                let gap = previous.map_or("", |b| &md[b.line.end..first.range.start]);
+                let prefix = if previous.is_some_and(|b| matches!(b.kind, BlockKind::Table(_)))
+                    && !gap.contains(|c: char| !c.is_whitespace())
+                    && gap.matches('\n').count() < 2
+                {
+                    eol.repeat(2 - gap.matches('\n').count())
+                } else if previous.is_some_and(|b| b.line.end == first.range.start) {
+                    eol.to_owned()
+                } else {
+                    String::new()
+                };
+                if !prefix.is_empty() {
+                    first.text.insert_str(0, &prefix);
+                    next_caret += prefix.len();
+                }
+            }
             let result = self.note.write().splice(&splices);
             if result.is_ok() {
                 if let Some((open, close)) = raw {
@@ -772,6 +1157,9 @@ impl Writing {
                 let next_proj = self.projection(next_field);
                 let local = next_proj.source_to_display(next_caret);
                 if next_field != field || next_proj.display != value {
+                    if next_field != field {
+                        self.body.set(None);
+                    }
                     self.open(next_field, [next_caret; 2]);
                     return;
                 }
@@ -784,31 +1172,29 @@ impl Writing {
             return;
         }
         let absolute = range.start + removed.start..range.start + removed.end;
-        if matches!(field, Field::Title | Field::Heading(_))
+        if matches!(field, Field::Title)
+            && parts.title.is_none()
             && removed.start == 0
             && let Some((hashes, text)) = inserted.split_once(' ')
             && (1..=6).contains(&hashes.len())
             && hashes.bytes().all(|c| c == b'#')
             && !text.is_empty()
         {
-            let heading = self.heading(field, &md);
-            let start = heading.as_ref().map_or(0, |(r, _)| r.start);
             let eol = table::eol(&md);
-            let extra = if heading.is_none() {
-                eol.repeat(2)
-            } else {
-                String::new()
-            };
+            let extra = eol.repeat(2);
+            let pos = hashes.len() + 1 + text.len();
             report(
                 self.note
                     .write()
-                    .replace(start..absolute.end, &format!("{hashes} {text}{extra}")),
+                    .replace(0..absolute.end, &format!("{hashes} {text}{extra}")),
                 self.message,
             );
-            self.focus.set(Some((field, [text.len(); 2])));
+            self.open(Field::Title, [pos; 2]);
             return;
         }
         let prefix_input = matches!(field, Field::Title | Field::Heading(_))
+            && (*self.edit_mode.peek() == super::projection::EditMode::Rich
+                || (field == Field::Title && parts.title.is_none()))
             && removed == (0..0)
             && self.title_prefix(field, inserted, false);
         if prefix_input {
@@ -833,6 +1219,15 @@ impl Writing {
             && !md.ends_with('\n');
         let replacement = match field {
             Field::Title if parts.title.is_none() => format!("# {value}{eol}{eol}"),
+            Field::Title | Field::Heading(_)
+                if !before.is_empty()
+                    && before.bytes().all(|b| b == b'#')
+                    && removed == (before.len()..before.len())
+                    && !inserted.is_empty()
+                    && !inserted.starts_with(['#', ' ', '\t', '\r', '\n']) =>
+            {
+                format!(" {inserted}")
+            }
             Field::Title | Field::Heading(_)
                 if before.is_empty() && md[..range.start].ends_with('#') =>
             {
@@ -880,6 +1275,33 @@ impl Writing {
         self.contents.read();
         self.tables.read();
         if result.is_ok()
+            && field == Field::Title
+            && parts.title.is_none()
+            && Sections::read(&self.contents.read()).title.is_some()
+        {
+            let pos = 2 + value.len();
+            self.open(Field::Title, [pos; 2]);
+            return;
+        }
+        if result.is_ok()
+            && field == Field::Title
+            && parts.title.is_some()
+            && Sections::read(&self.contents.read()).title.is_none()
+        {
+            self.body.set(None);
+            let pos = absolute.start + replacement.len();
+            self.open(self.field_at(pos), [pos; 2]);
+            return;
+        }
+        if result.is_ok()
+            && matches!(field, Field::Heading(_))
+            && self.blocks.read().len() != old_count
+        {
+            let pos = absolute.start + replacement.len();
+            self.open(self.field_at(pos), [pos; 2]);
+            return;
+        }
+        if result.is_ok()
             && field == Field::Body(0)
             && parts.title.is_none()
             && Sections::read(&self.contents.read()).title.is_some()
@@ -891,6 +1313,7 @@ impl Writing {
         }
         if result.is_ok()
             && (field == Field::TitleGap
+                || matches!(field, Field::Title | Field::Heading(_)) && inserted != replacement
                 || matches!(field, Field::Body(_))
                     && (self.blocks.read().len() != old_count
                         || inserted != replacement && !needs_body_separator))

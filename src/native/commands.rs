@@ -109,6 +109,21 @@ impl Writing {
         let mods = e.modifiers();
         let primary = mods.intersects(Modifiers::META | Modifiers::CONTROL) && !mods.alt();
         let key = e.key();
+        if mods == (Modifiers::ALT | Modifiers::SHIFT)
+            && !matches!(field, Field::Cell(..))
+            && matches!(key, Key::Named(NamedKey::ArrowUp | NamedKey::ArrowDown))
+        {
+            let md = self.contents.read().clone();
+            if let Some([_, head]) = self.absolute_selection() {
+                let blocks = super::blocks::split_blocks(&md);
+                if let Some(bidx) = super::blocks::block_index_at(&blocks, head) {
+                    self.move_block_dir(bidx, key == Key::Named(NamedKey::ArrowDown));
+                    e.prevent_default();
+                    e.stop_propagation();
+                    return true;
+                }
+            }
+        }
         if primary && key == Key::Named(NamedKey::Enter) && !mods.shift() {
             if self.toggle_line_task(field) {
                 e.prevent_default();

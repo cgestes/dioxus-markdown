@@ -1,3 +1,5 @@
+#[path = "native/blocks.rs"]
+mod blocks;
 #[path = "native/commands.rs"]
 mod commands;
 #[path = "native/document.rs"]
@@ -25,6 +27,8 @@ mod pointer;
 mod projection;
 #[path = "native/selection.rs"]
 mod selection_model;
+#[path = "native/slash.rs"]
+mod slash;
 #[path = "native/split.rs"]
 mod split;
 #[path = "native/typefaces.rs"]
@@ -80,7 +84,13 @@ enum ToolIcon {
     Strike,
     Code,
     Link,
-    Plus,
+    List,
+    Task,
+    Quote,
+    Rule,
+    Image,
+    Grip,
+    Bug,
     Table,
     Undo,
     Redo,
@@ -98,7 +108,13 @@ impl ToolIcon {
             Self::Link => {
                 "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
             }
-            Self::Plus => "M12 5v14M5 12h14",
+            Self::List => "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+            Self::Task => "m9 11 3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+            Self::Quote => "M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1Zm12 0c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1Z",
+            Self::Rule => "M4 12h16",
+            Self::Image => "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3.5 5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM21 15l-5-5L5 21",
+            Self::Grip => "M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01",
+            Self::Bug => "m8 2 1.88 1.88M14.12 3.88 16 2M9 7.13v-1a3.003 3.003 0 1 1 6 0v1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6ZM12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4",
             Self::Table => {
                 "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM3 9h18M9 3v18"
             }
@@ -348,7 +364,6 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
         cells: use_signal(|| None),
         cell_editing: use_signal(|| false),
         table_menu: use_signal(|| None),
-        table_menu_top: use_signal(|| None),
         quiet_cell: use_signal(|| None),
         selected_text: use_signal(|| None),
         format_position: use_signal(|| None),
@@ -358,11 +373,18 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
         mouse_box: use_signal(|| None),
         edit_mode: use_signal(|| projection::EditMode::Markdown),
         cursor_source: use_signal(|| None),
+        parsed: use_memo(move || projection::parse_markdown(&contents.read())),
+        dom_dirty: use_signal(|| true),
+        empty_line: use_signal(|| None),
+        slash_menu: use_signal(|| None),
+        block_menu: use_signal(|| None),
+        block_drag: use_signal(|| None),
         heights: use_signal(Vec::new),
         heading_heights: use_signal(Vec::new),
         caret_line_col: use_signal(|| None),
         syntax: use_memo(move || markdown::syntax(&contents.read())),
         ink: use_signal(Vec::new),
+        caret: use_signal(|| None),
         active: use_signal(|| initial_field.filter(|f| *f != Field::Source)),
         body: use_signal(|| None),
         parked_selection: use_signal(|| None),
@@ -404,6 +426,9 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
         {
             restore_focus(handle, focus);
             writing.refresh_format_position();
+            writing.refresh_empty_line();
+            writing.refresh_slash();
+            writing.refresh_boxes();
         }
     });
     // Window scrolling must follow ordinary native typing as well as commands
@@ -442,18 +467,30 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
     });
     // Resolve pending DOM mutations immediately after Dioxus renders so Blitz's
     // hit-testing (paint_children) never dereferences a deleted NodeId.
+    {
+        let dirty = writing.dom_dirty;
+        *dirty.write_unchecked() = true;
+    }
     use_effect(move || {
         writing.contents.read();
         writing.ink.read();
+        writing.caret.read();
         writing.boxes.read();
+        writing.hovered_box.read();
         writing.format_position.read();
+        writing.empty_line.read();
+        writing.slash_menu.read();
+        writing.block_menu.read();
+        writing.block_drag.read();
         writing.table_menu.read();
         writing.cells.read();
         writing.span.read();
         writing.edit_mode.read();
         view.read();
+        let dirty = writing.dom_dirty;
+        *dirty.write_unchecked() = true;
         if let Some(handle) = root.peek().as_ref() {
-            handle.doc_mut().resolve(0.0);
+            writing.resolve_dom(handle);
         }
     });
     let (hint, action, action_id) = if raw {
@@ -507,6 +544,21 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
     };
     let is_rich = view() == View::Live && (writing.edit_mode)() == projection::EditMode::Rich;
     let is_md_live = view() == View::Live && (writing.edit_mode)() == projection::EditMode::Markdown;
+    let mut toggle_debug = move || {
+        if source() {
+            change_view(View::Live);
+            trace.set(inspector::Trace::new(&contents.peek()));
+            inspecting.set(true);
+            return;
+        }
+        let next = !inspecting();
+        trace.set(if next {
+            inspector::Trace::new(&contents.peek())
+        } else {
+            inspector::Trace::new("")
+        });
+        inspecting.set(next);
+    };
     rsx! {
         style { "{CSS}" }
         main { class: "notebook", class: if view()==View::Split { "split-view" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" },
@@ -519,9 +571,7 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
                         Key::Named(NamedKey::F8) => {
                             e.prevent_default();
                             if !e.is_auto_repeating() {
-                                let next = !inspecting();
-                                trace.set(if next { inspector::Trace::new(&contents.peek()) } else { inspector::Trace::new("") });
-                                inspecting.set(next);
+                                toggle_debug();
                             }
                             return;
                         }
@@ -541,76 +591,42 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
                     writing.history(source(), e.modifiers().shift() || k.eq_ignore_ascii_case("y"));
                 }
             },
-            header { id: "workspace-bar", class: "workspace-bar",
-                div { class: "brand",
-                    span { class: "brandmark", aria_hidden: "true", i {} i {} i {} }
-                    span { class: "wordmark", "Margin" }
-                }
-                if inspecting() && !source() {
-                    inspector::Inspector { writing, trace, desktop }
-                }
-                nav { aria_label: "Editor tools",
+            div { id: "mode-bar", class: "mode-dock",
+                nav { class: "mode-pill-bar", aria_label: "Editor tools",
                     div { class: "mode", role: "group", aria_label: "Markdown view",
-                        EditorButton { label: "Rich", id: "rich-mode", tip: "Traditional rich editing with toolbar", selected: is_rich, onactivate: move |_| set_edit_mode(projection::EditMode::Rich) }
+                        EditorButton { label: "Rich", id: "rich-mode", tip: "Rich editing (delimiters stay hidden)", selected: is_rich, onactivate: move |_| set_edit_mode(projection::EditMode::Rich) }
                         EditorButton { label: "Live", id: "live-mode", tip: "Keyboard-first Markdown live editing", selected: is_md_live, onactivate: move |_| set_edit_mode(projection::EditMode::Markdown) }
                         EditorButton { label: "Split", id: "split-mode", selected: view()==View::Split, onactivate: move |_| change_view(View::Split) }
                         EditorButton { label: "Source", id: "source-mode", selected: view()==View::Source, onactivate: move |_| change_view(View::Source) }
                     }
-                    EditorButton { id: "insert-table", label: "Insert table", tip: "Insert Markdown table", icon: ToolIcon::Table, glyph: "Table", onactivate: move |_| writing.insert_table(source()) }
+                    EditorButton { id: "insert-table", class: "dock-icon-btn", label: "Insert table", tip: "Insert Markdown table", icon: ToolIcon::Table, onactivate: move |_| writing.insert_table(source()) }
                     div { class: "history-tools", role: "group", aria_label: "History",
-                        EditorButton { id: "undo", label: "Undo", tip: undo_tip, icon: ToolIcon::Undo, disabled: !note.read().can_undo(), onactivate: move |_| writing.history(source(), false) }
-                        EditorButton { id: "redo", label: "Redo", tip: redo_tip, icon: ToolIcon::Redo, disabled: !note.read().can_redo(), onactivate: move |_| writing.history(source(), true) }
+                        EditorButton { id: "undo", class: "dock-icon-btn", label: "Undo", tip: undo_tip, icon: ToolIcon::Undo, disabled: !note.read().can_undo(), onactivate: move |_| writing.history(source(), false) }
+                        EditorButton { id: "redo", class: "dock-icon-btn", label: "Redo", tip: redo_tip, icon: ToolIcon::Redo, disabled: !note.read().can_redo(), onactivate: move |_| writing.history(source(), true) }
                     }
+                    EditorButton { id: "toggle-debug", class: "dock-icon-btn", label: "Debug display", tip: "Toggle debug display (F8)", icon: ToolIcon::Bug, selected: inspecting() && !source(), onactivate: move |_| toggle_debug() }
                 }
             }
-            if is_rich {
-                div { id: "rich-toolbar", class: "rich-toolbar", role: "toolbar", aria_label: "Formatting toolbar",
-                    onpointerdown: move |e| e.prevent_default(),
-                    div { class: "rich-group",
-                        EditorButton { id: "rich-h1", label: "Heading 1", glyph: "H1", tip: "Heading 1 (⌘1)",
-                            onactivate: move |_| { if let Some(f) = *writing.active.peek() { writing.set_heading_level(f, 1); } } }
-                        EditorButton { id: "rich-h2", label: "Heading 2", glyph: "H2", tip: "Heading 2 (⌘2)",
-                            onactivate: move |_| { if let Some(f) = *writing.active.peek() { writing.set_heading_level(f, 2); } } }
-                        EditorButton { id: "rich-h3", label: "Heading 3", glyph: "H3", tip: "Heading 3 (⌘3)",
-                            onactivate: move |_| { if let Some(f) = *writing.active.peek() { writing.set_heading_level(f, 3); } } }
-                        EditorButton { id: "rich-p", label: "Paragraph", glyph: "¶", tip: "Paragraph (⌘0)",
-                            onactivate: move |_| { if let Some(f) = *writing.active.peek() { writing.set_heading_level(f, 0); } } }
-                    }
-                    span { class: "rich-sep", aria_hidden: "true" }
-                    div { class: "rich-group",
-                        EditorButton { id: "rich-bold", label: "Bold", tip: "Bold (⌘B)", icon: ToolIcon::Bold,
-                            onactivate: move |_| { writing.format(margin_editor_core::format::Style::Bold); } }
-                        EditorButton { id: "rich-italic", label: "Italic", tip: "Italic (⌘I)", icon: ToolIcon::Italic,
-                            onactivate: move |_| { writing.format(margin_editor_core::format::Style::Italic); } }
-                        EditorButton { id: "rich-strike", label: "Strikethrough", tip: "Strikethrough (⌘⇧X)", icon: ToolIcon::Strike,
-                            onactivate: move |_| { writing.format(margin_editor_core::format::Style::Strike); } }
-                        EditorButton { id: "rich-code", label: "Inline code", tip: "Inline code (⌘E)", icon: ToolIcon::Code,
-                            onactivate: move |_| { writing.format(margin_editor_core::format::Style::Code); } }
-                        EditorButton { id: "rich-link", label: "Link", tip: "Link (⌘K)", icon: ToolIcon::Link,
-                            onactivate: move |_| { writing.format(margin_editor_core::format::Style::Link); } }
-                    }
-                    span { class: "rich-sep", aria_hidden: "true" }
-                    div { class: "rich-group",
-                        EditorButton { id: "rich-bullet", label: "Bullet list", glyph: "• List", tip: "Toggle bullet list",
-                            onactivate: move |_| writing.toggle_line_prefix("- ") }
-                        EditorButton { id: "rich-task", label: "Checklist", glyph: "☑ Task", tip: "Toggle checklist (⌘Enter)",
-                            onactivate: move |_| { if let Some(f) = *writing.active.peek() { writing.toggle_line_task(f); } } }
-                        EditorButton { id: "rich-quote", label: "Quote", glyph: "❝ Quote", tip: "Toggle blockquote",
-                            onactivate: move |_| writing.toggle_line_prefix("> ") }
-                        EditorButton { id: "rich-rule", label: "Divider", glyph: "— Rule", tip: "Insert horizontal rule",
-                            onactivate: move |_| writing.insert_rule() }
-                    }
+            if inspecting() && !source() {
+                div { class: "inspector-strip",
+                    inspector::Inspector { writing, trace, desktop }
                 }
             }
             if source() {
                 split::DocumentEditor { writing, split: view()==View::Split }
             } else {
                 div { class: "paper", id: "paper",
+                    class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
                     onpointerdown: move |e| writing.pointer_down(e),
                     onpointermove: move |e| writing.pointer_move(e),
                     onpointerup: move |_| writing.end_drag(),
                     onpointercancel: move |_| writing.end_drag(),
                     onpointerleave: move |_| writing.clear_hover(),
+                    if let Some(y) = writing.block_drag.read().filter(|d| d.dragging).and_then(|d| d.indicator_y) {
+                        div { id: "block-drop-line", class: "block-drop-line", aria_hidden: "true", style: "top:{y:.1}px;",
+                            span { class: "block-drop-dot" }
+                        }
+                    }
                     grid::Heading { writing, field: Field::Title }
                 if title_gap {
                     div { class: "title-row",
@@ -622,6 +638,7 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
                         oninput: move |e| writing.input(Field::TitleGap, &e.value()),
                     }
                     selection_model::SelectionInk { writing, field: Field::TitleGap }
+                    grid::EmptyLineBar { writing, field: Field::TitleGap }
                     }
                 }
                 section {
@@ -676,12 +693,11 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
                 }
                 }
                 formatting::FormatBar { writing }
+                slash::SlashMenu { writing }
                 if desktop { marker_view::WindowLayout { writing } }
             }
             if view() != View::Split {
                 footer { class: "statusbar",
-                    span { class: "status-format", i { aria_hidden: "true" } "Markdown" }
-                    span { class: "status-sep", aria_hidden: "true" }
                     span { class: "status-words", {
                         let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();
                         format!("{words} {}", if words == 1 { "word" } else { "words" })
@@ -696,7 +712,7 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
                     }
                     span { class: "status-right",
                         if let Some([ln, col]) = (writing.caret_line_col)() {
-                            span { "Ln {ln}, Col {col}" }
+                            span { class: "status-pos", "Ln {ln}, Col {col}" }
                             span { class: "status-sep", aria_hidden: "true" }
                         }
                         span { class: "status-lines", {

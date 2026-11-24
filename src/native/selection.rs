@@ -1,8 +1,6 @@
 //! The focused input projects part of the Markdown selection. Its anchor and
 //! moving end may be on opposite sides of a widget or hidden syntax.
-use super::{
-    ByteSelection, Field, Sections, Writing, document::BodyStart, report, selection,
-};
+use super::{ByteSelection, Field, Sections, Writing, document::BodyStart, report};
 use dioxus_native::prelude::*;
 
 impl Writing {
@@ -11,39 +9,74 @@ impl Writing {
             return Some(span);
         }
         let field = (*self.active.peek())?;
-        let proj = self.projection(field);
-        let [a, b] = selection(self.root, field)?;
-        Some([proj.display_to_source(a), proj.display_to_source(b)])
+        let proj = self.projection_peek(field);
+        let root = self.root.peek();
+        let doc = root.as_ref()?.doc();
+        let id = doc.get_element_by_id(&field.id())?;
+        let editor = &doc.get_node(id)?.element_data()?.text_input_data()?.editor;
+        if editor.raw_text() != proj.display {
+            return (*self.cursor_source.peek()).or_else(|| {
+                let selected = editor.raw_selection();
+                Some([
+                    proj.display_to_source(selected.anchor().index()),
+                    proj.display_to_source(selected.focus().index()),
+                ])
+            });
+        }
+        let selected = editor.raw_selection();
+        Some([
+            proj.display_to_source(selected.anchor().index()),
+            proj.display_to_source(selected.focus().index()),
+        ])
     }
 
     pub fn open(mut self, field: Field, absolute: ByteSelection) {
-        self.quiet_cell.set(None);
-        self.keep_cells_in(field);
-        self.parked_selection.set(None);
-        let md = self.contents.read();
-        if matches!(field, Field::Body(_)) {
-            let parts = Sections::read(&md);
-            let origin = if parts.origin == BodyStart::AfterBlankLine && absolute[1] < parts.body {
-                BodyStart::AfterHeading
-            } else {
-                parts.origin
-            };
-            self.body.set(Some(origin));
-        } else {
-            self.body.set(None);
+        if self.quiet_cell.peek().is_some() {
+            self.quiet_cell.set(None);
         }
-        self.literal.set(None);
-        self.active.set(Some(field));
-        self.cursor_source.set(Some(absolute));
+        self.keep_cells_in(field);
+        if self.parked_selection.peek().is_some() {
+            self.parked_selection.set(None);
+        }
+        let md = self.contents.read();
+        let next_body = if matches!(field, Field::Body(_)) {
+            let parts = Sections::read(&md);
+            Some(
+                if parts.origin == BodyStart::AfterBlankLine && absolute[1] < parts.body {
+                    BodyStart::AfterHeading
+                } else {
+                    parts.origin
+                },
+            )
+        } else {
+            None
+        };
+        if *self.body.peek() != next_body {
+            self.body.set(next_body);
+        }
+        if self.literal.peek().is_some() {
+            self.literal.set(None);
+        }
+        if *self.active.peek() != Some(field) {
+            self.active.set(Some(field));
+        }
+        // Keep inline delimiter projection steady under a moving pointer during drags;
+        // `end_drag` settles `cursor_source` once when the pointer is released.
+        if self.drag.peek().is_none() && *self.cursor_source.peek() != Some(absolute) {
+            self.cursor_source.set(Some(absolute));
+        }
         let range = self.range(field, &md);
         let cross = absolute[0] != absolute[1]
             && absolute
                 .iter()
                 .any(|i| !((range.start..=range.end).contains(i)));
-        self.span.set(cross.then_some(absolute));
+        let next_span = cross.then_some(absolute);
+        if *self.span.peek() != next_span {
+            self.span.set(next_span);
+        }
         let selected = if cross { [absolute[1]; 2] } else { absolute };
         drop(md);
-        let proj = self.projection(field);
+        let proj = self.projection_peek(field);
         let local = selected.map(|i| proj.source_to_display(i));
         self.focus.set(Some((field, local)));
         self.note.peek().remember_selection(absolute);
@@ -163,7 +196,7 @@ pub(super) fn SelectionInk(writing: Writing, field: Field) -> Element {
     let Some(layout) = input.editor.try_layout() else {
         return rsx! {};
     };
-    let proj = writing.projection(field);
+    let proj = writing.projection_peek(field);
     let cursor = |p| {
         parley::Cursor::from_byte_index(
             layout,

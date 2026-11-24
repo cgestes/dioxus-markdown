@@ -134,6 +134,15 @@ fn press(doc: &mut DioxusDocument, key: Key, repeat: bool) {
     send_key(doc, key, KeyState::Pressed, repeat);
 }
 
+fn backspace_text(doc: &mut DioxusDocument) {
+    #[cfg(target_os = "macos")]
+    {
+        doc.handle_ui_event(UiEvent::AppleStandardKeybinding("deleteBackward:".into()));
+        render(doc);
+    }
+    press(doc, Key::Named(NamedKey::Backspace), false);
+}
+
 fn field(doc: &DioxusDocument, id: NodeId) -> String {
     doc.inner
         .borrow()
@@ -275,11 +284,19 @@ fn source_and_live_restore_both_selection_ends_after_multibyte_text() {
 #[test]
 fn toolbar_commands_work_by_keyboard() {
     let mut doc = editor();
-    press(&mut doc, Key::Named(NamedKey::Tab), false);
-    assert_eq!(
-        doc.inner.borrow().get_focussed_node_id(),
-        Some(id(&doc, "rich-mode"))
-    );
+    assert!(doc.inner.borrow().get_element_by_id("workspace-bar").is_none());
+    let mode_bar = bounds(&doc, "mode-bar");
+    let title = bounds(&doc, "note-title");
+    assert!(mode_bar[1] <= 1.0 && mode_bar[1] + mode_bar[3] <= title[1]);
+    // Debug display toggle turns inspector mode on and off cleanly.
+    assert!(doc.inner.borrow().get_element_by_id("save-inspection").is_none());
+    click(&mut doc, "toggle-debug");
+    assert!(doc.inner.borrow().get_element_by_id("save-inspection").is_some());
+    click(&mut doc, "toggle-debug");
+    assert!(doc.inner.borrow().get_element_by_id("save-inspection").is_none());
+    let rich = id(&doc, "rich-mode");
+    doc.inner.borrow_mut().set_focus_to(rich);
+    assert_eq!(doc.inner.borrow().get_focussed_node_id(), Some(rich));
     press(&mut doc, Key::Named(NamedKey::Tab), false);
     assert_eq!(
         doc.inner.borrow().get_focussed_node_id(),
@@ -324,9 +341,10 @@ fn value(doc: &DioxusDocument, name: &str) -> String {
 fn edit_title_and_multiline_body_in_live_and_undo_in_source() {
     let mut doc = editor();
     click(&mut doc, "note-title");
-    select(&doc, "note-title", ["Field notes".len(), 0]);
+    assert_eq!(value(&doc, "note-title"), "# Field notes");
+    select(&doc, "note-title", [2 + "Field notes".len(), 2]);
     commit_text(&mut doc, "Écoutes 🎧");
-    assert_eq!(value(&doc, "note-title"), "Écoutes 🎧");
+    assert_eq!(value(&doc, "note-title"), "# Écoutes 🎧");
     press(&mut doc, Key::Named(NamedKey::Tab), false);
     assert_focus(&doc, "note-body", [0; 2]);
     let body_field = id(&doc, "note-body");
@@ -414,7 +432,7 @@ fn adding_a_title_preserves_unheaded_text_and_existing_markdown_separators() {
     let start = md.find("Old").unwrap();
     select(&doc, "markdown", [start + 3, start]);
     click(&mut doc, "live-mode");
-    assert_focus(&doc, "note-title", [3, 0]);
+    assert_focus(&doc, "note-title", [5, 2]);
     commit_text(&mut doc, "New");
     click(&mut doc, "source-mode");
     assert_eq!(value(&doc, "markdown"), md.replace("Old", "New"));
@@ -426,7 +444,7 @@ fn edit_a_heading_only_note_and_preserve_a_leading_body_newline() {
     select(&doc, "markdown", [0, SAMPLE.len()]);
     commit_text(&mut doc, "#");
     click(&mut doc, "live-mode");
-    assert_focus(&doc, "note-title", [0; 2]);
+    assert_focus(&doc, "note-title", [1; 2]);
     commit_text(&mut doc, "Morning");
     press(&mut doc, Key::Named(NamedKey::Enter), false);
     commit_text(&mut doc, "First paragraph");
@@ -487,42 +505,46 @@ fn bounds(doc: &DioxusDocument, name: &str) -> [f64; 4] {
 }
 
 #[test]
-fn title_prefix_is_edited_from_the_first_letter_without_focusing_the_gutter() {
+fn title_prefix_is_edited_inline_in_live_and_hidden_in_rich() {
     let mut doc = editor();
-    let title = bounds(&doc, "note-title");
     let body = bounds(&doc, "note-body");
-    click(&mut doc, "note-title");
-    let gutter = bounds(&doc, "heading-level");
-    assert!(gutter[0] + gutter[2] <= title[0]);
-    let gutter_id = id(&doc, "heading-level");
-    assert!(
-        doc.inner
-            .borrow()
-            .get_node(gutter_id)
-            .unwrap()
-            .element_data()
-            .unwrap()
-            .text_input_data()
-            .is_none()
-    );
-    select(&doc, "note-title", [0; 2]);
-    let width = glyph_position(&doc, "note-title", 1).0;
-    press(&mut doc, Key::Character("#".into()), false);
-    press(&mut doc, Key::Character(" ".into()), false);
-    assert_focus(&doc, "note-title", [0; 2]);
+    // At rest (unfocused), heading hashes are collapsed out of the display text.
     assert_eq!(value(&doc, "note-title"), "Field notes");
-    assert!(glyph_position(&doc, "note-title", 1).0 < width);
-    assert_eq!(bounds(&doc, "note-body"), body);
-    commit_text(&mut doc, "### ");
+    // Clicking the heading in Live mode reveals `# ` inline inside the heading textarea.
+    click(&mut doc, "note-title");
+    assert_eq!(value(&doc, "note-title"), "# Field notes");
+    // Caret can move onto and before `#` via ArrowLeft.
+    select(&doc, "note-title", [2; 2]);
+    press(&mut doc, Key::Named(NamedKey::ArrowLeft), false);
+    assert_focus(&doc, "note-title", [1; 2]);
+    press(&mut doc, Key::Named(NamedKey::ArrowLeft), false);
     assert_focus(&doc, "note-title", [0; 2]);
+    // Typing `#` directly upgrades H1 -> H2 (shrinking the display font size).
+    let width = glyph_position(&doc, "note-title", 3).0 - glyph_position(&doc, "note-title", 2).0;
+    press(&mut doc, Key::Character("#".into()), false);
+    assert_eq!(value(&doc, "note-title"), "## Field notes");
+    assert_focus(&doc, "note-title", [1; 2]);
+    let h2_width =
+        glyph_position(&doc, "note-title", 4).0 - glyph_position(&doc, "note-title", 3).0;
+    assert!(h2_width < width, "H2 glyph width should shrink below H1");
+    assert_eq!(bounds(&doc, "note-body"), body);
+    // In Rich mode, `#` stays hidden even while focused, and `#`/Backspace at 0 adjust level.
+    click(&mut doc, "rich-mode");
+    click(&mut doc, "note-title");
+    assert_eq!(value(&doc, "note-title"), "Field notes");
+    select(&doc, "note-title", [0; 2]);
+    press(&mut doc, Key::Character("#".into()), false);
     press(&mut doc, Key::Named(NamedKey::Backspace), false);
+    assert_focus(&doc, "note-title", [0; 2]);
     click(&mut doc, "source-mode");
     assert_eq!(value(&doc, "markdown"), SAMPLE.replacen('#', "##", 1));
-    select(&doc, "markdown", [1; 2]);
+    // Back in Live mode, deleting the `#`s and space demotes the heading into body prose.
+    select(&doc, "markdown", [3; 2]);
     click(&mut doc, "live-mode");
-    assert_focus(&doc, "note-title", [0; 2]);
-    press(&mut doc, Key::Named(NamedKey::Backspace), false);
-    press(&mut doc, Key::Named(NamedKey::Backspace), false);
+    assert_focus(&doc, "note-title", [3; 2]);
+    backspace_text(&mut doc);
+    backspace_text(&mut doc);
+    backspace_text(&mut doc);
     assert_focus(&doc, "note-body", [0; 2]);
     assert!(value(&doc, "note-body").starts_with("Field notes"));
 }
@@ -568,6 +590,26 @@ fn resting_checkboxes_reveal_only_for_keyboard_cursor_while_mouse_keeps_togglebo
         (box_rect[0] - body_rect[0] + box_rect[2] * 0.5) as f32,
         (box_rect[1] - body_rect[1] + box_rect[3] * 0.5) as f32,
     );
+    // Hovering a checkbox must immediately report a pointer cursor (not I-beam text cursor).
+    {
+        let mut ptr = doc
+            .inner
+            .borrow()
+            .get_node(id(&doc, "note-body"))
+            .unwrap()
+            .synthetic_click_event_data(Modifiers::empty());
+        ptr.coords.client_x = body_rect[0] as f32 + click_pt.0;
+        ptr.coords.client_y = body_rect[1] as f32 + click_pt.1;
+        ptr.coords.page_x = ptr.coords.client_x;
+        ptr.coords.page_y = ptr.coords.client_y;
+        doc.handle_ui_event(UiEvent::PointerMove(ptr));
+        render(&mut doc);
+        assert_eq!(
+            format!("{:?}", doc.inner.borrow().get_cursor()),
+            "Some(Pointer)",
+            "hovering a checkbox should show a pointer cursor"
+        );
+    }
     click_at(&mut doc, "note-body", Some(click_pt));
     assert_eq!(&markdown(&doc)[open..open + 3], "[x]");
     assert!(shown(&doc, &first_id), "mouse click keeps togglebox visible");
@@ -617,7 +659,7 @@ fn vertical_arrows_cross_the_title_boundary_and_follow_soft_wrapped_body_lines()
         doc.inner.borrow().get_focussed_node_id(),
         Some(id(&doc, "note-title"))
     );
-    assert!(focus_pos(&doc, "note-title").abs_diff(5) <= 1);
+    assert!(focus_pos(&doc, "note-title").abs_diff(7) <= 1);
     select(&doc, "note-title", [0; 2]);
     press(&mut doc, Key::Named(NamedKey::ArrowLeft), false);
     assert_focus(&doc, "note-title", [0; 2]);
@@ -776,10 +818,10 @@ fn typing_a_heading_into_an_empty_title_and_pasting_a_marked_heading() {
     assert_eq!(value(&doc, "markdown"), "## Études\n\nBody only");
     click(&mut doc, "live-mode");
     click(&mut doc, "note-title");
-    select(&doc, "note-title", [0, "Études".len()]);
+    select(&doc, "note-title", [0, "## Études".len()]);
     commit_text(&mut doc, "### Morning");
-    assert_eq!(value(&doc, "note-title"), "Morning");
-    assert_focus(&doc, "note-title", ["Morning".len(); 2]);
+    assert_eq!(value(&doc, "note-title"), "### Morning");
+    assert_focus(&doc, "note-title", ["### Morning".len(); 2]);
     click(&mut doc, "source-mode");
     assert_eq!(value(&doc, "markdown"), "### Morning\n\nBody only");
 }
@@ -815,14 +857,18 @@ fn each_heading_uses_its_own_prefix_and_caret_in_document_order() {
     let mut doc = editor();
     let md = "# One\n\nBody\n\n## Two\n\n### Three\n\nLast";
     open_markdown(&mut doc, md, md.find("Two").unwrap());
-    assert_focus(&doc, "note-heading-0", [0; 2]);
+    assert_focus(&doc, "note-heading-0", [3; 2]);
+    // Arrow left onto `##`, add a third `#`, then return to the text to type `É`.
+    select(&doc, "note-heading-0", [2; 2]);
     press(&mut doc, Key::Character("#".into()), false);
-    press(&mut doc, Key::Character(" ".into()), false);
+    select(&doc, "note-heading-0", [4; 2]);
     commit_text(&mut doc, "É");
-    assert_eq!(value(&doc, "note-heading-0"), "ÉTwo");
+    assert_eq!(value(&doc, "note-heading-0"), "### ÉTwo");
     click(&mut doc, "note-heading-1");
-    select(&doc, "note-heading-1", [0; 2]);
-    press(&mut doc, Key::Named(NamedKey::Backspace), false);
+    assert_eq!(value(&doc, "note-heading-1"), "### Three");
+    select(&doc, "note-heading-1", [3; 2]);
+    backspace_text(&mut doc);
+    select(&doc, "note-heading-1", [3; 2]);
     commit_text(&mut doc, "Day ");
     click(&mut doc, "source-mode");
     assert_eq!(
@@ -836,14 +882,14 @@ fn each_heading_uses_its_own_prefix_and_caret_in_document_order() {
 fn arrows_visit_each_blank_heading_and_table_row_once_in_both_directions() {
     let mut doc = editor();
     let md = "# One\n\nA\n\n\n## Two\n\n| Place | Time |\n| --- | --- |\n| Lock | Noon |\n\nEnd";
-    open_markdown(&mut doc, md, 2);
+    open_markdown(&mut doc, md, 0);
     let path = [
-        ("note-title", 0),
+        ("note-title", 2),
         ("title-gap", 0),
         ("note-body", 0),
         ("note-body", 2),
         ("note-body", 3),
-        ("note-heading-0", 0),
+        ("note-heading-0", 3),
         ("note-body-1", 0),
         ("cell-0-0-0", 0),
         ("cell-0-1-0", 0),
@@ -946,12 +992,35 @@ fn paper_around_table_controls_places_a_caret_without_growing_the_grid() {
     let [_, _, width, height] = bounds(&doc, "grid-scroll-0");
     click_at(&mut doc, "grid-scroll-0", Some((width as f32 + 9.0, 8.0)));
     assert_focus(&doc, "cell-0-0-1", [4; 2]);
+    // Clicking just below the table's bottom border places the caret on the line underneath.
     click_at(&mut doc, "grid-scroll-0", Some((3.0, height as f32 + 3.0)));
-    assert_focus(&doc, "cell-0-1-0", [0; 2]);
+    assert_focus(&doc, "note-body-2", [0; 2]);
     click_at(&mut doc, "note-heading-0", Some((-12.0, 18.0)));
-    assert_focus(&doc, "note-heading-0", [0; 2]);
+    assert_focus(&doc, "note-heading-0", [3; 2]);
     click(&mut doc, "source-mode");
     assert_eq!(value(&doc, "markdown"), md);
+}
+
+#[test]
+fn typing_below_table_with_formatted_prose_does_not_absorb_into_table() {
+    let mut doc = editor();
+    let md = "# Field notes\n\n| Stop | Take |\n| --- | --- |\n| Lock | 45 s |\n\n- [ ] Leave **ten seconds** of silence.";
+    open_markdown(&mut doc, md, 2);
+    let [_, _, _, height] = bounds(&doc, "grid-scroll-0");
+    click_at(&mut doc, "grid-scroll-0", Some((3.0, height as f32 + 4.0)));
+    assert_focus(&doc, "note-body-1", [0; 2]);
+    press(&mut doc, Key::Character("h".into()), false);
+    press(&mut doc, Key::Character("i".into()), false);
+    let out = markdown(&doc);
+    assert_eq!(
+        table::tables(&out)[0].rows.len(),
+        2,
+        "typed text below table must not become a table row: {out:?}"
+    );
+    assert!(
+        out.contains("| Lock | 45 s |\n\nhi\n- [ ] Leave **ten seconds** of silence."),
+        "expected blank line separating table and typed text, got: {out:?}"
+    );
 }
 
 #[test]
@@ -1008,8 +1077,8 @@ fn split_inside_a_section_then_join_at_the_paragraph_boundary() {
     assert_eq!(value(&doc, "note-heading-0"), "Café");
     assert_focus(&doc, "note-body-1", [0; 2]);
     press(&mut doc, Key::Named(NamedKey::Backspace), false);
-    assert_eq!(value(&doc, "note-heading-0"), "Café noir");
-    assert_focus(&doc, "note-heading-0", ["Café".len(); 2]);
+    assert_eq!(value(&doc, "note-heading-0"), "## Café noir");
+    assert_focus(&doc, "note-heading-0", ["## Café".len(); 2]);
 }
 
 fn chord(doc: &mut DioxusDocument, key: Key, modifiers: Modifiers) {
@@ -1046,7 +1115,7 @@ fn extend_a_selection_from_heading_to_prose_and_replace_then_undo() {
         .raw_selection();
     let head = selected.focus().index();
     assert_eq!(selected.anchor().index(), anchor);
-    assert!(head >= md.find("🌿").unwrap() && head <= md.find("port").unwrap());
+    assert!(head >= md.find("🌿").unwrap() && head <= md.find("\n\nFin").unwrap());
     drop(dom);
     click(&mut doc, "live-mode");
     commit_text(&mut doc, "été");
@@ -1731,32 +1800,334 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     // Alt+Right moves column right directly from the keyboard!
     chord(&mut doc, Key::Named(NamedKey::ArrowRight), Modifiers::ALT);
     assert!(markdown(&doc).contains("| Take | Stop |"), "{}", markdown(&doc));
-    // Docked bar buttons work in 1 click without any popup menu!
+    // Per-column header menu and per-row line menu operate on each header and row directly.
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-1").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-2").is_some());
+    // Column menu: move left, move right, align L/C/R, insert left, insert right, delete column.
+    click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "move-col-left-0");
     assert!(markdown(&doc).contains("| Stop | Take |"));
-    click(&mut doc, "cell-0-1-1");
+    click(&mut doc, "col-menu-btn-0-0");
+    click(&mut doc, "move-col-right-0");
+    assert!(markdown(&doc).contains("| Take | Stop |"));
+    click(&mut doc, "col-menu-btn-0-1");
+    click(&mut doc, "move-col-left-0");
+    assert!(markdown(&doc).contains("| Stop | Take |"));
+    click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-right-0");
     assert!(markdown(&doc).contains("| --- | ---: |"));
-    click(&mut doc, "cell-0-1-0");
+    click(&mut doc, "col-menu-btn-0-1");
+    click(&mut doc, "align-center-0");
+    assert!(markdown(&doc).contains("| --- | :---: |"));
+    click(&mut doc, "col-menu-btn-0-1");
+    click(&mut doc, "align-left-0");
+    assert!(markdown(&doc).contains("| --- | :--- |"));
+    click(&mut doc, "col-menu-btn-0-1");
+    click(&mut doc, "insert-col-right-0");
+    assert!(markdown(&doc).contains("| Stop | Take | Column 3 |"));
+    click(&mut doc, "col-menu-btn-0-2");
+    click(&mut doc, "col-menu-delete-0-2");
+    assert!(markdown(&doc).contains("| Stop | Take |"));
+    click(&mut doc, "col-menu-btn-0-0");
+    click(&mut doc, "insert-col-left-0");
+    assert!(markdown(&doc).contains("| Column 3 | Stop | Take |"));
+    click(&mut doc, "delete-column-0");
+    assert!(markdown(&doc).contains("| Stop | Take |"));
+    // Row menu: insert above, insert below, move up, move down, delete row.
+    click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "insert-row-above-0");
-    assert!(markdown(&doc).contains("| --- | ---: |\n|  |  |\n| Bridge | 30 s |"));
+    assert!(markdown(&doc).contains("| --- | :--- |\n|  |  |\n| Bridge | 30 s |"));
+    click(&mut doc, "row-menu-btn-0-1");
+    click(&mut doc, "row-menu-delete-0-1");
+    assert!(!markdown(&doc).contains("|  |  |"));
+    click(&mut doc, "row-menu-btn-0-1");
+    click(&mut doc, "move-row-down-0");
+    assert!(markdown(&doc).contains("| Lock | 45 s |\n| Bridge | 30 s |"));
+    click(&mut doc, "row-menu-btn-0-2");
+    click(&mut doc, "move-row-up-0");
+    assert!(markdown(&doc).contains("| Bridge | 30 s |\n| Lock | 45 s |"));
+    click(&mut doc, "row-menu-btn-0-1");
+    click(&mut doc, "insert-row-below-0");
+    assert!(markdown(&doc).contains("| Bridge | 30 s |\n|  |  |\n| Lock | 45 s |"));
+    // Quick delete button beside a non-active row deletes that row directly.
+    click(&mut doc, "row-delete-0-1");
+    assert!(!markdown(&doc).contains("| Bridge | 30 s |"));
+    // Perimeter + Add column and + Add row buttons work directly.
+    click(&mut doc, "add-column-0");
+    assert!(markdown(&doc).contains("| Stop | Take | Column 3 |"));
+    click(&mut doc, "add-row-0");
+    assert_eq!(table::tables(&markdown(&doc))[0].rows.len(), 4);
 }
 
 #[test]
-fn rich_mode_toolbar_edits_markdown_without_revealing_delimiters() {
+fn rich_mode_has_no_global_toolbar_and_empty_line_shows_inline_icons() {
     let mut doc = editor();
-    let md = "# Notes\n\nLeave **ten** seconds.";
+    let md = "# Notes\n\nLeave **ten** seconds.\n\nNext line.";
     open_markdown(&mut doc, md, md.find("ten").unwrap() + 1);
     click(&mut doc, "rich-mode");
-    assert!(doc.inner.borrow().get_element_by_id("rich-toolbar").is_some());
+    // No global formatting toolbar bar.
+    assert!(doc.inner.borrow().get_element_by_id("rich-toolbar").is_none());
     // Even with cursor inside **ten**, Rich mode keeps delimiters hidden!
-    assert_eq!(value(&doc, "note-body"), "Leave ten seconds.");
-    // Toolbar H2 converts the line to a heading in Loro Markdown.
+    assert_eq!(value(&doc, "note-body"), "Leave ten seconds.\n\nNext line.");
+    // On a non-empty line, inline empty-line icons are hidden.
+    assert!(doc.inner.borrow().get_element_by_id("empty-line-tools").is_none());
+    // Selecting text still brings up the floating FormatBar and formats without revealing delimiters.
     let sec = markdown(&doc).find("seconds").unwrap();
     open_body_at(&mut doc, [sec, sec + 7]);
-    click(&mut doc, "rich-italic");
-    assert_eq!(markdown(&doc), "# Notes\n\nLeave **ten** *seconds*.");
-    assert_eq!(value(&doc, "note-body"), "Leave ten seconds.");
+    click(&mut doc, "format-1");
+    assert_eq!(
+        markdown(&doc),
+        "# Notes\n\nLeave **ten** *seconds*.\n\nNext line."
+    );
+    assert_eq!(value(&doc, "note-body"), "Leave ten seconds.\n\nNext line.");
+    // Moving caret onto the blank line reveals inline block-insert icons.
+    let blank = markdown(&doc).find("\n\nNext").unwrap() + 1;
+    open_body_at(&mut doc, [blank; 2]);
+    assert!(doc.inner.borrow().get_element_by_id("empty-line-tools").is_some());
+    // Clicking inline checklist icon inserts a task on that empty line and hides the empty-line bar.
+    click(&mut doc, "empty-task");
+    assert!(markdown(&doc).contains("\n- [ ] \nNext line."));
+    assert!(doc.inner.borrow().get_element_by_id("empty-line-tools").is_none());
+    // Undo back to blank line and test inline H2, quote, code block, and divider.
+    click(&mut doc, "undo");
+    open_body_at(&mut doc, [blank; 2]);
+    assert!(doc.inner.borrow().get_element_by_id("empty-line-tools").is_some());
+    click(&mut doc, "empty-quote");
+    assert!(markdown(&doc).contains("\n> \nNext line."));
+    click(&mut doc, "undo");
+    open_body_at(&mut doc, [blank; 2]);
+    click(&mut doc, "empty-h2");
+    assert!(markdown(&doc).contains("\n## \nNext line."));
+}
+
+#[test]
+fn live_mode_displays_bold_edits_striked_and_paints_visible_caret() {
+    // Both IBM Plex Mono and DM Sans must register weight 400 and 600 under their CSS family names.
+    let mut fonts = crate::typefaces::notebook_fonts();
+    for name in ["IBM Plex Mono", "DM Sans"] {
+        let id = fonts
+            .collection
+            .family_id(name)
+            .unwrap_or_else(|| panic!("missing font family {name}"));
+        let weights: Vec<f32> = fonts
+            .collection
+            .family(id)
+            .unwrap()
+            .fonts()
+            .iter()
+            .map(|f| f.weight().value())
+            .collect();
+        assert!(weights.contains(&400.0), "{name} missing 400: {weights:?}");
+        assert!(weights.contains(&600.0), "{name} missing 600: {weights:?}");
+    }
+
+    let mut doc = editor();
+    let md = "# Note\n\nSome **bold** and ~~striked~~ text.\n\n- [x] Done task.";
+    open_markdown(&mut doc, md, 0);
+    let bold_at = md.find("bold").unwrap();
+    {
+        let dom = doc.inner.borrow();
+        let nid = dom.get_element_by_id(&format!("ink-{bold_at}")).unwrap();
+        let st = dom.get_node(nid).unwrap().primary_styles().unwrap();
+        assert_eq!(st.clone_font_weight().value(), 600.0);
+    }
+
+    // Click inside ~~striked~~: expands delimiters, lands on exact clicked char, paints visible caret above .md-ink, and edits cleanly.
+    let disp_r = value(&doc, "note-body").find("riked").unwrap();
+    let (x, y) = glyph_position(&doc, "note-body", disp_r);
+    click_at(&mut doc, "note-body", Some((x + 0.5, y)));
+    assert_eq!(
+        value(&doc, "note-body"),
+        "Some bold and ~~striked~~ text.\n\n-    Done task."
+    );
+    assert!(
+        doc.inner.borrow().get_element_by_id("caret-ink").is_some(),
+        "caret overlay should be visible on top of strikethrough ink"
+    );
+    press(&mut doc, Key::Character("X".into()), false);
+    assert_eq!(
+        markdown(&doc),
+        "# Note\n\nSome **bold** and ~~stXriked~~ text.\n\n- [x] Done task."
+    );
+    assert!(doc.inner.borrow().get_element_by_id("caret-ink").is_some());
+
+    // Click inside completed (strikethrough) task line: caret overlay is visible and text is editable.
+    let disp_done = value(&doc, "note-body").find("one task").unwrap();
+    let (dx, dy) = glyph_position(&doc, "note-body", disp_done);
+    click_at(&mut doc, "note-body", Some((dx + 0.5, dy)));
+    assert!(
+        doc.inner.borrow().get_element_by_id("caret-ink").is_some(),
+        "caret overlay should be visible on top of completed-task strikethrough ink"
+    );
+    press(&mut doc, Key::Character("Z".into()), false);
+    assert_eq!(
+        markdown(&doc),
+        "# Note\n\nSome **bold** and ~~stXriked~~ text.\n\n- [x] DZone task."
+    );
+}
+
+#[test]
+fn slash_menu_filters_and_inserts_blocks_and_block_handle_reorders_blocks() {
+    let mut doc = editor();
+    let md = "# Notes\n\nFirst paragraph.\n\n\nSecond paragraph.";
+    let blank = md.find("\n\n\nSecond").unwrap() + 2;
+    open_markdown(&mut doc, md, blank);
+    assert!(doc.inner.borrow().get_element_by_id("slash-menu").is_none());
+
+    // Typing `/` on an empty line opens the slash menu and filters live.
+    press(&mut doc, Key::Character("/".into()), false);
+    assert!(doc.inner.borrow().get_element_by_id("slash-menu").is_some());
+    press(&mut doc, Key::Character("i".into()), false);
+    press(&mut doc, Key::Character("m".into()), false);
+    assert!(doc.inner.borrow().get_element_by_id("slash-image").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("slash-table").is_none());
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert!(doc.inner.borrow().get_element_by_id("slash-menu").is_none());
+    assert!(
+        markdown(&doc).contains("![alt text](https://)"),
+        "slash /im should insert image snippet: {}",
+        markdown(&doc)
+    );
+
+    // Block handle on the left supports click-for-menu, drag-and-drop reorder, and Alt+Shift+Arrows.
+    let md2 = "# Title\n\nAlpha block.\n\nBeta block.\n\nGamma block.";
+    open_markdown(&mut doc, md2, md2.find("Alpha").unwrap());
+    // Every paragraph inside the prose block has its own handle!
+    assert!(doc.inner.borrow().get_element_by_id("block-handle-1").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("block-handle-2").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("block-handle-3").is_some());
+    // Clicking opens the block menu.
+    click(&mut doc, "block-handle-1");
+    assert!(doc.inner.borrow().get_element_by_id("block-menu").is_some());
+    click(&mut doc, "block-move-down");
+    assert_eq!(
+        markdown(&doc),
+        "# Title\n\nBeta block.\n\nAlpha block.\n\nGamma block."
+    );
+    click(&mut doc, "undo");
+    assert_eq!(markdown(&doc), md2);
+
+    // Dragging `block-handle-3` ("Gamma block.") up above `block-handle-1` ("Alpha block.") reorders in one undoable edit!
+    let h3 = bounds(&doc, "block-handle-3");
+    let h1 = bounds(&doc, "block-handle-1");
+    let make_ptr = |d: &DioxusDocument, x: f32, y: f32, held: bool| {
+        let mut ptr = d
+            .inner
+            .borrow()
+            .get_node(id(d, "block-handle-3"))
+            .unwrap()
+            .synthetic_click_event_data(Modifiers::empty());
+        ptr.coords.client_x = x;
+        ptr.coords.client_y = y;
+        ptr.coords.page_x = x;
+        ptr.coords.page_y = y;
+        ptr.buttons = if held {
+            MouseEventButtons::Primary
+        } else {
+            MouseEventButtons::None
+        };
+        ptr
+    };
+    let hx = (h3[0] + h3[2] * 0.5) as f32;
+    let y_start = (h3[1] + h3[3] * 0.5) as f32;
+    let y_above_h1 = (h1[1] - 4.0) as f32;
+    doc.handle_ui_event(UiEvent::PointerDown(make_ptr(&doc, hx, y_start, true)));
+    render(&mut doc);
+    doc.handle_ui_event(UiEvent::PointerMove(make_ptr(&doc, hx, y_above_h1, true)));
+    render(&mut doc);
+    assert!(
+        doc.inner.borrow().get_element_by_id("block-drop-line").is_some(),
+        "dragging a block handle should display a drop indicator line"
+    );
+    doc.handle_ui_event(UiEvent::PointerUp(make_ptr(&doc, hx, y_above_h1, false)));
+    render(&mut doc);
+    assert!(doc.inner.borrow().get_element_by_id("block-drop-line").is_none());
+    assert_eq!(
+        markdown(&doc),
+        "# Title\n\nGamma block.\n\nAlpha block.\n\nBeta block."
+    );
+    // Alt+Shift+ArrowDown moves the focused block down from the keyboard.
+    chord(
+        &mut doc,
+        Key::Named(NamedKey::ArrowDown),
+        Modifiers::ALT | Modifiers::SHIFT,
+    );
+    assert_eq!(
+        markdown(&doc),
+        "# Title\n\nAlpha block.\n\nGamma block.\n\nBeta block."
+    );
+    click(&mut doc, "undo");
+    click(&mut doc, "undo");
+    assert_eq!(markdown(&doc), md2);
+}
+
+#[test]
+fn selecting_on_title_and_formatted_prose_keeps_delimiters_steady_without_wiggle() {
+    let mut doc = editor();
+    let title_rect = bounds(&doc, "note-title");
+    let make_ptr = |d: &DioxusDocument, x: f32, y: f32, held: bool| {
+        let mut ptr = d
+            .inner
+            .borrow()
+            .get_node(id(d, "note-title"))
+            .unwrap()
+            .synthetic_click_event_data(Modifiers::empty());
+        ptr.coords.client_x = x;
+        ptr.coords.client_y = y;
+        ptr.coords.page_x = x;
+        ptr.coords.page_y = y;
+        ptr.buttons = if held {
+            MouseEventButtons::Primary
+        } else {
+            MouseEventButtons::None
+        };
+        ptr
+    };
+
+    // Dragging directly on an unfocused title expands `# ` once and selects without collapsing.
+    let y_mid = (title_rect[1] + title_rect[3] * 0.5) as f32;
+    let x_start = (title_rect[0] + 10.0) as f32;
+    let x_end = (title_rect[0] + 180.0) as f32;
+    doc.handle_ui_event(UiEvent::PointerDown(make_ptr(&doc, x_start, y_mid, true)));
+    render(&mut doc);
+    assert_eq!(value(&doc, "note-title"), "# Field notes");
+    // Drag right, then stray vertically above the title box — `# ` must never collapse/wiggle!
+    doc.handle_ui_event(UiEvent::PointerMove(make_ptr(&doc, x_end, y_mid, true)));
+    render(&mut doc);
+    assert_eq!(value(&doc, "note-title"), "# Field notes");
+    doc.handle_ui_event(UiEvent::PointerMove(make_ptr(
+        &doc,
+        x_end,
+        title_rect[1] as f32 - 8.0,
+        true,
+    )));
+    render(&mut doc);
+    assert_eq!(value(&doc, "note-title"), "# Field notes");
+    doc.handle_ui_event(UiEvent::PointerUp(make_ptr(&doc, x_end, y_mid, false)));
+    render(&mut doc);
+    assert_eq!(value(&doc, "note-title"), "# Field notes");
+
+    // Dragging on an already-focused title and straying outside must also keep `# ` steady.
+    doc.handle_ui_event(UiEvent::PointerDown(make_ptr(
+        &doc,
+        x_start + 40.0,
+        y_mid,
+        true,
+    )));
+    render(&mut doc);
+    doc.handle_ui_event(UiEvent::PointerMove(make_ptr(
+        &doc,
+        x_end,
+        title_rect[1] as f32 - 6.0,
+        true,
+    )));
+    render(&mut doc);
+    assert_eq!(value(&doc, "note-title"), "# Field notes");
+    doc.handle_ui_event(UiEvent::PointerUp(make_ptr(&doc, x_end, y_mid, false)));
+    render(&mut doc);
+    assert_eq!(value(&doc, "note-title"), "# Field notes");
 }
 
 #[path = "tests/live_workflows.rs"]

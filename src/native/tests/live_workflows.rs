@@ -415,6 +415,9 @@ fn arrows_cross_each_blank_line_heading_and_table_row_once() {
         "# One\n\nA\n\n\n## Two\n\n| Place | Time |\n| --- | --- |\n| Lock | Noon |\n\nEnd";
     run("vertical-navigation", MD, (680, 540), 1, |s| {
         s.click_at_text("note-title", 0);
+        // Move to offset 0 (before `#`) so goal_x sits on the left margin.
+        s.named(NamedKey::ArrowLeft);
+        s.named(NamedKey::ArrowLeft);
         let stops = [
             ("note-title", 2),
             ("title-gap", 6),
@@ -691,12 +694,26 @@ fn floating_format_bar_keeps_text_selection_focus_and_undo_in_prose_and_cells() 
 
 #[test]
 fn ux_polish_showcase_renders_rich_markdown_and_table_controls() {
-    const MD: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x]. Visit [canal](https://example.com).\n\n> Morning fog along the lock gate.\n\n---\n\n## Listening stops\n\n| Stop | Listen for | Take |\n| :--- | :--- | ---: |\n| North lock | **Water** through the gate | 45 s |\n| Footbridge | Steps on `steel` deck | 30 s |\n\n- [ ] Leave **ten seconds** of silence.\n- [x] Set the recorder to `48 kHz`.";
+    const MD: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x]. Visit [canal](https://example.com).\n\n\n> Morning fog along the lock gate.\n\n---\n\n## Listening stops\n\n| Stop | Listen for | Take |\n| :--- | :--- | ---: |\n| North lock | **Water** through the gate | 45 s |\n| Footbridge | Steps on `steel` deck | 30 s |\n\n- [ ] Leave **ten seconds** of silence.\n- [x] Set the recorder to `48 kHz`.";
     run("ux-showcase", MD, (900, 680), 1, |s| {
         s.capture("live-resting-tight");
+        s.click_at_text("note-title", 3);
+        s.capture("live-inline-heading-hashes");
+        s.click_at_text("note-heading-0", 4);
+        s.capture("live-inline-h2-hashes");
         s.click_at_text("cell-0-1-1", 2);
         s.capture("live-active-span-and-table-bar");
+        s.button("col-menu-btn-0-1");
+        s.capture("live-table-column-menu");
+        s.button("row-menu-btn-0-1");
+        s.capture("live-table-row-menu");
+        let blank = s.markdown().find("\n\n\n>").unwrap() + 2;
+        open_body_at(&mut s.doc, [blank; 2]);
+        press(&mut s.doc, Key::Character("/".into()), false);
+        s.capture("live-slash-menu");
+        press(&mut s.doc, Key::Named(NamedKey::Escape), false);
         s.button("rich-mode");
-        s.capture("rich-mode-with-toolbar");
+        open_body_at(&mut s.doc, [blank; 2]);
+        s.capture("rich-mode-empty-line-icons");
     });
 }

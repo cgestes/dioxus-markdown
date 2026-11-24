@@ -337,7 +337,8 @@ impl Source {
             }
             _ => return,
         };
-        if let Some(edit) = lists::edit(&self.writing.contents.peek(), range, command) {
+        let edit = lists::edit(&self.writing.contents.peek(), range, command);
+        if let Some(edit) = edit {
             event.prevent_default();
             report(
                 self.writing.note.write().splice(&edit.changes),

@@ -15,7 +15,6 @@ pub(super) const QUOTE: u16 = 64;
 pub(super) const RULE: u16 = 128;
 pub(super) const PUNCTUATION: u16 = 256;
 pub(super) const BULLET: u16 = 512;
-pub(super) const TASK_DASH: u16 = 1024;
 pub(super) const QUOTE_MARK: u16 = 2048;
 pub(super) const DONE: u16 = 4096;
 pub(super) const CODE_BLOCK: u16 = 8192;
@@ -85,13 +84,12 @@ pub fn syntax(md: &str) -> Vec<Token> {
                 }
                 if matches!(tag, Tag::Item) && raw.starts_with(['-', '*', '+']) {
                     let rest = raw[1..].trim_start();
-                    let is_task = ["[ ]", "[x]", "[X]"].iter().any(|p| rest.starts_with(p));
                     if rest.starts_with("[x]") || rest.starts_with("[X]") {
                         add |= DONE;
                     }
                     tokens.push(Token {
                         range: range.start..range.start + 1,
-                        style: if is_task { TASK_DASH } else { BULLET },
+                        style: BULLET,
                     });
                 }
                 if matches!(tag, Tag::BlockQuote(_)) && raw.starts_with('>') {
@@ -191,6 +189,32 @@ pub fn syntax(md: &str) -> Vec<Token> {
     tokens
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct CaretInk {
+    pub field: Field,
+    x: f32,
+    y: f32,
+    height: f32,
+}
+
+#[component]
+pub fn CaretOverlay(writing: Writing, field: Field) -> Element {
+    let Some(caret) = (writing.caret)() else {
+        return rsx! {};
+    };
+    if caret.field != field {
+        return rsx! {};
+    }
+    rsx! {
+        span {
+            id: "caret-ink",
+            class: "caret-ink",
+            aria_hidden: "true",
+            style: format!("left:{:.2}px; top:{:.2}px; height:{:.2}px;", caret.x, caret.y, caret.height),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct Ink {
     pub field: Field,
@@ -228,7 +252,6 @@ impl Ink {
                 class: if style & QUOTE_MARK != 0 { "quote-mark" },
                 class: if style & RULE != 0 { "rule" },
                 class: if style & PUNCTUATION != 0 { "punctuation" },
-                class: if style & TASK_DASH != 0 { "task-dash" },
                 class: if style & DONE != 0 { "done" },
                 style: "left:{x}px; top:{y}px; width:{width}px; height:{height}px; line-height:{height}px;",
                 if style == BULLET {
@@ -237,7 +260,7 @@ impl Ink {
                     span { class: "quote-bar" }
                 } else if style == RULE {
                     span { class: "rule-line" }
-                } else if style != TASK_DASH {
+                } else {
                     "{text}"
                 }
             }
@@ -283,7 +306,7 @@ impl Writing {
             return Vec::new();
         };
         let text = input.editor.raw_text();
-        let proj = self.projection(field);
+        let proj = self.projection_peek(field);
         if input.editor.is_composing() || text != proj.display {
             return Vec::new();
         }
@@ -379,5 +402,56 @@ impl Writing {
             }
         }
         result
+    }
+
+    pub fn measured_caret(self) -> Option<CaretInk> {
+        if self.span.peek().is_some() || self.cells.peek().is_some() {
+            return None;
+        }
+        let field = (*self.active.peek())?;
+        if matches!(field, Field::Source | Field::TitleGap) {
+            return None;
+        }
+        let handle = self.root.peek().clone()?;
+        let doc = handle.doc();
+        let id = doc.get_element_by_id(&field.id())?;
+        if doc.get_focussed_node_id() != Some(id) {
+            return None;
+        }
+        let node = doc.get_node(id)?;
+        let input = node.element_data()?.text_input_data()?;
+        if !input.editor.raw_selection().is_collapsed() {
+            return None;
+        }
+        let layout = input.editor.try_layout()?;
+        let cursor = input.editor.cursor_geometry(1.5)?;
+        let scale = layout.scale();
+        let l = node.final_layout();
+        let top = if input.is_multiline {
+            input.scroll_offset * scale
+        } else {
+            0.0
+        };
+        let left_inset = l.border.left + l.padding.left
+            - if input.is_multiline {
+                0.0
+            } else {
+                input.scroll_offset
+            };
+        let top_inset = l.border.top
+            + l.padding.top
+            + node.text_input_v_centering_offset(f64::from(scale)) as f32;
+        let x = left_inset + cursor.x0 as f32 / scale;
+        let y = top_inset + (cursor.y0 as f32 - top) / scale;
+        let height = ((cursor.y1 - cursor.y0) as f32 / scale).max(12.0);
+        if y + height < 0.0 || y > l.content_box_height() + l.padding.top + l.padding.bottom {
+            return None;
+        }
+        Some(CaretInk {
+            field,
+            x,
+            y,
+            height,
+        })
     }
 }

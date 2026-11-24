@@ -4,6 +4,9 @@ use margin_editor_core::format::{InlineSelection, Style};
 
 impl Writing {
     fn format_position(self) -> Option<[i32; 2]> {
+        if self.drag.peek().is_some() {
+            return None;
+        }
         let [anchor, head] = (*self.selected_text.peek())?;
         if self.cells.peek().is_some() || self.table_menu.peek().is_some() {
             return None;
@@ -23,7 +26,7 @@ impl Writing {
         let node = doc.get_node(id)?;
         let input = node.element_data()?.text_input_data()?;
         let layout = input.editor.try_layout()?;
-        let proj = self.projection(field);
+        let proj = self.projection_peek(field);
         let cursor = |at: usize| {
             let byte = proj.source_to_display(at);
             parley::Cursor::from_byte_index(
@@ -62,11 +65,11 @@ impl Writing {
         } else {
             b.x0
         };
-        let header_bottom = doc
-            .get_element_by_id("workspace-bar")
+        let bar_bottom = doc
+            .get_element_by_id("mode-bar")
             .and_then(|n| doc.get_client_bounding_rect(n))
             .map_or(0., |r| r.y + r.height);
-        let min_top = (header_bottom + 8.).max(8.);
+        let min_top = (bar_bottom + 6.).max(8.);
         let mut above = y + top_y / scale - 46.;
         let mut bottom = y + bot_y / scale;
         if bottom < 0. || y + top_y / scale > f64::from(h) {

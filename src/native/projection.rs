@@ -74,24 +74,31 @@ pub struct Projection {
     pub tokens: Vec<DisplayToken>,
     pub checkboxes: Vec<DisplayCheckbox>,
     hidden_pairs: Vec<DelimPair>,
+    pub has_hidden_heading_prefix: bool,
     pub is_cell: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct RawToken {
     range: Range<usize>,
     style: u16,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct CollapseGroup {
     outer: Range<usize>,
     open: Range<usize>,
     close: Option<Range<usize>>,
-    is_task_dash: bool,
+    is_heading_prefix: bool,
 }
 
-fn parse_groups_and_tokens(md: &str) -> (Vec<CollapseGroup>, Vec<RawToken>) {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParsedMarkdown {
+    groups: Vec<CollapseGroup>,
+    tokens: Vec<RawToken>,
+}
+
+pub fn parse_markdown(md: &str) -> ParsedMarkdown {
     let mut groups = Vec::new();
     let mut tokens = Vec::new();
     let mut links: Vec<(Range<usize>, usize, usize)> = Vec::new(); // (outer, open_len, last_child_end)
@@ -151,33 +158,14 @@ fn parse_groups_and_tokens(md: &str) -> (Vec<CollapseGroup>, Vec<RawToken>) {
                     }
                 }
                 if matches!(tag, Tag::Item) && raw.starts_with(['-', '*', '+']) {
-                    let after_dash = &raw[1..];
-                    let trimmed = after_dash.trim_start_matches([' ', '\t']);
-                    let ws = after_dash.len() - trimmed.len();
-                    let is_task = ["[ ]", "[x]", "[X]"]
-                        .iter()
-                        .any(|p| trimmed.starts_with(p));
+                    let trimmed = raw[1..].trim_start_matches([' ', '\t']);
                     if trimmed.starts_with("[x]") || trimmed.starts_with("[X]") {
                         add |= DONE;
                     }
-                    if is_task {
-                        let box_start = range.start + 1 + ws;
-                        groups.push(CollapseGroup {
-                            outer: range.start..box_start + 3,
-                            open: range.start..box_start,
-                            close: None,
-                            is_task_dash: true,
-                        });
-                        tokens.push(RawToken {
-                            range: range.start..range.start + 1,
-                            style: PUNCTUATION,
-                        });
-                    } else {
-                        tokens.push(RawToken {
-                            range: range.start..range.start + 1,
-                            style: BULLET,
-                        });
-                    }
+                    tokens.push(RawToken {
+                        range: range.start..range.start + 1,
+                        style: BULLET,
+                    });
                 }
                 if matches!(tag, Tag::BlockQuote(_)) && raw.starts_with('>') {
                     tokens.push(RawToken {
@@ -223,10 +211,22 @@ fn parse_groups_and_tokens(md: &str) -> (Vec<CollapseGroup>, Vec<RawToken>) {
                     }
                 }
                 if add == HEADING {
-                    let digits = md[range.clone()].bytes().take_while(|b| *b == b'#').count();
+                    let raw_h = &md[range.clone()];
+                    let lead = raw_h.len() - raw_h.trim_start_matches(' ').len();
+                    let digits = raw_h[lead..].bytes().take_while(|b| *b == b'#').count();
                     if digits > 0 {
+                        let hash_start = range.start + lead;
+                        let hash_end = hash_start + digits;
+                        let sep = usize::from(md[hash_end..range.end].starts_with([' ', '\t']));
+                        let prefix_end = hash_end + sep;
+                        groups.push(CollapseGroup {
+                            outer: hash_start..range.end,
+                            open: hash_start..prefix_end,
+                            close: None,
+                            is_heading_prefix: true,
+                        });
                         tokens.push(RawToken {
-                            range: range.start..range.start + digits,
+                            range: hash_start..hash_end,
                             style: PUNCTUATION,
                         });
                     }
@@ -251,7 +251,7 @@ fn parse_groups_and_tokens(md: &str) -> (Vec<CollapseGroup>, Vec<RawToken>) {
                         outer,
                         open,
                         close,
-                        is_task_dash: false,
+                        is_heading_prefix: false,
                     });
                 }
                 if let Some((_, Some((outer, open, close)))) = stack.pop() {
@@ -266,7 +266,7 @@ fn parse_groups_and_tokens(md: &str) -> (Vec<CollapseGroup>, Vec<RawToken>) {
                             outer,
                             open,
                             close: Some(close),
-                            is_task_dash: false,
+                            is_heading_prefix: false,
                         });
                     }
                 }
@@ -281,7 +281,7 @@ fn parse_groups_and_tokens(md: &str) -> (Vec<CollapseGroup>, Vec<RawToken>) {
                         outer: range.clone(),
                         open: open.clone(),
                         close: Some(close.clone()),
-                        is_task_dash: false,
+                        is_heading_prefix: false,
                     });
                     tokens.push(RawToken {
                         range: open,
@@ -305,13 +305,15 @@ fn parse_groups_and_tokens(md: &str) -> (Vec<CollapseGroup>, Vec<RawToken>) {
             tokens.push(RawToken { range, style });
         }
     }
+    groups.sort_by_key(|g| (g.outer.start, g.outer.end));
     tokens.sort_by_key(|t| (t.range.start, t.range.end));
-    (groups, tokens)
+    ParsedMarkdown { groups, tokens }
 }
 
 impl Projection {
     pub fn build(
         md: &str,
+        parsed: &ParsedMarkdown,
         field_range: Range<usize>,
         markers: &[Marker],
         mode: EditMode,
@@ -321,7 +323,8 @@ impl Projection {
         is_body: bool,
         is_cell: bool,
     ) -> Self {
-        let (groups, raw_tokens) = parse_groups_and_tokens(md);
+        let groups = &parsed.groups;
+        let raw_tokens = &parsed.tokens;
         let sel_range = active_sel.map(|[a, b]| a.min(b)..a.max(b));
         let near_marker = if mode == EditMode::Markdown && is_body {
             sel_range
@@ -349,21 +352,20 @@ impl Projection {
 
         let mut overrides: Vec<Override> = Vec::new();
         let mut hidden_pairs: Vec<DelimPair> = Vec::new();
+        let mut has_hidden_heading_prefix = false;
 
-        for g in &groups {
-            if g.outer.end <= field_range.start || g.outer.start >= field_range.end {
+        for g in groups {
+            if g.outer.start >= field_range.end {
+                break;
+            }
+            if g.outer.end <= field_range.start {
                 continue;
             }
             let expanded = match mode {
                 EditMode::Rich => false,
                 EditMode::Markdown => {
-                    if g.is_task_dash {
-                        let box_open = g.open.end;
-                        near_marker.is_some_and(|m| m.open == box_open)
-                            || literal.is_some_and(|(p, _)| p == box_open)
-                            || sel_range.as_ref().is_some_and(|s| {
-                                s.start < g.open.end && s.end >= g.open.start
-                            })
+                    if g.is_heading_prefix {
+                        active_sel.is_some()
                     } else {
                         sel_range
                             .as_ref()
@@ -374,6 +376,9 @@ impl Projection {
             if !expanded {
                 let open = g.open.start.max(field_range.start)..g.open.end.min(field_range.end);
                 if !open.is_empty() {
+                    if g.is_heading_prefix && open.start == field_range.start {
+                        has_hidden_heading_prefix = true;
+                    }
                     overrides.push(Override::Hidden(open.clone()));
                 }
                 if let Some(close) = &g.close {
@@ -491,6 +496,7 @@ impl Projection {
             tokens: Vec::new(),
             checkboxes: Vec::new(),
             hidden_pairs,
+            has_hidden_heading_prefix,
             is_cell,
         };
 
@@ -638,9 +644,12 @@ impl Projection {
             std::mem::swap(&mut src_start, &mut src_end);
         }
 
-            // Whole-field replacement (e.g. Select All + type) replaces leading/trailing hidden syntax too.
+            // Whole-field replacement (e.g. Select All + type) replaces leading/trailing hidden syntax too,
+            // except a hidden heading prefix in Rich mode so replacing a heading's text keeps its level.
             if removed.start == 0 && removed.end == self.display.len() {
-                src_start = self.field_start;
+                if !self.has_hidden_heading_prefix {
+                    src_start = self.field_start;
+                }
                 if let Some(last) = self.pieces.last() {
                     src_end = src_end.max(last.source.end);
                 }
@@ -709,9 +718,11 @@ mod tests {
     #[test]
     fn markdown_mode_is_tight_at_rest_and_expands_only_the_active_span() {
         let md = "Leave **ten seconds** and `48 kHz` here.";
+        let parsed = parse_markdown(md);
         let markers = markdown_markers(md);
         let resting = Projection::build(
             md,
+            &parsed,
             0..md.len(),
             &markers,
             EditMode::Markdown,
@@ -727,6 +738,7 @@ mod tests {
         let inside_bold = md.find("seconds").unwrap();
         let active = Projection::build(
             md,
+            &parsed,
             0..md.len(),
             &markers,
             EditMode::Markdown,
@@ -741,6 +753,7 @@ mod tests {
         // Rich mode stays tight even when cursor is inside **ten seconds**.
         let rich = Projection::build(
             md,
+            &parsed,
             0..md.len(),
             &markers,
             EditMode::Rich,
@@ -756,11 +769,13 @@ mod tests {
     #[test]
     fn mouse_clicked_checkbox_stays_togglebox_while_keyboard_cursor_reveals_it() {
         let md = "- [ ] Pack\n- [x] Done";
+        let parsed = parse_markdown(md);
         let markers = markdown_markers(md);
         let open = md.find("[ ]").unwrap();
 
         let mouse = Projection::build(
             md,
+            &parsed,
             0..md.len(),
             &markers,
             EditMode::Markdown,
@@ -773,11 +788,12 @@ mod tests {
         assert!(!mouse.checkboxes[0].revealed);
         assert_eq!(
             mouse.display,
-            format!("{CHECKBOX_SLOT_MONO} Pack\n{CHECKBOX_SLOT_MONO} Done")
+            format!("- {CHECKBOX_SLOT_MONO} Pack\n- {CHECKBOX_SLOT_MONO} Done")
         );
 
         let keyboard = Projection::build(
             md,
+            &parsed,
             0..md.len(),
             &markers,
             EditMode::Markdown,
@@ -791,16 +807,18 @@ mod tests {
         assert!(!keyboard.checkboxes[1].revealed);
         assert_eq!(
             keyboard.display,
-            format!("- [ ] Pack\n{CHECKBOX_SLOT_MONO} Done")
+            format!("- [ ] Pack\n- {CHECKBOX_SLOT_MONO} Done")
         );
     }
 
     #[test]
     fn rich_editing_preserves_and_cleans_up_hidden_markdown_delimiters() {
         let md = "Leave **ten** here.";
+        let parsed = parse_markdown(md);
         let markers = markdown_markers(md);
         let proj = Projection::build(
             md,
+            &parsed,
             0..md.len(),
             &markers,
             EditMode::Rich,

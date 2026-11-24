@@ -106,13 +106,189 @@
 .ledger .ledger-mini:hover, .ledger .ledger-mini:focus-visible { color: var(--accent-deep); background: var(--pale); }
 .ledger .ledger-mini.selected { color: var(--accent-deep); background: var(--pale); }
 .ledger .ledger-mini.remove:hover, .ledger .ledger-mini.remove:focus-visible { color: var(--alert); background: var(--alert-wash); }
-.ledger .ledger-chip {
-  height: 22px;
-  padding: 0 8px;
+.ledger .ledger-col-strip {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  right: 0;
+  height: 24px;
+  padding-bottom: 2px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+.ledger .ledger-col-slot {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 88px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ledger .ledger-col-add-slot {
+  flex: 0 0 var(--ledger-rail);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ledger .ledger-row-strip {
+  position: absolute;
+  left: -42px;
+  top: var(--ledger-head);
+  width: 42px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.ledger .ledger-row-slot {
+  position: relative;
+  height: var(--ledger-row);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 4px;
+}
+.ledger .ledger-row-add-slot {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 4px;
+}
+.ledger .ledger-axis-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+.ledger .ledger-axis-btn {
+  width: 18px;
+  height: 20px;
+  padding: 0;
   border: 0;
   border-radius: 4px;
+  color: var(--faint);
+  background: transparent;
+  font: 600 11px/1 var(--sans);
+  opacity: 0.45;
+  pointer-events: auto;
+}
+.ledger .ledger-axis-btn.ledger-axis-add {
+  width: 20px;
+  height: 20px;
+  color: var(--muted);
+  font: 500 14px/1 var(--sans);
+}
+.ledger .ledger-col-slot.active > .ledger-axis-btn,
+.ledger .ledger-row-slot.active > .ledger-axis-btn,
+.ledger .ledger-axis-btn.open {
+  opacity: 0.85;
+  color: var(--muted);
+}
+.ledger .ledger-axis-btn:hover,
+.ledger .ledger-axis-btn:focus-visible,
+.ledger .ledger-axis-btn.open {
+  opacity: 1;
+  color: var(--accent-deep);
+  background: var(--pale);
+}
+.ledger .ledger-axis-btn.remove:hover,
+.ledger .ledger-axis-btn.remove:focus-visible {
+  opacity: 1;
+  color: var(--alert);
+  background: var(--alert-wash);
+}
+.ledger .ledger-axis-btn:disabled {
+  opacity: 0.2;
+  background: transparent;
+}
+.ledger .ledger-axis-menu {
+  position: absolute;
+  top: 22px;
+  left: calc(50% - 70px);
+  z-index: 14;
+  width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px #18362a24;
+  pointer-events: auto;
+}
+.ledger .ledger-axis-menu.align-start {
+  left: 0;
+}
+.ledger .ledger-axis-menu.align-end {
+  left: auto;
+  right: 0;
+}
+.ledger .ledger-axis-menu.row-menu {
+  top: 8px;
+  left: 40px;
+}
+.ledger .ledger-axis-align {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+}
+.ledger .ledger-axis-align button {
+  flex: 1;
+  justify-content: center;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 11px/1 var(--sans);
+}
+.ledger .ledger-axis-align button.selected,
+.ledger .ledger-axis-align button:hover {
+  color: var(--accent-deep);
+  background: var(--pale);
+}
+.ledger .ledger-axis-menu > button {
+  justify-content: flex-start;
+  gap: 8px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
   color: var(--ink);
+  font: 400 12px var(--sans);
+  white-space: nowrap;
+}
+.ledger .ledger-axis-menu > button:hover,
+.ledger .ledger-axis-menu > button:focus-visible {
   background: var(--wash);
+  color: var(--accent-deep);
+}
+.ledger .ledger-axis-menu > button.remove:hover,
+.ledger .ledger-axis-menu > button.remove:focus-visible {
+  background: var(--alert-wash);
+  color: var(--alert);
+}
+.ledger .ledger-axis-menu > button:disabled {
+  opacity: 0.36;
+  background: transparent;
+}
+.ledger .ledger-chip {
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
   font: 500 11px/1 var(--sans);
 }
 .ledger .ledger-chip:hover { color: var(--accent-deep); background: var(--pale); }
