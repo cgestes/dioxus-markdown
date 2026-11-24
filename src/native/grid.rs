@@ -1065,6 +1065,22 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                                 div {
                                     class: "ledger-axis-group",
                                     onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
+                                    if is_active_col {
+                                        EditorButton { id: format!("move-col-left-{index}"), class: "ledger-mini", label: "Move column left", tip: "Move column left (⌥←)", glyph: "←",
+                                            disabled: c == 0, onactivate: move |_| writing.move_column_dir(index, active_row, c, false) }
+                                        EditorButton { id: format!("move-col-right-{index}"), class: "ledger-mini", label: "Move column right", tip: "Move column right (⌥→)", glyph: "→",
+                                            disabled: c + 1 >= width_count, onactivate: move |_| writing.move_column_dir(index, active_row, c, true) }
+                                        span { class: "ledger-bar-sep", aria_hidden: "true" }
+                                        EditorButton { id: format!("align-left-{index}"), class: "ledger-mini", label: "Align left", glyph: "L", selected: matches!(col_align, Alignment::Left | Alignment::None),
+                                            onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
+                                        EditorButton { id: format!("align-center-{index}"), class: "ledger-mini", label: "Align center", glyph: "C", selected: col_align == Alignment::Center,
+                                            onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
+                                        EditorButton { id: format!("align-right-{index}"), class: "ledger-mini", label: "Align right", glyph: "R", selected: col_align == Alignment::Right,
+                                            onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
+                                        span { class: "ledger-bar-sep", aria_hidden: "true" }
+                                        EditorButton { id: format!("insert-col-left-{index}"), class: "ledger-mini", label: "Insert column left", tip: "Insert column left", glyph: "+←",
+                                            onactivate: move |_| writing.insert_column_at(index, active_row, c) }
+                                    }
                                     EditorButton {
                                         id: format!("col-menu-btn-{index}-{c}"),
                                         class: menu_cls,
@@ -1098,26 +1114,26 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                                         aria_label: format!("Column {} menu", c + 1),
                                         onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
                                         div { class: "ledger-axis-align",
-                                            EditorButton { id: format!("align-left-{index}"), class: "ledger-mini", label: "Align left", glyph: "L", selected: matches!(col_align, Alignment::Left | Alignment::None),
+                                            EditorButton { id: format!("col-menu-align-left-{index}-{c}"), class: "ledger-mini", label: "Align left", glyph: "L", selected: matches!(col_align, Alignment::Left | Alignment::None),
                                                 onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
-                                            EditorButton { id: format!("align-center-{index}"), class: "ledger-mini", label: "Align center", glyph: "C", selected: col_align == Alignment::Center,
+                                            EditorButton { id: format!("col-menu-align-center-{index}-{c}"), class: "ledger-mini", label: "Align center", glyph: "C", selected: col_align == Alignment::Center,
                                                 onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
-                                            EditorButton { id: format!("align-right-{index}"), class: "ledger-mini", label: "Align right", glyph: "R", selected: col_align == Alignment::Right,
+                                            EditorButton { id: format!("col-menu-align-right-{index}-{c}"), class: "ledger-mini", label: "Align right", glyph: "R", selected: col_align == Alignment::Right,
                                                 onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
                                         }
-                                        button { id: format!("move-col-left-{index}"), role: "menuitem", disabled: c == 0,
+                                        button { id: format!("col-menu-move-left-{index}-{c}"), role: "menuitem", disabled: c == 0,
                                             onclick: move |_| writing.move_column_dir(index, active_row, c, false),
                                             span { class: "bm-glyph", "←" } "Move left"
                                         }
-                                        button { id: format!("move-col-right-{index}"), role: "menuitem", disabled: c + 1 >= width_count,
+                                        button { id: format!("col-menu-move-right-{index}-{c}"), role: "menuitem", disabled: c + 1 >= width_count,
                                             onclick: move |_| writing.move_column_dir(index, active_row, c, true),
                                             span { class: "bm-glyph", "→" } "Move right"
                                         }
-                                        button { id: format!("insert-col-left-{index}"), role: "menuitem",
+                                        button { id: format!("col-menu-insert-left-{index}-{c}"), role: "menuitem",
                                             onclick: move |_| writing.insert_column_at(index, active_row, c),
                                             span { class: "bm-glyph", "+" } "Insert left"
                                         }
-                                        button { id: format!("insert-col-right-{index}"), role: "menuitem",
+                                        button { id: format!("col-menu-insert-right-{index}-{c}"), role: "menuitem",
                                             onclick: move |_| writing.insert_column_at(index, active_row, c + 1),
                                             span { class: "bm-glyph", "+" } "Insert right"
                                         }
@@ -1164,17 +1180,39 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                         } else {
                             "ledger-axis-btn"
                         };
+                        let row_menu_cls = if is_active_row {
+                            if row_open {
+                                "ledger-row-btn open"
+                            } else {
+                                "ledger-row-btn"
+                            }
+                        } else {
+                            menu_cls
+                        };
+                        let row_del_cls = if is_active_row {
+                            "ledger-row-btn remove"
+                        } else {
+                            "ledger-axis-btn remove"
+                        };
                         rsx! {
                             div {
                                 key: "{r}",
                                 class: "ledger-row-slot",
                                 class: if is_active_row || row_open { "active" },
                                 div {
-                                    class: "ledger-axis-group",
+                                    class: if is_active_row { "ledger-axis-group row-inline" } else { "ledger-axis-group" },
                                     onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
+                                    if is_active_row {
+                                        EditorButton { id: format!("move-row-up-{index}"), class: "ledger-row-btn", label: "Move row up", tip: "Move row up (⌥↑)", glyph: "↑",
+                                            disabled: r <= 1, onactivate: move |_| writing.move_row_dir(index, r, active_col, false) }
+                                        EditorButton { id: format!("move-row-down-{index}"), class: "ledger-row-btn", label: "Move row down", tip: "Move row down (⌥↓)", glyph: "↓",
+                                            disabled: r + 1 >= row_count, onactivate: move |_| writing.move_row_dir(index, r, active_col, true) }
+                                        EditorButton { id: format!("insert-row-above-{index}"), class: "ledger-row-btn", label: "Insert row above", tip: "Insert row above", glyph: "+",
+                                            onactivate: move |_| writing.insert_row_at(index, r, active_col) }
+                                    }
                                     EditorButton {
                                         id: format!("row-menu-btn-{index}-{r}"),
-                                        class: menu_cls,
+                                        class: row_menu_cls,
                                         label: "Row menu",
                                         tip: "Row actions",
                                         glyph: "⋯",
@@ -1187,7 +1225,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                                     }
                                     EditorButton {
                                         id: del_id,
-                                        class: "ledger-axis-btn remove",
+                                        class: row_del_cls,
                                         label: "Delete row",
                                         tip: "Delete row",
                                         glyph: "×",
@@ -1201,19 +1239,19 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                                         role: "menu",
                                         aria_label: format!("Row {} menu", r + 1),
                                         onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                                        button { id: format!("move-row-up-{index}"), role: "menuitem", disabled: r <= 1,
+                                        button { id: format!("row-menu-move-up-{index}-{r}"), role: "menuitem", disabled: r <= 1,
                                             onclick: move |_| writing.move_row_dir(index, r, active_col, false),
                                             span { class: "bm-glyph", "↑" } "Move up"
                                         }
-                                        button { id: format!("move-row-down-{index}"), role: "menuitem", disabled: r + 1 >= row_count,
+                                        button { id: format!("row-menu-move-down-{index}-{r}"), role: "menuitem", disabled: r + 1 >= row_count,
                                             onclick: move |_| writing.move_row_dir(index, r, active_col, true),
                                             span { class: "bm-glyph", "↓" } "Move down"
                                         }
-                                        button { id: format!("insert-row-above-{index}"), role: "menuitem",
+                                        button { id: format!("row-menu-insert-above-{index}-{r}"), role: "menuitem",
                                             onclick: move |_| writing.insert_row_at(index, r, active_col),
                                             span { class: "bm-glyph", "+" } "Insert above"
                                         }
-                                        button { id: format!("insert-row-below-{index}"), role: "menuitem",
+                                        button { id: format!("row-menu-insert-below-{index}-{r}"), role: "menuitem",
                                             onclick: move |_| writing.insert_row_at(index, r + 1, active_col),
                                             span { class: "bm-glyph", "+" } "Insert below"
                                         }

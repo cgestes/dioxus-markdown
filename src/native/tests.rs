@@ -1800,61 +1800,55 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     // Alt+Right moves column right directly from the keyboard!
     chord(&mut doc, Key::Named(NamedKey::ArrowRight), Modifiers::ALT);
     assert!(markdown(&doc).contains("| Take | Stop |"), "{}", markdown(&doc));
-    // Per-column header menu and per-row line menu operate on each header and row directly.
+    // Frameless flat inline controls on active column/row + per-header & per-row menus + quick deletes!
     assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_some());
     assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-1").is_some());
     assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_some());
     assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-2").is_some());
-    // Column menu: move left, move right, align L/C/R, insert left, insert right, delete column.
-    click(&mut doc, "col-menu-btn-0-1");
+    // Active column flat inline buttons work in 1 click without opening a menu!
     click(&mut doc, "move-col-left-0");
     assert!(markdown(&doc).contains("| Stop | Take |"));
-    click(&mut doc, "col-menu-btn-0-0");
     click(&mut doc, "move-col-right-0");
     assert!(markdown(&doc).contains("| Take | Stop |"));
-    click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "move-col-left-0");
     assert!(markdown(&doc).contains("| Stop | Take |"));
-    click(&mut doc, "col-menu-btn-0-1");
+    click(&mut doc, "cell-0-1-1");
     click(&mut doc, "align-right-0");
     assert!(markdown(&doc).contains("| --- | ---: |"));
-    click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-center-0");
     assert!(markdown(&doc).contains("| --- | :---: |"));
-    click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-left-0");
     assert!(markdown(&doc).contains("| --- | :--- |"));
+    // Column popover menu works on any column (including insert right & delete).
     click(&mut doc, "col-menu-btn-0-1");
-    click(&mut doc, "insert-col-right-0");
+    click(&mut doc, "col-menu-insert-right-0-1");
     assert!(markdown(&doc).contains("| Stop | Take | Column 3 |"));
     click(&mut doc, "col-menu-btn-0-2");
     click(&mut doc, "col-menu-delete-0-2");
     assert!(markdown(&doc).contains("| Stop | Take |"));
     click(&mut doc, "col-menu-btn-0-0");
-    click(&mut doc, "insert-col-left-0");
+    click(&mut doc, "col-menu-insert-left-0-0");
     assert!(markdown(&doc).contains("| Column 3 | Stop | Take |"));
     click(&mut doc, "delete-column-0");
     assert!(markdown(&doc).contains("| Stop | Take |"));
-    // Row menu: insert above, insert below, move up, move down, delete row.
-    click(&mut doc, "row-menu-btn-0-1");
+    // Active row flat inline buttons + per-row menu + quick delete.
+    click(&mut doc, "cell-0-1-0");
     click(&mut doc, "insert-row-above-0");
     assert!(markdown(&doc).contains("| --- | :--- |\n|  |  |\n| Bridge | 30 s |"));
     click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "row-menu-delete-0-1");
     assert!(!markdown(&doc).contains("|  |  |"));
-    click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "move-row-down-0");
     assert!(markdown(&doc).contains("| Lock | 45 s |\n| Bridge | 30 s |"));
-    click(&mut doc, "row-menu-btn-0-2");
     click(&mut doc, "move-row-up-0");
     assert!(markdown(&doc).contains("| Bridge | 30 s |\n| Lock | 45 s |"));
     click(&mut doc, "row-menu-btn-0-1");
-    click(&mut doc, "insert-row-below-0");
+    click(&mut doc, "row-menu-insert-below-0-1");
     assert!(markdown(&doc).contains("| Bridge | 30 s |\n|  |  |\n| Lock | 45 s |"));
     // Quick delete button beside a non-active row deletes that row directly.
     click(&mut doc, "row-delete-0-1");
     assert!(!markdown(&doc).contains("| Bridge | 30 s |"));
-    // Perimeter + Add column and + Add row buttons work directly.
+    // Unified flat + Add column and + Add row buttons work directly.
     click(&mut doc, "add-column-0");
     assert!(markdown(&doc).contains("| Stop | Take | Column 3 |"));
     click(&mut doc, "add-row-0");
@@ -2128,6 +2122,99 @@ fn selecting_on_title_and_formatted_prose_keeps_delimiters_steady_without_wiggle
     doc.handle_ui_event(UiEvent::PointerUp(make_ptr(&doc, x_end, y_mid, false)));
     render(&mut doc);
     assert_eq!(value(&doc, "note-title"), "# Field notes");
+}
+
+#[test]
+fn table_buttons_work_at_retina_and_hover() {
+    let config = dioxus_native::DocumentConfig {
+        font_ctx: Some(typefaces::notebook_fonts()),
+        viewport: Some(Viewport {
+            window_size: (1840, 1300),
+            hidpi_scale: 2.0,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut doc = DioxusDocument::new(VirtualDom::new(|| notebook(crate::SAMPLE)), config);
+    doc.initial_build();
+    render(&mut doc);
+
+    let send_ptr = |d: &mut DioxusDocument, x: f32, y: f32, kind: &str| {
+        let mut ptr = d
+            .inner
+            .borrow()
+            .get_node(id(d, "paper"))
+            .unwrap()
+            .synthetic_click_event_data(Modifiers::empty());
+        ptr.coords.client_x = x;
+        ptr.coords.client_y = y;
+        ptr.coords.page_x = x;
+        ptr.coords.page_y = y;
+        let ev = match kind {
+            "move" => {
+                ptr.buttons = MouseEventButtons::None;
+                UiEvent::PointerMove(ptr)
+            }
+            "down" => {
+                ptr.buttons = MouseEventButtons::Primary;
+                UiEvent::PointerDown(ptr)
+            }
+            "up" => {
+                ptr.buttons = MouseEventButtons::None;
+                UiEvent::PointerUp(ptr)
+            }
+            _ => unreachable!(),
+        };
+        d.handle_ui_event(ev);
+        render(d);
+    };
+    // Simulate a REAL mouse/trackpad click (including micro-jitter PointerMove while button held!).
+    let real_click = |d: &mut DioxusDocument, name: &str| {
+        let b = bounds(d, name);
+        let cx = (b[0] + b[2] * 0.5) as f32;
+        let cy = (b[1] + b[3] * 0.5) as f32;
+        send_ptr(d, cx, cy, "move");
+        send_ptr(d, cx, cy, "down");
+        // Micro-jitter while button is held (previously triggered Blitz DragMode::Selecting!).
+        let mut jitter = d
+            .inner
+            .borrow()
+            .get_node(id(d, "paper"))
+            .unwrap()
+            .synthetic_click_event_data(Modifiers::empty());
+        jitter.coords.client_x = cx + 0.5;
+        jitter.coords.client_y = cy + 0.5;
+        jitter.coords.page_x = cx + 0.5;
+        jitter.coords.page_y = cy + 0.5;
+        jitter.buttons = MouseEventButtons::Primary;
+        d.handle_ui_event(UiEvent::PointerMove(jitter));
+        render(d);
+        send_ptr(d, cx + 0.5, cy + 0.5, "up");
+    };
+
+    // 1. Click cell-0-1-1, then verify real jittery clicks work on active inline controls,
+    //    popover menu items, and + add-column / + add-row buttons at 2x Retina!
+    real_click(&mut doc, "cell-0-1-1");
+    real_click(&mut doc, "move-col-left-0");
+    assert!(
+        markdown(&doc).contains("| Listen for | Stop | Take |"),
+        "real click on move-col-left-0 failed: {}",
+        markdown(&doc)
+    );
+    real_click(&mut doc, "col-menu-btn-0-0");
+    assert!(
+        doc.inner.borrow().get_element_by_id("col-menu-0-0").is_some(),
+        "real click on col-menu-btn-0-0 must open popover"
+    );
+    real_click(&mut doc, "col-menu-move-right-0-0");
+    assert!(
+        markdown(&doc).contains("| Stop | Listen for | Take |"),
+        "real click on col-menu-move-right-0-0 failed"
+    );
+    real_click(&mut doc, "add-column-0");
+    assert!(markdown(&doc).contains("| Stop | Listen for | Take | Column 4 |"));
+    real_click(&mut doc, "add-row-0");
+    assert_eq!(table::tables(&markdown(&doc))[0].rows.len(), 4);
 }
 
 #[path = "tests/live_workflows.rs"]

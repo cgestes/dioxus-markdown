@@ -117,6 +117,7 @@
   display: flex;
   align-items: center;
   pointer-events: none;
+  user-select: none;
 }
 .ledger .ledger-col-slot {
   position: relative;
@@ -136,13 +137,14 @@
 }
 .ledger .ledger-row-strip {
   position: absolute;
-  left: -42px;
+  left: -46px;
   top: var(--ledger-head);
-  width: 42px;
+  width: 46px;
   z-index: 7;
   display: flex;
   flex-direction: column;
   pointer-events: none;
+  user-select: none;
 }
 .ledger .ledger-row-slot {
   position: relative;
@@ -163,7 +165,28 @@
   display: flex;
   align-items: center;
   gap: 1px;
+  user-select: none;
 }
+.ledger .ledger-axis-group.row-inline {
+  width: 42px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 1px;
+}
+.ledger .ledger-row-btn {
+  width: 13px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  color: var(--muted);
+  background: transparent;
+  font: 600 9.5px/1 var(--sans);
+  user-select: none;
+}
+.ledger .ledger-row-btn:hover, .ledger .ledger-row-btn:focus-visible { color: var(--accent-deep); background: var(--pale); }
+.ledger .ledger-row-btn.remove:hover, .ledger .ledger-row-btn.remove:focus-visible { color: var(--alert); background: var(--alert-wash); }
+.ledger .ledger-row-btn:disabled { opacity: 0.22; background: transparent; }
 .ledger .ledger-axis-btn {
   width: 18px;
   height: 20px;
@@ -230,7 +253,7 @@
 }
 .ledger .ledger-axis-menu.row-menu {
   top: 8px;
-  left: 40px;
+  left: 44px;
 }
 .ledger .ledger-axis-align {
   display: flex;

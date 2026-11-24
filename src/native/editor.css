@@ -16,10 +16,11 @@ nav { gap: 6px; }
 button {
     justify-content: center; gap: 6px; height: 28px; padding: 0 8px;
     border: 1px solid transparent; border-radius: 6px; background: transparent;
-    color: var(--muted); font: 400 12px var(--sans); cursor: pointer;
+    color: var(--muted); font: 400 12px var(--sans); cursor: pointer; user-select: none;
 }
 button:hover { background: var(--pale); color: var(--accent-deep); }
 button:active { background: var(--line); }
+.restart-app { color: var(--accent-deep); border-color: var(--accent-deep); }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 button:disabled { color: #8e9b93; opacity: .36; background: transparent; cursor: default; }
 .tool-caption, .tool-icon { pointer-events: none; }
@@ -220,20 +221,26 @@ textarea.body-editor {
     opacity: 1; pointer-events: auto;
 }
 .ledger.engaged .ledger-axis-btn, .ledger:hover .ledger-axis-btn {
-    opacity: 0.45; pointer-events: auto;
+    opacity: 0.55; pointer-events: auto;
 }
 .ledger.engaged .ledger-axis-btn.ledger-axis-add, .ledger:hover .ledger-axis-btn.ledger-axis-add {
     opacity: 1; pointer-events: auto;
 }
+.ledger.engaged .ledger-col-slot.active .ledger-mini,
+.ledger.engaged .ledger-row-slot.active .ledger-row-btn {
+    opacity: 0.9; pointer-events: auto;
+}
 .ledger.engaged .ledger-col-slot.active .ledger-axis-btn,
 .ledger.engaged .ledger-row-slot.active .ledger-axis-btn,
 .ledger.engaged .ledger-axis-btn.open {
-    opacity: 0.85;
+    opacity: 0.9;
 }
 .ledger.engaged .ledger-axis-btn:hover,
 .ledger.engaged .ledger-axis-btn:focus-visible,
 .ledger:hover .ledger-axis-btn:hover,
-.ledger:hover .ledger-axis-btn:focus-visible {
+.ledger:hover .ledger-axis-btn:focus-visible,
+.ledger.engaged .ledger-mini:hover,
+.ledger.engaged .ledger-row-btn:hover {
     opacity: 1;
 }
 .grid-block.engaged .grid-edge button, .grid-block:hover .grid-edge button, .grid-edge button:focus,

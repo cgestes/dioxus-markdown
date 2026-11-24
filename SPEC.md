@@ -125,10 +125,16 @@
 - **Visual Design:**
   - Pine header, subtle row rules, steady column widths while typing (no jitter), aligned cell hit areas (`left`, `center`, `right`).
   - No ugly floating bordered `+` / `+ Row` pills and no detached popup menu.
-- **Unified Flat Axis Bars (Top Column Bar + Left Row Bar):**
-  - All table controls are **flat** (borderless, shadowless, transparent ghost buttons on `--page`, with soft hover tints) and appear only when the table is hovered or focused — no duplicate right-edge or bottom-right growth buttons.
-  - **Top column bar (`#col-strip-{t}`):** Every column header has a flat `⋯` menu trigger (`L / C / R` alignment, Move Left/Right, Insert Left/Right, Delete Column) + quick `×` delete directly above it, and a coherent flat `+` button at the right end of the bar to append a column.
-  - **Left row bar (`#row-strip-{t}`):** Every data row (`r > 0`) has a flat `⋯` menu trigger (Move Up/Down, Insert Above/Below, Delete Row) + quick `×` delete directly beside it, and a coherent flat `+` button at the bottom end of the bar to append a row.
+- **Unified Flat Axis Bars (Frameless Active Controls + Per-Header/Per-Row Menus & Delete):**
+  - All table controls are **flat and frameless** (no surrounding card border, background, or drop shadow — transparent ghost buttons on `--page` with soft hover tints) and appear only when the table is hovered or focused.
+  - **Top column bar (`#col-strip-{t}`):**
+    - The **active column** shows its flat frameless inline bar directly above the header (`←`, `→`, `L`, `C`, `R`, `+←`, `⋯`, `×`).
+    - **Every other column header** shows a compact flat `⋯` menu trigger (`L / C / R` alignment, Move Left/Right, Insert Left/Right, Delete Column) + quick `×` delete.
+    - A coherent flat `+` button sits at the right end of the bar to append a column.
+  - **Left row bar (`#row-strip-{t}`):**
+    - The **active data row** shows its flat frameless inline micro-controls beside the row (`↑`, `↓`, `+`, `⋯`, `×`).
+    - **Every other data row** shows a compact flat `⋯` menu trigger (Move Up/Down, Insert Above/Below, Delete Row) + quick `×` delete.
+    - A coherent flat `+` button sits at the bottom end of the bar to append a row.
   - **Bottom scope strip (`#table-bar-{t}`):** Shows only the minimal flat cell/range scope label (`Cell B2`, or `B2 – C3 · N cells  Clear  Del rows  Del cols` when a rectangular range is selected).
 - **Keyboard & Pointer:**
   - `Tab` / `Shift+Tab` move horizontally (growing a new row at the last cell); `Enter` / `Shift+Enter` move vertically.
