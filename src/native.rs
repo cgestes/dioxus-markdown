@@ -23,6 +23,8 @@ mod navigation;
 mod pointer;
 #[path = "native/projection.rs"]
 mod projection;
+#[path = "native/restart.rs"]
+mod restart;
 #[path = "native/selection.rs"]
 mod selection_model;
 #[path = "native/split.rs"]
@@ -315,6 +317,7 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
     let mut view = use_signal(|| initial_view);
     let source = move || view() != View::Live;
     let message = use_signal(String::new);
+    let newer_build = restart::use_newer_build();
     let mut root = use_signal(|| None::<NodeHandle>);
     let mut bookmark = use_signal(|| [0, 0]);
     let initial_field = match initial_view {
@@ -380,10 +383,11 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
     let window_title = use_memo(move || {
         let md = contents.read();
         let title = Sections::read(&md).title(&md).trim();
-        format!(
-            "Margin · {}",
-            if title.is_empty() { "Untitled" } else { title }
-        )
+        let title = if title.is_empty() { "Untitled" } else { title };
+        match restart::worktree_name() {
+            Some(name) => format!("Margin · {name} · {title}"),
+            None => format!("Margin · {title}"),
+        }
     });
     let desktop = window.is_some();
     use_effect(move || {
@@ -557,6 +561,10 @@ fn notebook_view(initial: &str, initial_view: View, inspect_at_start: bool) -> E
                         EditorButton { label: "Source", id: "source-mode", selected: view()==View::Source, onactivate: move |_| change_view(View::Source) }
                     }
                     EditorButton { id: "insert-table", label: "Insert table", tip: "Insert Markdown table", icon: ToolIcon::Table, glyph: "Table", onactivate: move |_| writing.insert_table(source()) }
+                    if newer_build() {
+                        EditorButton { id: "restart-app", label: "Restart", tip: "A newer build is ready. Restart Margin to run it",
+                            class: "restart-app", onactivate: move |_| restart::restart_app() }
+                    }
                     div { class: "history-tools", role: "group", aria_label: "History",
                         EditorButton { id: "undo", label: "Undo", tip: undo_tip, icon: ToolIcon::Undo, disabled: !note.read().can_undo(), onactivate: move |_| writing.history(source(), false) }
                         EditorButton { id: "redo", label: "Redo", tip: redo_tip, icon: ToolIcon::Redo, disabled: !note.read().can_redo(), onactivate: move |_| writing.history(source(), true) }

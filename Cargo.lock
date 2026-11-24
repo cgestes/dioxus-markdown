@@ -2990,6 +2990,8 @@ dependencies = [
  "blitz-traits",
  "dioxus-devtools",
  "dioxus-native",
+ "futures-channel",
+ "futures-util",
  "loro",
  "parley",
  "png 0.18.1",

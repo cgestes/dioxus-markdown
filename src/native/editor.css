@@ -15,6 +15,7 @@ button {
 }
 button:hover { background: var(--pale); color: var(--accent-deep); }
 button:active { background: var(--line); }
+.restart-app { color: var(--accent-deep); border-color: var(--accent-deep); }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 button:disabled { color: #8e9b93; opacity: .36; background: transparent; cursor: default; }
 .tool-caption, .tool-icon { pointer-events: none; }

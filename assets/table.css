@@ -11,7 +11,7 @@
   --ledger-row: 45px;
   --ledger-head: 37px;
   --ledger-rail: 24px;
-  --ledger-foot: 36px;
+  --ledger-foot: 27px;
   position: relative;
   padding-right: var(--ledger-rail);
   margin-right: calc(0px - var(--ledger-rail));
