@@ -60,6 +60,25 @@ impl Session {
         click_at(&mut self.doc, name, Some((x, y)));
     }
 
+    fn hover(&mut self, name: &str) {
+        self.actions.push(format!("Hover {name}"));
+        let element = id(&self.doc, name);
+        let mut pointer = {
+            let dom = self.doc.inner.borrow();
+            let mut p = dom.get_node(element).unwrap().synthetic_click_event_data(Modifiers::empty());
+            let r = dom.get_client_bounding_rect(element).unwrap();
+            let scroll = dom.viewport_scroll();
+            p.coords.client_x = (r.x + r.width / 2.) as f32;
+            p.coords.client_y = (r.y + r.height / 2.) as f32;
+            p.coords.page_x = p.coords.client_x + scroll.x as f32;
+            p.coords.page_y = p.coords.client_y + scroll.y as f32;
+            p
+        };
+        pointer.buttons = MouseEventButtons::None;
+        self.doc.handle_ui_event(UiEvent::PointerMove(pointer));
+        render(&mut self.doc);
+    }
+
     fn button(&mut self, name: &str) {
         self.actions.push(format!("Click {name}"));
         click(&mut self.doc, name);
@@ -745,5 +764,31 @@ fn ux_polish_showcase_renders_rich_markdown_and_table_controls() {
         });
         render(&mut s.doc);
         s.capture("live-comments-pane");
+    });
+}
+
+#[test]
+fn only_one_menu_is_open_at_a_time() {
+    const MD: &str = "Intro\n\n\n| Stop | Take |\n| --- | --- |\n| North | 45 s |";
+    run("one-menu", MD, (900, 680), 1, |s| {
+        let shown = |s: &Session, id: &str| s.doc.inner.borrow().get_element_by_id(id).is_some();
+        let blank = MD.find("\n\n\n").unwrap() + 2;
+        s.click_at_text("cell-0-1-0", 2);
+        s.button("row-menu-btn-0-1");
+        assert!(shown(s, "row-menu-0-1"));
+        // The caret moves without a click (a command, a test), then `/` opens
+        // the slash menu: the row menu closes.
+        open_body_at(&mut s.doc, [blank; 2]);
+        s.type_char('/');
+        assert!(shown(s, "slash-menu"), "the slash menu opens");
+        assert!(!shown(s, "row-menu-0-1"), "the row menu closed");
+        // And the other way: the row menu replaces the slash menu.
+        s.hover("cell-0-1-1");
+        s.button("row-menu-btn-0-1");
+        assert!(shown(s, "row-menu-0-1"), "the row menu opens");
+        assert!(!shown(s, "slash-menu"), "the slash menu closed");
+        // Menus of the same table replace each other too.
+        s.button("col-menu-btn-0-1");
+        assert!(shown(s, "col-menu-0-1") && !shown(s, "row-menu-0-1"));
     });
 }

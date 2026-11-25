@@ -738,9 +738,8 @@ pub fn BlockHandle(writing: Writing, block_idx: usize, total: usize, top: i32) -
                     {
                         e.prevent_default();
                         e.stop_propagation();
-                        let mut w = writing;
-                        let next = (*w.block_menu.peek() != Some(block_idx)).then_some(block_idx);
-                        w.block_menu.set(next);
+                        let next = (*writing.block_menu.peek() != Some(block_idx)).then_some(block_idx);
+                        writing.show_block_menu(next);
                     }
                 },
                 {super::Icon::Grip.draw()}
@@ -879,10 +878,9 @@ fn HeaderMenuBtn(
                 tip: "Column menu & alignment",
                 icon: super::Icon::ChevronDown,
                 onclick: move |_| {
-                    let mut w = writing;
                     let target = super::writing::TableMenu::Column(index, col);
-                    let next = (*w.table_menu.peek() != Some(target)).then_some(target);
-                    w.table_menu.set(next);
+                    let next = (*writing.table_menu.peek() != Some(target)).then_some(target);
+                    writing.show_table_menu(next);
                 },
             }
         }
@@ -1008,10 +1006,9 @@ fn RowStrip(
                                         label: "Row menu",
                                         icon: super::Icon::ChevronDown,
                                         onclick: move |_| {
-                                            let mut w = writing;
                                             let target = super::writing::TableMenu::Row(index, r);
-                                            let next = (*w.table_menu.peek() != Some(target)).then_some(target);
-                                            w.table_menu.set(next);
+                                            let next = (*writing.table_menu.peek() != Some(target)).then_some(target);
+                                            writing.show_table_menu(next);
                                         },
                                     }
                                 }
@@ -1268,7 +1265,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                     } else {
                         super::writing::TableMenu::Row(index, r)
                     };
-                    writing.table_menu.set(Some(next));
+                    writing.show_table_menu(Some(next));
                 }
             },
             onpointerenter: move |_| { if !*hovered.peek() { hovered.set(true); } },

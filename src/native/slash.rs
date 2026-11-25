@@ -161,6 +161,9 @@ impl Writing {
                     }
                 }
             }
+            if prev.is_none() && next.is_some() {
+                self.close_menus();
+            }
             self.slash_menu.set(next);
         }
     }

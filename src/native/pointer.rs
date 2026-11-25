@@ -214,7 +214,7 @@ impl Writing {
                 } else {
                     super::writing::TableMenu::Row(t, r)
                 };
-                self.table_menu.set(Some(target_menu));
+                self.show_table_menu(Some(target_menu));
             }
             return;
         }
@@ -498,7 +498,7 @@ impl Writing {
             self.move_block_to_slot(bd.from, bd.target);
         } else {
             let next = (*self.block_menu.peek() != Some(bd.from)).then_some(bd.from);
-            self.block_menu.set(next);
+            self.show_block_menu(next);
         }
     }
 

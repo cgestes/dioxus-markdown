@@ -363,6 +363,30 @@ impl Writing {
         Some((field, left, top))
     }
 
+    /// One menu at a time: the slash, block and table menus close the others
+    /// when they open, however the caret got where it is.
+    pub(super) fn close_menus(mut self) {
+        if self.slash_menu.peek().is_some() {
+            self.slash_menu.set(None);
+        }
+        if self.block_menu.peek().is_some() {
+            self.block_menu.set(None);
+        }
+        if self.table_menu.peek().is_some() {
+            self.table_menu.set(None);
+        }
+    }
+
+    pub(super) fn show_table_menu(mut self, menu: Option<TableMenu>) {
+        self.close_menus();
+        self.table_menu.set(menu);
+    }
+
+    pub(super) fn show_block_menu(mut self, block: Option<usize>) {
+        self.close_menus();
+        self.block_menu.set(block);
+    }
+
     pub fn reset(mut self) {
         self.clear_cells();
         self.selected_text.set(None);
