@@ -583,11 +583,14 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         }
         reveal_input.set(false);
         if let Some(handle) = root.peek().as_ref() {
-            let mut doc = handle.doc_mut();
-            if let Some(id) = doc.get_focussed_node_id() {
-                doc.resolve(0.0);
-                selection_model::scroll_caret(&mut doc, id);
+            {
+                let mut doc = handle.doc_mut();
+                if let Some(id) = doc.get_focussed_node_id() {
+                    doc.resolve(0.0);
+                    selection_model::scroll_caret(&mut doc, id);
+                }
             }
+            writing.refresh_boxes();
         }
     });
     let markdown = contents();

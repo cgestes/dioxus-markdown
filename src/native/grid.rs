@@ -507,6 +507,18 @@ impl Writing {
         self.focus_cell(t, r, c);
     }
 
+    fn reveal_cell_caret(self, field: Field) {
+        let Some(handle) = self.root.peek().clone() else {
+            return;
+        };
+        let mut doc = handle.doc_mut();
+        if let Some(id) = doc.get_element_by_id(&field.id())
+            && doc.get_focussed_node_id() == Some(id)
+        {
+            super::selection_model::keep_caret_in_view(&mut doc, id);
+        }
+    }
+
     fn cell_input(mut self, t: usize, r: usize, c: usize, value: &str) {
         let field = Field::Cell(t, r, c);
         if self.replace_span_input(field, value) {
@@ -838,56 +850,6 @@ fn scope_label(rect: table::CellRect) -> String {
 }
 
 #[component]
-fn HeaderMenuBtn(
-    writing: Writing,
-    index: usize,
-    col: usize,
-    right_aligned: bool,
-    hovered_col: Signal<Option<usize>>,
-    open_col: Option<usize>,
-    single_active_col: Option<usize>,
-    multi_active: bool,
-) -> Element {
-    let target_col = if multi_active {
-        None
-    } else {
-        open_col.or_else(|| *hovered_col.read()).or(single_active_col)
-    };
-    if target_col != Some(col) {
-        return rsx! {};
-    }
-    let head_menu_cls = if open_col == Some(col) {
-        "ledger-head-menu-btn open"
-    } else {
-        "ledger-head-menu-btn"
-    };
-    let wrap_cls = if right_aligned {
-        "ledger-head-menu-wrap align-left"
-    } else {
-        "ledger-head-menu-wrap"
-    };
-    rsx! {
-        div {
-            class: wrap_cls,
-            onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-            Button {
-                id: format!("col-menu-btn-{index}-{col}"),
-                variant: Variant::Icon,
-                class: head_menu_cls,
-                label: "Column menu",
-                tip: "Column menu & alignment",
-                icon: super::Icon::ChevronDown,
-                onclick: move |_| {
-                    let target = super::writing::TableMenu::Column(index, col);
-                    let next = (*writing.table_menu.peek() != Some(target)).then_some(target);
-                    writing.show_table_menu(next);
-                },
-            }
-        }
-    }
-}
-
-#[component]
 fn ColStrip(
     writing: Writing,
     index: usize,
@@ -898,56 +860,99 @@ fn ColStrip(
     alignments: Vec<Alignment>,
     width_count: usize,
     active_row: usize,
+    single_active_col: Option<usize>,
+    multi_active: bool,
     open_col: Option<usize>,
+    scroll_x: Signal<f64>,
 ) -> Element {
-    let Some(c) = open_col.filter(|&c| c < width_count) else {
+    let hover_c = (*hovered_col.read()).filter(|&c| c < width_count);
+    let target_col = if multi_active {
+        None
+    } else {
+        open_col.or(hover_c).or(single_active_col)
+    };
+    let Some(c) = target_col.filter(|&c| c < width_count) else {
         return rsx! {};
     };
+    let col_open = open_col == Some(c);
     let col_align = alignments.get(c).copied().unwrap_or(Alignment::None);
     let col_rect = table::CellRect {
         anchor: [active_row, c],
         head: [active_row, c],
     };
-    let col_right_aligned = col_align == Alignment::Right;
     let weight_c = weights.get(c).copied().unwrap_or(12);
-    let align_start = col_right_aligned && (c + 1 < width_count || width_count == 1)
-        || (c == 0 && !col_right_aligned && width_count > 1 && weight_c < 14);
-    let align_end = !align_start;
+    let align_start = c == 0 && width_count > 1 && weight_c < 18;
+    let align_end = c + 1 == width_count && width_count > 1 && weight_c < 18;
+    let handle_cls = if col_open {
+        "ledger-col-handle open"
+    } else {
+        "ledger-col-handle"
+    };
+    let shift = *scroll_x.read();
+    let track_style = if shift > 0.0 {
+        format!("margin-left: -{shift:.1}px;")
+    } else {
+        String::new()
+    };
     rsx! {
         div {
             id: format!("col-strip-{index}"),
             class: "ledger-col-strip",
-            onpointerenter: move |_| { if !*hovered.peek() { hovered.set(true); } },
+            style: track_style,
             for (slot_c, &weight) in weights.iter().enumerate() {
                 div {
                     key: "{slot_c}",
                     class: "ledger-col-slot",
+                    class: if slot_c == c { "active" },
                     flex_grow: weight.to_string(),
                     if slot_c == c {
-                        Menu {
-                            id: format!("col-menu-{index}-{c}"),
-                            class: if align_start { "ledger-axis-menu col-menu align-start" } else if align_end { "ledger-axis-menu col-menu align-end" } else { "ledger-axis-menu col-menu" },
-                            label: format!("Column {} menu", c + 1),
-                            MenuRow {
-                                Button { id: format!("align-left-{index}"), variant: Variant::Icon, label: "Align left", icon: super::Icon::AlignLeft, selected: matches!(col_align, Alignment::Left | Alignment::None),
-                                    onclick: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
-                                Button { id: format!("align-center-{index}"), variant: Variant::Icon, label: "Align center", icon: super::Icon::AlignCenter, selected: col_align == Alignment::Center,
-                                    onclick: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
-                                Button { id: format!("align-right-{index}"), variant: Variant::Icon, label: "Align right", icon: super::Icon::AlignRight, selected: col_align == Alignment::Right,
-                                    onclick: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
+                        div {
+                            class: "ledger-col-handle-wrap",
+                            onpointerenter: move |_| {
+                                if !*hovered.peek() { hovered.set(true); }
+                                if *hovered_col.peek() != Some(c) { hovered_col.set(Some(c)); }
+                            },
+                            onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
+                            Button {
+                                id: format!("col-menu-btn-{index}-{c}"),
+                                variant: Variant::Icon,
+                                class: handle_cls,
+                                label: "Column menu",
+                                tip: "Column options & alignment",
+                                icon: super::Icon::DotsHorizontal,
+                                onclick: move |_| {
+                                    let target = super::writing::TableMenu::Column(index, c);
+                                    let next = (*writing.table_menu.peek() != Some(target)).then_some(target);
+                                    writing.show_table_menu(next);
+                                },
                             }
-                            MenuSeparator {}
-                            MenuItem { id: format!("col-menu-move-left-{index}-{c}"), label: "Move left", badge: "←", disabled: c == 0,
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, false); } }
-                            MenuItem { id: format!("col-menu-move-right-{index}-{c}"), label: "Move right", badge: "→", disabled: c + 1 >= width_count,
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, true); } }
-                            MenuItem { id: format!("col-menu-insert-left-{index}-{c}"), label: "Insert left", badge: "+",
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c); } }
-                            MenuItem { id: format!("col-menu-insert-right-{index}-{c}"), label: "Insert right", badge: "+",
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c + 1); } }
-                            MenuSeparator {}
-                            MenuItem { id: format!("col-menu-delete-{index}-{c}"), label: "Delete column", badge: "×", danger: true, disabled: width_count <= 1,
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.remove_axis(index, col_rect, true); } }
+                        }
+                        if col_open {
+                            Menu {
+                                id: format!("col-menu-{index}-{c}"),
+                                class: if align_start { "ledger-axis-menu col-menu align-start" } else if align_end { "ledger-axis-menu col-menu align-end" } else { "ledger-axis-menu col-menu" },
+                                label: format!("Column {} menu", c + 1),
+                                MenuRow {
+                                    Button { id: format!("align-left-{index}"), variant: Variant::Icon, label: "Align left", icon: super::Icon::AlignLeft, selected: matches!(col_align, Alignment::Left | Alignment::None),
+                                        onclick: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
+                                    Button { id: format!("align-center-{index}"), variant: Variant::Icon, label: "Align center", icon: super::Icon::AlignCenter, selected: col_align == Alignment::Center,
+                                        onclick: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
+                                    Button { id: format!("align-right-{index}"), variant: Variant::Icon, label: "Align right", icon: super::Icon::AlignRight, selected: col_align == Alignment::Right,
+                                        onclick: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
+                                }
+                                MenuSeparator {}
+                                MenuItem { id: format!("col-menu-move-left-{index}-{c}"), label: "Move left", badge: "←", disabled: c == 0,
+                                    onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, false); } }
+                                MenuItem { id: format!("col-menu-move-right-{index}-{c}"), label: "Move right", badge: "→", disabled: c + 1 >= width_count,
+                                    onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, true); } }
+                                MenuItem { id: format!("col-menu-insert-left-{index}-{c}"), label: "Insert left", badge: "+",
+                                    onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c); } }
+                                MenuItem { id: format!("col-menu-insert-right-{index}-{c}"), label: "Insert right", badge: "+",
+                                    onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c + 1); } }
+                                MenuSeparator {}
+                                MenuItem { id: format!("col-menu-delete-{index}-{c}"), label: "Delete column", badge: "×", danger: true, disabled: width_count <= 1,
+                                    onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.remove_axis(index, col_rect, true); } }
+                            }
                         }
                     }
                 }
@@ -979,16 +984,15 @@ fn RowStrip(
         div {
             id: format!("row-strip-{index}"),
             class: "ledger-row-strip",
-            onpointerenter: move |_| { if !*hovered.peek() { hovered.set(true); } },
             for r in 1..row_count {
                 {
                     let row_open = open_row == Some(r);
                     let is_target_row = target_row == Some(r);
                     let row_rect = table::CellRect { anchor: [r, active_col], head: [r, active_col] };
-                    let row_menu_cls = if row_open {
-                        "ledger-row-btn open"
+                    let row_handle_cls = if row_open {
+                        "ledger-row-handle open"
                     } else {
-                        "ledger-row-btn"
+                        "ledger-row-handle"
                     };
                     rsx! {
                         div {
@@ -997,14 +1001,19 @@ fn RowStrip(
                             class: if is_target_row || row_open { "active" },
                             if is_target_row {
                                 div {
-                                    class: "ledger-axis-group",
+                                    class: "ledger-row-handle-wrap",
+                                    onpointerenter: move |_| {
+                                        if !*hovered.peek() { hovered.set(true); }
+                                        if *hovered_row.peek() != Some(r) { hovered_row.set(Some(r)); }
+                                    },
                                     onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
                                     Button {
                                         id: format!("row-menu-btn-{index}-{r}"),
                                         variant: Variant::Icon,
-                                        class: row_menu_cls,
+                                        class: row_handle_cls,
                                         label: "Row menu",
-                                        icon: super::Icon::ChevronDown,
+                                        tip: "Row options",
+                                        icon: super::Icon::DotsVertical,
                                         onclick: move |_| {
                                             let target = super::writing::TableMenu::Row(index, r);
                                             let next = (*writing.table_menu.peek() != Some(target)).then_some(target);
@@ -1046,14 +1055,14 @@ fn GridRow(
     row: usize,
     last: bool,
     open_col: Option<usize>,
-    single_active_col: Option<usize>,
-    multi_active: bool,
+    open_row: Option<usize>,
     mut hovered_col: Signal<Option<usize>>,
     mut hovered_row: Signal<Option<usize>>,
     values: Vec<(String, &'static str, usize)>,
 ) -> Element {
+    let row_targeted = open_row == Some(row);
     rsx! {
-        div { class: "grid-row", class: if last { "ledger-last" }, role: "row",
+        div { class: "grid-row", class: if last { "ledger-last" }, class: if row_targeted { "row-menu-target" }, role: "row",
             for (col, (value, alignment, weight)) in values.into_iter().enumerate() {
                 {
                     let field = Field::Cell(index, row, col);
@@ -1061,7 +1070,7 @@ fn GridRow(
                     let selected = selected_rect.is_some();
                     let active = *writing.active.read() == Some(field) && writing.span.read().is_none();
                     let whole_cell = selected && active && !*writing.cell_editing.read();
-                    let right_aligned = alignment == "right";
+                    let col_targeted = open_col == Some(col);
                     rsx! {
                         div { key: "{col}", id: "slot-{index}-{row}-{col}", class: "cell-slot ledger-cell align-{alignment}",
                             class: if row == 0 { "ledger-head" } else { "ledger-data" },
@@ -1069,6 +1078,7 @@ fn GridRow(
                             class: if row > 0 && alignment == "right" { "ledger-number" },
                             class: if selected { "range-cell" }, class: if active { "is-editing" },
                             class: if whole_cell { "range-target" },
+                            class: if col_targeted { "col-menu-target" },
                             aria_selected:selected.to_string(), flex_grow: weight.to_string(), role: if row == 0 { "columnheader" } else { "cell" },
                             onpointerenter: move |_| {
                                 if *hovered_col.peek() != Some(col) {
@@ -1079,9 +1089,6 @@ fn GridRow(
                                     hovered_row.set(next_row);
                                 }
                             },
-                            if row == 0 && right_aligned {
-                                HeaderMenuBtn { writing, index, col, right_aligned: true, hovered_col, open_col, single_active_col, multi_active }
-                            }
                             div { class: "cell-field",
                                 // A Blitz single-line input has an unconstrained Parley layout. Size its
                                 // frame to the shaped text for alignment; let long values scroll normally.
@@ -1095,16 +1102,16 @@ fn GridRow(
                                     onfocus: move |_| writing.track_field(field),
                                     onpointerup: move |_| writing.track_field(field),
                                     onkeydown: move |e| writing.cell_key(index, row, col, e),
-                                    onkeyup: move |_| writing.track_field(field),
+                                    onkeyup: move |_| {
+                                        writing.reveal_cell_caret(field);
+                                        writing.track_field(field);
+                                    },
                                     oninput: move |e| writing.cell_input(index, row, col, &e.value()),
                                 }
                                 {(writing.ink)().into_iter().filter(|ink| ink.field == field).map(|ink| ink.draw())}
                                 super::comments::CommentInk { writing, field }
                                 SelectionInk { writing, field }
                                 super::markdown::CaretOverlay { writing, field }
-                            }
-                            if row == 0 && !right_aligned {
-                                HeaderMenuBtn { writing, index, col, right_aligned: false, hovered_col, open_col, single_active_col, multi_active }
                             }
                             if let Some(s) = selected_rect {
                                 span { class:"range-outline", aria_hidden:"true",
@@ -1127,6 +1134,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
     let mut hovered_col = use_signal(|| None::<usize>);
     let mut hovered_row = use_signal(|| None::<usize>);
     let mut within = use_signal(|| false);
+    let mut scroll_x = use_signal(|| 0.0_f64);
     // Fit columns when the grid opens or its column count changes. Ordinary
     // typing must never move the cell underneath a stationary pointer.
     let width = use_memo(move || writing.tables.read().get(index).map_or(0, Table::width));
@@ -1279,11 +1287,25 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
             if let Some(bidx) = table_block_idx {
                 BlockHandle { writing, block_idx: bidx, total: total_blocks, top: 6 }
             }
-            ColStrip { writing, index, hovered, hovered_col, hovered_row, weights: weights_vec.clone(), alignments: alignments_vec, width_count, active_row, open_col }
+            ColStrip { writing, index, hovered, hovered_col, hovered_row, weights: weights_vec.clone(), alignments: alignments_vec, width_count, active_row, single_active_col, multi_active, open_col, scroll_x }
             RowStrip { writing, index, hovered, hovered_col, hovered_row, row_count, active_col, single_active_row, multi_active, open_row }
             div { id: "grid-scroll-{index}", class: "grid-scroll", role: "table", aria_label: "Markdown table",
+                onscroll: move |_| {
+                    if let Some(handle) = writing.root.peek().as_ref() {
+                        let doc = handle.doc();
+                        if let Some(node) = doc
+                            .get_element_by_id(&format!("grid-scroll-{index}"))
+                            .and_then(|id| doc.get_node(id))
+                        {
+                            let sx = node.scroll_offset().x;
+                            if (*scroll_x.peek() - sx).abs() > 0.25 {
+                                scroll_x.set(sx);
+                            }
+                        }
+                    }
+                },
                 for (r, _) in grid.rows.iter().enumerate() {
-                    GridRow { key: "{r}", writing, index, row: r, last: r + 1 == grid.rows.len(), open_col, single_active_col, multi_active, hovered_col, hovered_row,
+                    GridRow { key: "{r}", writing, index, row: r, last: r + 1 == grid.rows.len(), open_col, open_row, hovered_col, hovered_row,
                         values: weights_vec.iter().enumerate().map(|(c, &weight)| (writing.projection(Field::Cell(index, r, c)).display, align(grid, c), weight)).collect()
                     }
                 }

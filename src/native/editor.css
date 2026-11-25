@@ -161,9 +161,15 @@ textarea.body-editor {
 .ledger .ledger-col-strip, .ledger .ledger-row-strip, .ledger .ledger-axis-btn { opacity: 0; pointer-events: none; }
 .grid-edge button { pointer-events: none; }
 .grid-block.engaged .grid-edge button, .grid-block:hover .grid-edge button, .grid-edge button:focus,
-.ledger.engaged .ledger-tools, .ledger:hover .ledger-tools, .ledger .ledger-tools:focus-within,
+.ledger.engaged .ledger-tools, .ledger:hover .ledger-tools, .ledger .ledger-tools:focus-within {
+    opacity: 1; pointer-events: auto;
+}
 .ledger.engaged .ledger-col-strip, .ledger:hover .ledger-col-strip,
 .ledger.engaged .ledger-row-strip, .ledger:hover .ledger-row-strip {
+    opacity: 1; pointer-events: none;
+}
+.ledger.engaged .ledger-col-handle, .ledger:hover .ledger-col-handle,
+.ledger.engaged .ledger-row-handle, .ledger:hover .ledger-row-handle {
     opacity: 1; pointer-events: auto;
 }
 .ledger.engaged .ledger-axis-btn, .ledger:hover .ledger-axis-btn {

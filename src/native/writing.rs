@@ -26,6 +26,7 @@ pub(super) type TrackedKey = (
     Field,
     ByteSelection,
     u64,
+    u32,
     super::projection::EditMode,
     Option<(usize, usize)>,
     Option<usize>,
@@ -461,6 +462,18 @@ impl Writing {
         self.sync_active_comment_at(selected[1]);
     }
 
+    fn field_scroll_bits(self, field: Field) -> u32 {
+        let root = self.root.peek();
+        root.as_ref()
+            .and_then(|h| {
+                let doc = h.doc();
+                let id = doc.get_element_by_id(&field.id())?;
+                let input = doc.get_node(id)?.element_data()?.text_input_data()?;
+                Some(input.scroll_offset.to_bits())
+            })
+            .unwrap_or(0)
+    }
+
     pub fn track_field(mut self, field: Field) {
         let rev = *self.doc_rev.read();
         if self.focus.peek().is_none()
@@ -473,6 +486,7 @@ impl Writing {
                 field,
                 raw_sel,
                 rev,
+                self.field_scroll_bits(field),
                 *self.edit_mode.peek(),
                 *self.literal.peek(),
                 *self.mouse_box.peek(),

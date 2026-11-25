@@ -300,6 +300,7 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
     use dioxus_native::winit::event::{Ime, WindowEvent};
     let mut writing = writing;
     let mut resized = true;
+    let mut wheeled = false;
     let mut previous = None;
     // Window hooks run before Blitz. On the following redraw its text editor
     // has the updated IME/selection geometry. Idle redraws need no note scan.
@@ -310,22 +311,40 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
             writing.cell_editing.set(true);
         }
         WindowEvent::SurfaceResized(_) | WindowEvent::ScaleFactorChanged { .. } => resized = true,
+        WindowEvent::MouseWheel { .. } => wheeled = true,
         WindowEvent::RedrawRequested => {
             let Some(handle) = writing.root.peek().clone() else {
                 return;
             };
             let changed_size = std::mem::take(&mut resized);
+            let did_wheel = std::mem::take(&mut wheeled);
             if changed_size {
                 handle.doc_mut().resolve(0.0);
             }
-            let doc = handle.doc();
-            let current = doc.get_focussed_node_id().and_then(|id| {
-                let text = doc.get_node(id)?.element_data()?.text_input_data()?;
-                Some((id, text.editor.generation(), text.scroll_offset))
-            });
-            drop(doc);
-            if changed_size || current != previous {
-                previous = current;
+            let current = {
+                let doc = handle.doc();
+                doc.get_focussed_node_id().and_then(|id| {
+                    let text = doc.get_node(id)?.element_data()?.text_input_data()?;
+                    Some((id, text.editor.generation(), text.scroll_offset.to_bits()))
+                })
+            };
+            let gen_changed = match (current, previous) {
+                (Some((id, rev, _)), Some((pid, prev, _))) => id != pid || rev != prev,
+                (Some(_), None) => true,
+                _ => false,
+            };
+            if gen_changed && let Some((id, _, _)) = current {
+                super::selection_model::keep_caret_in_view(&mut handle.doc_mut(), id);
+            }
+            let settled = {
+                let doc = handle.doc();
+                doc.get_focussed_node_id().and_then(|id| {
+                    let text = doc.get_node(id)?.element_data()?.text_input_data()?;
+                    Some((id, text.editor.generation(), text.scroll_offset.to_bits()))
+                })
+            };
+            if changed_size || did_wheel || settled != previous {
+                previous = settled;
                 if writing.drag.peek().is_none() {
                     if writing.focus.peek().is_none()
                         && let Some(field) = *writing.active.peek()
