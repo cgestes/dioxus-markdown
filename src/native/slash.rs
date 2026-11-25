@@ -1,5 +1,5 @@
 //! Slash command menu (`/`) on an empty line for fast keyboard/mouse block insertion.
-use super::{Field, ToolIcon, Writing, report};
+use super::{Field, Icon, Writing, report};
 use dioxus_native::prelude::*;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -32,7 +32,7 @@ pub struct SlashItem {
     pub hint: &'static str,
     pub keywords: &'static [&'static str],
     pub glyph: Option<&'static str>,
-    pub icon: Option<ToolIcon>,
+    pub icon: Option<Icon>,
 }
 
 const ITEMS: &[SlashItem] = &[
@@ -70,7 +70,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "-",
         keywords: &["bullet", "list", "ul"],
         glyph: None,
-        icon: Some(ToolIcon::List),
+        icon: Some(Icon::List),
     },
     SlashItem {
         kind: SlashKind::Task,
@@ -79,7 +79,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "- [ ]",
         keywords: &["task", "todo", "check", "checkbox"],
         glyph: None,
-        icon: Some(ToolIcon::Task),
+        icon: Some(Icon::Task),
     },
     SlashItem {
         kind: SlashKind::Quote,
@@ -88,7 +88,7 @@ const ITEMS: &[SlashItem] = &[
         hint: ">",
         keywords: &["quote", "blockquote", "callout"],
         glyph: None,
-        icon: Some(ToolIcon::Quote),
+        icon: Some(Icon::Quote),
     },
     SlashItem {
         kind: SlashKind::CodeBlock,
@@ -97,7 +97,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "```",
         keywords: &["code", "fence", "pre", "snippet"],
         glyph: None,
-        icon: Some(ToolIcon::Code),
+        icon: Some(Icon::Code),
     },
     SlashItem {
         kind: SlashKind::Table,
@@ -106,7 +106,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "| |",
         keywords: &["table", "grid", "columns"],
         glyph: None,
-        icon: Some(ToolIcon::Table),
+        icon: Some(Icon::Table),
     },
     SlashItem {
         kind: SlashKind::Rule,
@@ -115,7 +115,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "---",
         keywords: &["rule", "hr", "divider", "line"],
         glyph: None,
-        icon: Some(ToolIcon::Rule),
+        icon: Some(Icon::Rule),
     },
     SlashItem {
         kind: SlashKind::Image,
@@ -124,7 +124,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "![ ]",
         keywords: &["image", "img", "photo", "picture"],
         glyph: None,
-        icon: Some(ToolIcon::Image),
+        icon: Some(Icon::Image),
     },
 ];
 
@@ -335,40 +335,29 @@ pub fn SlashMenu(writing: Writing) -> Element {
     }
     let active_idx = (writing.slash_selected)().min(matches.len() - 1);
     rsx! {
-        div {
+        crate::ui::Menu {
             id: "slash-menu",
             class: "slash-menu",
             role: "listbox",
-            aria_label: "Insert block",
+            label: "Insert block",
             style: format!("left:{:.0}px; top:{:.0}px;", state.x, state.y),
-            onpointerdown: move |e| {
-                e.prevent_default();
-                e.stop_propagation();
-            },
             for (i, item) in matches.into_iter().enumerate() {
-                button {
+                crate::ui::MenuItem {
                     key: "{item.id}",
-                    id: "{item.id}",
-                    class: "slash-item",
-                    class: if i == active_idx { "selected" },
-                    role: "option",
-                    aria_selected: if i == active_idx { "true" } else { "false" },
-                    onpointerenter: move |_| {
+                    id: item.id.to_string(),
+                    label: item.title.to_string(),
+                    icon: item.icon,
+                    badge: item.glyph.map(String::from),
+                    hint: item.hint.to_string(),
+                    option: true,
+                    active: i == active_idx,
+                    onhover: move |_| {
                         let mut w = writing;
                         if *w.slash_selected.peek() != i {
                             w.slash_selected.set(i);
                         }
                     },
                     onclick: move |_| writing.execute_slash(item.kind),
-                    span { class: "slash-badge",
-                        if let Some(icon) = item.icon {
-                            {icon.draw()}
-                        } else if let Some(g) = item.glyph {
-                            "{g}"
-                        }
-                    }
-                    span { class: "slash-title", "{item.title}" }
-                    span { class: "slash-hint", "{item.hint}" }
                 }
             }
         }

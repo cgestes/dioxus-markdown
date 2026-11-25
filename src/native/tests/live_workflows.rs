@@ -722,78 +722,21 @@ fn ux_polish_showcase_renders_rich_markdown_and_table_controls() {
         s.button("live-mode");
         s.writing(|mut w| {
             let mut seeded = comments::seed_sample_comments(&w.note.peek());
-            if seeded.is_empty() {
+            // The showcase's cell is bold; anchor thread 1 to it.
+            if !seeded.iter().any(|t| t.id == 1) {
                 let md = w.note.peek().markdown();
-                if let Some(at) = md.find("**Water** through the gate") {
-                    let r = at..at + "**Water** through the gate".len();
-                    seeded.push(comments::CommentThread {
-                        id: 1,
-                        anchor: w.note.peek().anchor_range(r),
-                        quote: "**Water** through the gate".into(),
-                        resolved: false,
-                        messages: vec![
-                            comments::CommentMessage {
-                                id: 101,
-                                author: "You".into(),
-                                is_ai: false,
-                                body: "Specify the mic setup so this take is reproducible?".into(),
-                                proposal: None,
-                            },
-                            comments::CommentMessage {
-                                id: 102,
-                                author: "Claude".into(),
-                                is_ai: true,
-                                body: "Good call — noting the stereo pattern and high-pass filter keeps the log actionable:".into(),
-                                proposal: Some(comments::EditProposal {
-                                    id: 1001,
-                                    label: "Update table cell".into(),
-                                    old_text: "**Water** through the gate".into(),
-                                    new_text: "**Water** through the gate (XY stereo, 80 Hz HPF)".into(),
-                                    applied: false,
-                                }),
-                            },
-                        ],
-                    });
-                }
-            } else {
-                // Also anchor thread 1 to "**Water** through the gate" if showcase has bold Water.
-                let md = w.note.peek().markdown();
-                if !seeded.iter().any(|t| t.id == 1)
-                    && let Some(at) = md.find("**Water** through the gate")
-                {
-                    let r = at..at + "**Water** through the gate".len();
-                    seeded.insert(
-                        0,
-                        comments::CommentThread {
-                            id: 1,
-                            anchor: w.note.peek().anchor_range(r),
-                            quote: "**Water** through the gate".into(),
-                            resolved: false,
-                            messages: vec![
-                                comments::CommentMessage {
-                                    id: 101,
-                                    author: "You".into(),
-                                    is_ai: false,
-                                    body: "Specify the mic setup so this take is reproducible?".into(),
-                                    proposal: None,
-                                },
-                                comments::CommentMessage {
-                                    id: 102,
-                                    author: "Claude".into(),
-                                    is_ai: true,
-                                    body: "Good call — noting the stereo pattern and high-pass filter keeps the log actionable:".into(),
-                                    proposal: Some(comments::EditProposal {
-                                        id: 1001,
-                                        label: "Update table cell".into(),
-                                        old_text: "**Water** through the gate".into(),
-                                        new_text: "**Water** through the gate (XY stereo, 80 Hz HPF)".into(),
-                                        applied: false,
-                                    }),
-                                },
-                            ],
-                        },
-                    );
-                }
+                let quote = "**Water** through the gate";
+                seeded.extend(comments::sample_thread(
+                    &w.note.peek(),
+                    &md,
+                    1,
+                    quote,
+                    "Specify the mic setup so this take is reproducible?",
+                    "Good call — noting the stereo pattern and high-pass filter keeps the log actionable:",
+                    "Update table cell",
+                    "**Water** through the gate (XY stereo, 80 Hz HPF)",
+                ));
+                seeded.sort_by_key(|t| t.id);
             }
             let first = seeded.first().map(|t| t.id);
             w.comments.set(seeded);

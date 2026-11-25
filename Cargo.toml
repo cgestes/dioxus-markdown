@@ -41,6 +41,11 @@ futures-util = { version = "0.3", default-features = false, features = ["std"] }
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false, optional = true }
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"], optional = true }
 parley = { version = "=0.12.0", default-features = false, optional = true }
+# Topics: SilverBullet + ZeroClaw over the tailnet (native-tls uses the system trust store).
+ureq = { version = "3.5", default-features = false, features = ["native-tls-no-default"], optional = true }
+tungstenite = { version = "0.29", features = ["native-tls"], optional = true }
+percent-encoding = { version = "2.3", optional = true }
+webbrowser = { version = "1.2", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.dioxus-native]
 git = "https://github.com/DioxusLabs/dioxus.git"
@@ -52,10 +57,12 @@ features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboar
 [target.'cfg(target_os = "macos")'.dependencies]
 blitz-shell = { version = "=0.3.0-beta.4", default-features = false, optional = true }
 dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", optional = true }
+security-framework = { version = "3", optional = true }
 
 [features]
 default = ["native"]
-native = ["dep:rfd", "dep:dioxus-native", "dep:parley", "dep:blitz-dom", "dep:blitz-shell", "dep:dioxus-devtools"]
+hub = ["dep:ureq", "dep:tungstenite", "dep:percent-encoding", "dep:security-framework"]
+native = ["hub", "dep:rfd", "dep:dioxus-native", "dep:parley", "dep:blitz-dom", "dep:blitz-shell", "dep:dioxus-devtools", "dep:webbrowser"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 blitz-traits = "=0.3.0-beta.4"

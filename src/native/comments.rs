@@ -1,71 +1,131 @@
-//! Anchored document comments with in-memory threads and interactive mock LLM replies/actions.
+//! Anchored comments. A thread is the comment file's own `file::Thread` plus
+//! what only this session knows (Loro cursors, the reply being written). An
+//! agent answers through `hub::AgentChat`: ZeroClaw's read-only agent on a
+//! page of the space, a local stand-in elsewhere; both stream the same way.
+//! On a page, threads save to `_margin/comments/<page>.json` (see `page`).
+use super::page::PageSource;
+use super::ui::{Badge, Banner, Button, Card, Chip, Composer, Icon, Message, MessageStyle, Segment, Segmented, Tone, Variant};
+use super::worker::{batch, turn, work};
 use super::{Field, Writing, report};
 use dioxus_native::prelude::*;
 use loro::cursor::Cursor;
+use margin_editor_core::comments::{self as file, ProposalState};
+use margin_editor_core::hub::{self, AgentChat, Canned, ChatEvent};
 use margin_editor_core::note::Note;
+use margin_editor_core::{dates, table};
+use std::collections::HashMap;
 use std::ops::Range;
+use std::sync::Arc;
 
-fn encode_cell_text(text: &str) -> String {
-    text.replace(['\r', '\n'], " ").replace('|', "\\|")
+/// Who answers comments.
+#[derive(Clone)]
+pub struct CommentAgent {
+    pub alias: String,
+    pub chat: Arc<dyn AgentChat>,
 }
 
-fn ai_sparkle(size: u8) -> Element {
-    rsx! {
-        span { class: "comment-svg-icon", aria_hidden: "true",
-            svg {
-                width: "{size}",
-                height: "{size}",
-                view_box: "0 0 16 16",
-                fill: "currentColor",
-                path { d: "M8 1.2 9.7 6.3 14.8 8 9.7 9.7 8 14.8 6.3 9.7 1.2 8 6.3 6.3Z" }
-            }
-        }
+impl PartialEq for CommentAgent {
+    fn eq(&self, other: &Self) -> bool {
+        self.alias == other.alias && Arc::ptr_eq(&self.chat, &other.chat)
     }
 }
 
-fn check_icon() -> Element {
-    rsx! {
-        span { class: "comment-svg-icon", aria_hidden: "true",
-            svg {
-                width: "11",
-                height: "11",
-                view_box: "0 0 16 16",
-                fill: "none",
-                stroke: "currentColor",
-                stroke_width: "2.2",
-                stroke_linecap: "round",
-                stroke_linejoin: "round",
-                path { d: "M3 8.5 6.5 12 13 4.5" }
-            }
+impl CommentAgent {
+    /// The local stand-in: an answer and an edit made from the quote and the
+    /// request, at once.
+    pub fn mock() -> Self {
+        Self {
+            alias: "Claude".into(),
+            chat: Arc::new(Canned { reply: Box::new(mock_reply), pause: None }),
         }
+    }
+
+    /// For a page whose agent cannot be reached: every answer fails, saying why.
+    pub fn unavailable(alias: &str, why: &str) -> Self {
+        Self { alias: alias.into(), chat: Arc::new(Unavailable(why.into())) }
     }
 }
 
-#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct EditProposal {
-    pub id: usize,
-    pub label: String,
-    pub old_text: String,
-    pub new_text: String,
-    pub applied: bool,
+struct Unavailable(String);
+
+impl AgentChat for Unavailable {
+    fn chat(&self, _: &hub::Ask, on: &mut dyn FnMut(ChatEvent) -> bool, _: &mut dyn FnMut() -> bool) {
+        on(ChatEvent::Error(self.0.clone()));
+    }
+
+    fn inline(&self) -> bool {
+        true
+    }
 }
 
-#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct CommentMessage {
-    pub id: usize,
-    pub author: String,
-    pub is_ai: bool,
-    pub body: String,
-    pub proposal: Option<EditProposal>,
+impl Default for CommentAgent {
+    fn default() -> Self {
+        Self::mock()
+    }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+/// A thread: the comment file's record and this session's view of it. The
+/// personal vault stores it as JSON; what only lives for a session is skipped.
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct CommentThread {
+    /// Handle in this window's DOM ids (`comment-thread-3`).
     pub id: usize,
-    pub anchor: Option<(Cursor, Cursor)>,
-    pub quote: String,
-    pub resolved: bool,
-    pub messages: Vec<CommentMessage>,
+    /// What the comment file holds. Its anchor and proposal states are those
+    /// of the last saved page; the live ones are `cursors` and `saved`'s keys.
+    pub file: file::Thread,
+    pub cursors: Option<(Cursor, Cursor)>,
+    /// The quote the agent saw on its last reply.
+    pub seen: Option<String>,
+    /// The reply being written (its text streams in `Writing::comment_stream`).
+    #[serde(skip)]
+    pub pending: Option<String>,
+    /// Replies that failed; shown, never saved.
+    #[serde(skip)]
+    pub failed: Vec<String>,
+    /// Proposal states as of the last saved page, by message id.
+    pub saved: HashMap<String, ProposalState>,
+}
+
+/// The page's comment file: its version, and saves in flight.
+#[derive(Clone, Default)]
+pub struct CommentFile {
+    etag: Option<String>,
+    /// Read (or known absent): only then may it be written.
+    loaded: bool,
+    saving: bool,
+    again: bool,
+    /// Deleted threads, kept so a merge does not bring them back.
+    tombstones: Vec<file::Thread>,
+    pub error: Option<String>,
+}
+
+#[cfg(test)]
+impl CommentFile {
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
+    }
+
+    pub fn is_saving(&self) -> bool {
+        self.saving || self.again
+    }
+}
+
+fn new_key() -> String {
+    use std::hash::BuildHasher;
+    let ms = dates::now_ms();
+    file::new_id(ms, std::collections::hash_map::RandomState::new().hash_one(ms))
+}
+
+fn message(author: &str, ai: bool, body: &str) -> file::Message {
+    file::Message {
+        id: new_key(),
+        author: author.into(),
+        ai,
+        at: dates::stamp(),
+        body: body.into(),
+        proposal: None,
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -81,90 +141,82 @@ enum CommentFilter {
     All,
 }
 
-/// Anchor the two Field notes discussions to the starter document's own Loro text.
-pub fn seed_sample_comments(note: &Note) -> Vec<CommentThread> {
-    let md = note.markdown();
-    let mut threads = Vec::new();
-    if let Some(at) = md.find("Water through the gate") {
-        let range = at..at + "Water through the gate".len();
-        threads.push(CommentThread {
-            id: 1,
-            anchor: note.anchor_range(range),
-            quote: "Water through the gate".into(),
-            resolved: false,
-            messages: vec![
-                CommentMessage {
-                    id: 101,
-                    author: "You".into(),
-                    is_ai: false,
-                    body: "Specify the mic setup so this take is reproducible?".into(),
-                    proposal: None,
-                },
-                CommentMessage {
-                    id: 102,
-                    author: "Claude".into(),
-                    is_ai: true,
-                    body: "Good call — noting the stereo pattern and high-pass filter keeps the log actionable:".into(),
-                    proposal: Some(EditProposal {
-                        id: 1001,
-                        label: "Update table cell".into(),
-                        old_text: "Water through the gate".into(),
-                        new_text: "Water through the gate (XY stereo, 80 Hz HPF)".into(),
-                        applied: false,
-                    }),
-                },
-            ],
-        });
-    }
-    if let Some(at) = md.find("Leave **ten seconds** of silence.") {
-        let range = at..at + "Leave **ten seconds** of silence.".len();
-        threads.push(CommentThread {
-            id: 2,
-            anchor: note.anchor_range(range),
-            quote: "Leave **ten seconds** of silence.".into(),
-            resolved: false,
-            messages: vec![
-                CommentMessage {
-                    id: 201,
-                    author: "You".into(),
-                    is_ai: false,
-                    body: "@ai tighten this reminder so it scans faster in the field".into(),
-                    proposal: None,
-                },
-                CommentMessage {
-                    id: 202,
-                    author: "Claude".into(),
-                    is_ai: true,
-                    body: "Here is a crisper version that keeps the bold emphasis:".into(),
-                    proposal: Some(EditProposal {
-                        id: 1002,
-                        label: "Tighten checklist item".into(),
-                        old_text: "Leave **ten seconds** of silence.".into(),
-                        new_text: "Record **10 s** of room tone first.".into(),
-                        applied: false,
-                    }),
-                },
-            ],
-        });
-    }
-    threads
+/// A thread on `quote` in `md`: your question and an answer proposing `new`.
+pub fn sample_thread(
+    note: &Note,
+    md: &str,
+    id: usize,
+    quote: &str,
+    question: &str,
+    answer: &str,
+    label: &str,
+    new: &str,
+) -> Option<CommentThread> {
+    let at = md.find(quote)?;
+    let range = at..at + quote.len();
+    let mut reply = message("Claude", true, answer);
+    reply.proposal = Some(file::Proposal {
+        label: label.into(),
+        old: quote.into(),
+        new: new.into(),
+        ..Default::default()
+    });
+    Some(CommentThread {
+        id,
+        cursors: note.anchor_range_in(md, range.clone()),
+        file: file::Thread {
+            id: format!("sample-{id}"),
+            anchor: file::Anchor::capture(md, range),
+            messages: vec![message("You", false, question), reply],
+            ..Default::default()
+        },
+        ..Default::default()
+    })
 }
 
-/// Fake in-memory LLM responder that inspects the anchored text and user prompt
-/// to generate a grounded reply + reviewable diff proposal.
-fn mock_llm_reply(
-    quote: &str,
-    prompt: &str,
-    is_cell: bool,
-    msg_id: usize,
-    prop_id: usize,
-) -> CommentMessage {
+/// Two demo threads anchored to phrases in `SAMPLE`.
+pub fn seed_sample_comments(note: &Note) -> Vec<CommentThread> {
+    let md = note.markdown();
+    [
+        sample_thread(
+            note,
+            &md,
+            1,
+            "Water through the gate",
+            "Specify the mic setup so this take is reproducible?",
+            "Good call — noting the stereo pattern and high-pass filter keeps the log actionable:",
+            "Update table cell",
+            "Water through the gate (XY stereo, 80 Hz HPF)",
+        ),
+        sample_thread(
+            note,
+            &md,
+            2,
+            "Leave **ten seconds** of silence.",
+            "@ai tighten this reminder so it scans faster in the field",
+            "Here is a crisper version that keeps the bold emphasis:",
+            "Tighten checklist item",
+            "Record **10 s** of room tone first.",
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+/// The stand-in's answer, written the way an agent writes one: the reply,
+/// then a `margin-edit` block.
+fn mock_reply(ask: &hub::Ask) -> String {
+    let (quote, request) = file::parse_request(&ask.content);
+    let (body, label, new) = mock_edit(&quote.unwrap_or_default(), &request, ask.content.contains("table cell:"));
+    format!("{body}\n\n{}\n{label}\n---\n{new}\n```", file::FENCE)
+}
+
+/// A grounded reply and edit from the quote and the request.
+fn mock_edit(quote: &str, prompt: &str, is_cell: bool) -> (String, String, String) {
     let trimmed = quote.trim();
     let lower = prompt.to_ascii_lowercase();
-    let (body, label, new_text) = if let Some(rest) = extract_after(
-        prompt,
-        &["replace with ", "change to ", "use ", "rewrite as "],
-    ) {
+    if let Some(rest) = extract_after(prompt, &["replace with ", "change to ", "use ", "rewrite as "]) {
         let cleaned = rest.trim().trim_matches(['"', '\'']).to_owned();
         (
             "Updated the proposal with your exact phrasing:".to_owned(),
@@ -203,16 +255,8 @@ fn mock_llm_reply(
         } else {
             format!("{} — field note", trimmed.trim_end_matches('.'))
         };
-        (
-            "Here is an alternative phrasing:".to_owned(),
-            "Alternative phrasing".to_owned(),
-            alt,
-        )
-    } else if lower.contains("polish")
-        || lower.contains("vivid")
-        || lower.contains("rewrite")
-        || lower.contains("improve")
-    {
+        ("Here is an alternative phrasing:".to_owned(), "Alternative phrasing".to_owned(), alt)
+    } else if ["polish", "vivid", "rewrite", "improve"].iter().any(|w| lower.contains(w)) {
         let base = trimmed.trim_end_matches('.');
         let punct = if trimmed.ends_with('.') { "." } else { "" };
         let polished = if is_cell {
@@ -228,73 +272,76 @@ fn mock_llm_reply(
     } else if lower.contains('?') {
         let base = trimmed.trim_end_matches('.');
         (
-            format!(
-                "Looks solid in context. If you want it more explicit, you could clarify \"{base}\" directly:"
-            ),
+            format!("Looks solid in context. If you want it more explicit, you could clarify \"{base}\" directly:"),
             "Clarify selection".to_owned(),
             format!("{base} (confirmed)"),
         )
     } else {
         let base = trimmed.trim_end_matches('.');
-        let note_tag = prompt.trim().trim_end_matches(['.', '?', '!']);
-        let short_tag: String = note_tag.chars().take(36).collect();
+        let tag: String = prompt.trim().trim_end_matches(['.', '?', '!']).chars().take(36).collect();
         (
             "Here is a suggested edit based on your note:".to_owned(),
-            if is_cell {
-                "Update cell".to_owned()
-            } else {
-                "Apply suggestion".to_owned()
-            },
-            format!("{base} — {short_tag}"),
+            if is_cell { "Update cell" } else { "Apply suggestion" }.to_owned(),
+            format!("{base} — {tag}"),
         )
-    };
-
-    CommentMessage {
-        id: msg_id,
-        author: "Claude".into(),
-        is_ai: true,
-        body,
-        proposal: Some(EditProposal {
-            id: prop_id,
-            label,
-            old_text: trimmed.to_owned(),
-            new_text,
-            applied: false,
-        }),
     }
 }
 
 fn extract_after<'a>(text: &'a str, prefixes: &[&str]) -> Option<&'a str> {
     let lower = text.to_ascii_lowercase();
-    for p in prefixes {
-        if let Some(pos) = lower.find(p) {
-            let after = text[pos + p.len()..].trim();
-            if !after.is_empty() {
-                return Some(after);
-            }
-        }
-    }
-    None
+    prefixes.iter().find_map(|p| {
+        let pos = lower.find(p)?;
+        let after = text[pos + p.len()..].trim();
+        (!after.is_empty()).then_some(after)
+    })
 }
 
-fn resolve_thread_range(note: &Note, md: &str, thread: &CommentThread) -> Option<Range<usize>> {
-    if let Some(anchor) = &thread.anchor
-        && let Some(r) = note.resolve_anchor(anchor)
-        && md.get(r.clone()).is_some()
-    {
-        return Some(r);
-    }
-    if !thread.quote.is_empty()
-        && let Some(pos) = md.find(&thread.quote)
-    {
-        return Some(pos..pos + thread.quote.len());
-    }
-    None
+/// Where a thread's text is now: its cursors, else its saved quote.
+fn thread_range(note: &Note, md: &str, t: &CommentThread) -> Option<Range<usize>> {
+    t.cursors
+        .as_ref()
+        .and_then(|c| note.resolve_anchor_in(md, c))
+        .filter(|r| md.get(r.clone()).is_some())
+        .or_else(|| t.file.anchor.resolve(md))
+}
+
+/// Where a thread is in the text now, and what text is there.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Placed {
+    pub id: usize,
+    pub range: Range<usize>,
+    pub resolved: bool,
+    pub text: String,
+}
+
+/// Every thread that is still in the text (see `Writing::comment_ranges`).
+pub fn ranges(note: &Note, md: &str, threads: &[CommentThread]) -> Vec<Placed> {
+    threads
+        .iter()
+        .filter_map(|t| {
+            let range = thread_range(note, md, t)?;
+            Some(Placed { id: t.id, text: md.get(range.clone())?.to_owned(), range, resolved: t.file.resolved })
+        })
+        .collect()
 }
 
 impl Writing {
+    fn with_thread<R>(mut self, id: usize, f: impl FnOnce(&mut CommentThread) -> R) -> Option<R> {
+        self.comments.write().iter_mut().find(|t| t.id == id).map(f)
+    }
+
+    /// The text under a thread now; its saved quote when the text is gone.
+    /// Subscribes the caller to changes of any thread's text.
+    fn thread_text(&self, t: &CommentThread) -> String {
+        self.comment_ranges
+            .read()
+            .iter()
+            .find(|p| p.id == t.id)
+            .map_or_else(|| t.file.anchor.exact.clone(), |p| p.text.clone())
+    }
+
     pub fn start_comment_from_selection(mut self) {
-        let md = self.contents.read().clone();
+        let md = self.contents.peek();
         let range = self
             .selected_text
             .peek()
@@ -303,272 +350,236 @@ impl Writing {
                 let lo = md.floor_char_boundary(a.min(b).min(md.len()));
                 let hi = md.floor_char_boundary(a.max(b).min(md.len()));
                 if lo < hi {
-                    Some(lo..hi)
-                } else {
-                    // Fallback to the current non-empty line or cell when cursor is collapsed.
-                    let line_start = md[..lo].rfind('\n').map_or(0, |i| i + 1);
-                    let line_end = lo + md[lo..].find('\n').unwrap_or(md.len() - lo);
-                    let trimmed = md[line_start..line_end].trim();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        let offset = md[line_start..line_end].find(trimmed).unwrap_or(0);
-                        Some(line_start + offset..line_start + offset + trimmed.len())
-                    }
+                    return Some(lo..hi);
                 }
+                // A collapsed caret comments on its line or cell.
+                let line_start = md[..lo].rfind('\n').map_or(0, |i| i + 1);
+                let line_end = lo + md[lo..].find('\n').unwrap_or(md.len() - lo);
+                let trimmed = md[line_start..line_end].trim();
+                (!trimmed.is_empty()).then(|| {
+                    let offset = md[line_start..line_end].find(trimmed).unwrap_or(0);
+                    line_start + offset..line_start + offset + trimmed.len()
+                })
             });
-        let Some(range) = range else {
-            self.comments_open.set(true);
-            return;
-        };
-        let quote = md[range.clone()].trim().to_owned();
-        if quote.is_empty() {
-            self.comments_open.set(true);
-            return;
-        }
+        let quote = range.as_ref().map(|r| md[r.clone()].trim().to_owned());
+        drop(md);
         self.comments_open.set(true);
-        self.draft_comment.set(Some(DraftComment { range, quote }));
-        self.format_position.set(None);
+        if let (Some(range), Some(quote)) = (range, quote.filter(|q| !q.is_empty())) {
+            self.draft_comment.set(Some(DraftComment { range, quote }));
+            self.format_position.set(None);
+        }
     }
 
     pub fn submit_draft_comment(mut self, text: &str) {
-        let prompt = text.trim();
-        if prompt.is_empty() {
+        if text.trim().is_empty() {
             return;
         }
         let Some(draft) = self.draft_comment.take() else {
             return;
         };
-        let anchor = self.note.peek().anchor_range(draft.range.clone());
-        let is_cell = matches!(self.field_at(draft.range.start), Field::Cell(..));
-        let mut threads = self.comments.write();
-        let next_tid = threads.iter().map(|t| t.id).max().unwrap_or(0) + 1;
-        let next_mid = threads
-            .iter()
-            .flat_map(|t| t.messages.iter().map(|m| m.id))
-            .max()
-            .unwrap_or(100)
-            + 1;
-        let next_pid = threads
-            .iter()
-            .flat_map(|t| {
-                t.messages
-                    .iter()
-                    .filter_map(|m| m.proposal.as_ref().map(|p| p.id))
-            })
-            .max()
-            .unwrap_or(1000)
-            + 1;
-        let user_msg = CommentMessage {
-            id: next_mid,
-            author: "You".into(),
-            is_ai: false,
-            body: prompt.to_owned(),
-            proposal: None,
-        };
-        let ai_msg = mock_llm_reply(&draft.quote, prompt, is_cell, next_mid + 1, next_pid);
-        threads.insert(
-            0,
+        let thread = {
+            let md = self.contents.peek();
+            let now = dates::stamp();
             CommentThread {
-                id: next_tid,
-                anchor,
-                quote: draft.quote,
-                resolved: false,
-                messages: vec![user_msg, ai_msg],
-            },
-        );
-        drop(threads);
-        self.active_comment.set(Some(next_tid));
+                id: self.comments.peek().iter().map(|t| t.id).max().unwrap_or(0) + 1,
+                cursors: self.note.peek().anchor_range_in(&md, draft.range.clone()),
+                file: file::Thread {
+                    id: new_key(),
+                    created: now.clone(),
+                    updated: now,
+                    anchor: file::Anchor::capture(&md, draft.range),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+        };
+        let id = thread.id;
+        self.comments.write().insert(0, thread);
+        self.active_comment.set(Some(id));
+        self.post(id, text.trim());
     }
 
-    pub fn reply_to_comment(mut self, thread_id: usize, text: &str) {
-        let prompt = text.trim();
-        if prompt.is_empty() {
+    pub fn reply_to_comment(self, thread_id: usize, text: &str) {
+        if text.trim().is_empty() {
             return;
         }
-        let md = self.contents.read().clone();
-        let (quote, is_cell, next_mid, next_pid) = {
-            let threads = self.comments.read();
-            let Some(thread) = threads.iter().find(|t| t.id == thread_id) else {
-                return;
-            };
-            let current_range = resolve_thread_range(&self.note.peek(), &md, thread);
-            let live_quote = current_range
-                .as_ref()
-                .and_then(|r| md.get(r.clone()))
-                .map_or_else(|| thread.quote.clone(), str::to_owned);
-            let is_cell = current_range
-                .as_ref()
-                .is_some_and(|r| matches!(self.field_at(r.start), Field::Cell(..)));
-            let next_mid = threads
-                .iter()
-                .flat_map(|t| t.messages.iter().map(|m| m.id))
-                .max()
-                .unwrap_or(100)
-                + 1;
-            let next_pid = threads
-                .iter()
-                .flat_map(|t| {
-                    t.messages
-                        .iter()
-                        .filter_map(|m| m.proposal.as_ref().map(|p| p.id))
-                })
-                .max()
-                .unwrap_or(1000)
-                + 1;
-            (live_quote, is_cell, next_mid, next_pid)
-        };
-        let user_msg = CommentMessage {
-            id: next_mid,
-            author: "You".into(),
-            is_ai: false,
-            body: prompt.to_owned(),
-            proposal: None,
-        };
-        let ai_msg = mock_llm_reply(&quote, prompt, is_cell, next_mid + 1, next_pid);
-        let mut threads = self.comments.write();
-        if let Some(thread) = threads.iter_mut().find(|t| t.id == thread_id) {
-            thread.resolved = false;
-            thread.messages.push(user_msg);
-            thread.messages.push(ai_msg);
-        }
+        self.with_thread(thread_id, |t| {
+            if t.file.resolved {
+                t.file.resolved = false;
+                t.file.updated = dates::stamp();
+            }
+        });
+        self.post(thread_id, text.trim());
     }
 
-    pub fn apply_comment_proposal(mut self, thread_id: usize, proposal_id: usize) {
-        let md = self.contents.read().clone();
-        let (range, replacement) = {
-            let threads = self.comments.read();
-            let Some(thread) = threads.iter().find(|t| t.id == thread_id) else {
-                return;
+    /// Add your message to a thread and ask the agent; the answer streams
+    /// into a new message, and a `margin-edit` block at its end becomes the
+    /// message's proposal (it never shows as text).
+    fn post(self, thread_id: usize, prompt: &str) {
+        let agent = self.comment_agent.peek().clone();
+        let page = self.page.peek().as_ref().map_or_else(|| "note.md".to_string(), |p| p.path.clone());
+        let Some((ask, reply, quote)) = self.with_thread(thread_id, |t| {
+            let md = self.contents.peek();
+            let range = thread_range(&self.note.peek(), &md, t).unwrap_or(0..0);
+            let quote = md[range.clone()].to_string();
+            let next = file::turn(&t.file.id, &page, &md, range, prompt, t.seen.clone());
+            t.file.messages.push(message("You", false, prompt));
+            let reply = message(&agent.alias, true, "");
+            t.pending = Some(reply.id.clone());
+            let id = reply.id.clone();
+            t.file.messages.push(reply);
+            let ask = hub::Ask {
+                agent: agent.alias.clone(),
+                session: next.session,
+                name: next.name,
+                content: next.content,
+                preamble: Some(next.preamble),
             };
-            let Some(prop) = thread
-                .messages
-                .iter()
-                .filter_map(|m| m.proposal.as_ref())
-                .find(|p| p.id == proposal_id)
-            else {
-                return;
-            };
-            if prop.applied {
-                return;
+            (ask, id, quote)
+        }) else {
+            return;
+        };
+        self.save_comments();
+        // The agent is read-only; anything that needs approval is refused.
+        let mut events = turn(agent.chat, ask, || false);
+        let mut stream = self.comment_stream;
+        spawn(async move {
+            let mut text = String::new();
+            let mut outcome = None;
+            while let Some(events) = batch(&mut events).await {
+                for e in events {
+                    match e {
+                        ChatEvent::Chunk(c) => text.push_str(&c),
+                        ChatEvent::Done(full) => outcome = Some(Ok(full)),
+                        ChatEvent::Error(e) => outcome = Some(Err(e)),
+                        _ => {}
+                    }
+                }
+                let shown = file::visible(&text);
+                if stream.peek().get(&reply).map(String::as_str) != Some(shown) {
+                    stream.write().insert(reply.clone(), shown.to_string());
+                }
             }
-            let Some(range) = resolve_thread_range(&self.note.peek(), &md, thread) else {
-                return;
-            };
-            let is_cell = matches!(self.field_at(range.start), Field::Cell(..));
-            let replacement = if is_cell {
-                encode_cell_text(&prop.new_text)
-            } else {
-                prop.new_text.clone()
-            };
-            (range, replacement)
+            stream.write().remove(&reply);
+            let outcome = outcome.unwrap_or_else(|| Err("the connection closed early".into()));
+            self.with_thread(thread_id, |t| {
+                t.pending = None;
+                let Some(m) = t.file.messages.iter_mut().find(|m| m.id == reply) else {
+                    return;
+                };
+                match outcome {
+                    Ok(full) => {
+                        m.body = file::visible(&full).to_owned();
+                        m.proposal = file::edit(&full).map(|e| file::Proposal {
+                            label: e.label,
+                            old: quote.clone(),
+                            new: e.replacement,
+                            ..Default::default()
+                        });
+                        t.seen = Some(quote);
+                    }
+                    Err(e) => {
+                        m.body = format!("{} couldn’t answer: {e}", m.author);
+                        t.failed.push(reply.clone());
+                    }
+                }
+            });
+            self.save_comments();
+        });
+    }
+
+    /// Apply a proposal (`apply`) or undo it, as one undoable edit. Refuses
+    /// when the text under the thread is not what the proposal expects.
+    fn swap_proposal(mut self, thread_id: usize, message: usize, apply: bool) {
+        let found = {
+            let md = self.contents.peek();
+            let threads = self.comments.peek();
+            threads.iter().find(|t| t.id == thread_id).and_then(|t| {
+                let p = t.file.messages.get(message)?.proposal.clone()?;
+                let range = thread_range(&self.note.peek(), &md, t)?;
+                let ready = (p.state == ProposalState::Applied) != apply && p.fits(&md[range.clone()]);
+                ready.then_some((p, range))
+            })
+        };
+        let Some((p, range)) = found else {
+            return;
+        };
+        let text = if apply { &p.new } else { &p.old };
+        let replacement = match self.field_at(range.start) {
+            Field::Cell(..) => table::cell_value(text),
+            _ => text.clone(),
         };
         if let Some(sel) = self.absolute_selection() {
             self.note.peek().remember_selection(sel);
         }
-        let new_end = range.start + replacement.len();
+        let end = range.start + replacement.len();
         let result = self.note.write().replace(range.clone(), &replacement);
         if result.is_ok() {
-            let new_anchor = self.note.peek().anchor_range(range.start..new_end);
-            let mut threads = self.comments.write();
-            if let Some(thread) = threads.iter_mut().find(|t| t.id == thread_id) {
-                thread.anchor = new_anchor;
-                thread.quote = replacement.clone();
-                for m in &mut thread.messages {
-                    if let Some(p) = &mut m.proposal {
-                        p.applied = p.id == proposal_id;
-                    }
+            let md = self.note.peek().markdown();
+            let cursors = self.note.peek().anchor_range_in(&md, range.start..end);
+            self.with_thread(thread_id, |t| {
+                t.cursors = cursors;
+                if !apply {
+                    t.file.resolved = false;
                 }
-            }
-            drop(threads);
+                if let Some(p) = t.file.messages.get_mut(message).and_then(|m| m.proposal.as_mut()) {
+                    p.state = if apply { ProposalState::Applied } else { ProposalState::Open };
+                    p.updated = dates::stamp();
+                }
+            });
             self.body.set(None);
-            let field = self.field_at(range.start);
-            self.open(field, [range.start, new_end]);
+            self.open(self.field_at(range.start), [range.start, end]);
+            self.save_comments();
         }
         report(result, self.message);
     }
 
-    pub fn undo_comment_proposal(mut self, thread_id: usize, proposal_id: usize) {
-        let md = self.contents.read().clone();
-        let (range, restore_text) = {
-            let threads = self.comments.read();
-            let Some(thread) = threads.iter().find(|t| t.id == thread_id) else {
-                return;
-            };
-            let Some(prop) = thread
-                .messages
-                .iter()
-                .filter_map(|m| m.proposal.as_ref())
-                .find(|p| p.id == proposal_id && p.applied)
-            else {
-                return;
-            };
-            let Some(range) = resolve_thread_range(&self.note.peek(), &md, thread) else {
-                return;
-            };
-            let is_cell = matches!(self.field_at(range.start), Field::Cell(..));
-            let restore = if is_cell {
-                encode_cell_text(&prop.old_text)
-            } else {
-                prop.old_text.clone()
-            };
-            (range, restore)
-        };
-        if let Some(sel) = self.absolute_selection() {
-            self.note.peek().remember_selection(sel);
-        }
-        let new_end = range.start + restore_text.len();
-        let result = self.note.write().replace(range.clone(), &restore_text);
-        if result.is_ok() {
-            let new_anchor = self.note.peek().anchor_range(range.start..new_end);
-            let mut threads = self.comments.write();
-            if let Some(thread) = threads.iter_mut().find(|t| t.id == thread_id) {
-                thread.anchor = new_anchor;
-                thread.quote = restore_text.clone();
-                thread.resolved = false;
-                for m in &mut thread.messages {
-                    if let Some(p) = &mut m.proposal
-                        && p.id == proposal_id
-                    {
-                        p.applied = false;
-                    }
-                }
-            }
-            drop(threads);
-            self.body.set(None);
-            let field = self.field_at(range.start);
-            self.open(field, [range.start, new_end]);
-        }
-        report(result, self.message);
+    pub fn apply_comment_proposal(self, thread_id: usize, message: usize) {
+        self.swap_proposal(thread_id, message, true);
     }
 
-    pub fn toggle_resolve_comment(mut self, thread_id: usize) {
-        let mut threads = self.comments.write();
-        if let Some(thread) = threads.iter_mut().find(|t| t.id == thread_id) {
-            thread.resolved = !thread.resolved;
-        }
+    pub fn undo_comment_proposal(self, thread_id: usize, message: usize) {
+        self.swap_proposal(thread_id, message, false);
+    }
+
+    pub fn toggle_resolve_comment(self, thread_id: usize) {
+        self.with_thread(thread_id, |t| {
+            t.file.resolved = !t.file.resolved;
+            t.file.updated = dates::stamp();
+        });
+        self.save_comments();
     }
 
     pub fn delete_comment_thread(mut self, thread_id: usize) {
-        self.comments.write().retain(|t| t.id != thread_id);
+        let removed = {
+            let mut threads = self.comments.write();
+            let at = threads.iter().position(|t| t.id == thread_id);
+            at.map(|i| threads.remove(i))
+        };
+        if let Some(t) = removed {
+            self.comment_file.write().tombstones.push(file::Thread {
+                id: t.file.id,
+                updated: dates::stamp(),
+                deleted: true,
+                ..Default::default()
+            });
+        }
         if *self.active_comment.peek() == Some(thread_id) {
             self.active_comment.set(None);
         }
+        self.save_comments();
     }
 
     pub fn jump_to_comment(mut self, thread_id: usize) {
         self.active_comment.set(Some(thread_id));
-        let md = self.contents.read().clone();
-        let range = {
-            let threads = self.comments.read();
-            threads
-                .iter()
-                .find(|t| t.id == thread_id)
-                .and_then(|t| resolve_thread_range(&self.note.peek(), &md, t))
-        };
+        let range = self
+            .comment_ranges
+            .peek()
+            .iter()
+            .find(|p| p.id == thread_id)
+            .map(|p| p.range.clone());
         if let Some(r) = range {
-            let field = self.field_at(r.start);
-            self.open(field, [r.start, r.end]);
+            self.open(self.field_at(r.start), [r.start, r.end]);
         }
     }
 
@@ -576,27 +587,174 @@ impl Writing {
         if !*self.comments_open.peek() {
             return;
         }
-        let md = self.contents.read();
-        let hit = {
-            let threads = self.comments.read();
-            threads.iter().find_map(|t| {
-                let r = resolve_thread_range(&self.note.peek(), &md, t)?;
-                (pos >= r.start && pos <= r.end).then_some(t.id)
-            })
-        };
-        if let Some(tid) = hit
-            && *self.active_comment.peek() != Some(tid)
+        let hit = self
+            .comment_ranges
+            .peek()
+            .iter()
+            .find(|p| pos >= p.range.start && pos <= p.range.end)
+            .map(|p| p.id);
+        if let Some(id) = hit
+            && *self.active_comment.peek() != Some(id)
         {
-            self.active_comment.set(Some(tid));
+            self.active_comment.set(Some(id));
         }
     }
+
+    /// The comment file as it should be on the server: anchors and proposal
+    /// states of the last saved page, finished messages only.
+    pub(super) fn comment_file_now(&self, page: &str) -> file::Sidecar {
+        let mut out = file::Sidecar::new(page);
+        for t in self.comments.peek().iter() {
+            let mut thread = t.file.clone();
+            thread
+                .messages
+                .retain(|m| t.pending.as_ref() != Some(&m.id) && !t.failed.contains(&m.id));
+            for m in &mut thread.messages {
+                if let Some(p) = &mut m.proposal {
+                    p.state = t.saved.get(&m.id).copied().unwrap_or_default();
+                }
+            }
+            out.threads.push(thread);
+        }
+        out.threads.extend(self.comment_file.peek().tombstones.iter().cloned());
+        out
+    }
+
+    /// The page was saved: anchors and proposal states now describe it.
+    pub(super) fn commit_comments(self) {
+        let mut comments = self.comments;
+        {
+            let md = self.contents.peek();
+            let note = self.note.peek();
+            for t in comments.write().iter_mut() {
+                if let Some(r) = thread_range(&note, &md, t) {
+                    t.file.anchor = file::Anchor::capture(&md, r);
+                }
+                t.saved = t
+                    .file
+                    .messages
+                    .iter()
+                    .filter_map(|m| Some((m.id.clone(), m.proposal.as_ref()?.state)))
+                    .collect();
+            }
+        }
+        self.save_comments();
+    }
+
+    /// Write the comment file. A concurrent change (by the agent, another
+    /// device) is merged and written again; saves never overlap, and a change
+    /// during a save is written right after it.
+    pub fn save_comments(self) {
+        let Some(page) = self.page.peek().clone() else {
+            return;
+        };
+        let mut state = self.comment_file;
+        {
+            let mut f = state.write();
+            if !f.loaded {
+                return;
+            }
+            if f.saving {
+                f.again = true;
+                return;
+            }
+            f.saving = true;
+        }
+        let ours = self.comment_file_now(&page.path);
+        let etag = state.peek().etag.clone();
+        spawn(async move {
+            let (space, path) = (page.space.clone(), file::sidecar_path(&page.path));
+            let result = work(move || match space.write(&path, &ours.to_json(), etag.as_deref()) {
+                Err(e) if e == hub::CONFLICT => {
+                    let theirs = space.read(&path)?;
+                    let merged = file::merge(&ours, &file::Sidecar::parse(&theirs.text)?);
+                    space.write(&path, &merged.to_json(), theirs.etag.as_deref())
+                }
+                other => other,
+            })
+            .await;
+            let again = {
+                let mut f = state.write();
+                f.saving = false;
+                match result {
+                    Ok(etag) => {
+                        f.etag = etag;
+                        f.error = None;
+                    }
+                    Err(e) => f.error = Some(format!("Comments not saved: {e}")),
+                }
+                std::mem::take(&mut f.again)
+            };
+            if again {
+                self.save_comments();
+            }
+        });
+    }
+
+    /// Show a comment file's threads, each at its text if it is still there.
+    pub(super) fn load_comment_file(mut self, saved: file::Sidecar) {
+        let mut threads = Vec::new();
+        let mut tombstones = Vec::new();
+        {
+            let md = self.contents.peek();
+            let note = self.note.peek();
+            for t in saved.threads {
+                if t.deleted {
+                    tombstones.push(t);
+                    continue;
+                }
+                let cursors = t.anchor.resolve(&md).and_then(|r| note.anchor_range_in(&md, r));
+                threads.push(CommentThread {
+                    id: threads.len() + 1,
+                    cursors,
+                    seen: t.messages.iter().any(|m| m.ai).then(|| t.anchor.exact.clone()),
+                    saved: t
+                        .messages
+                        .iter()
+                        .filter_map(|m| Some((m.id.clone(), m.proposal.as_ref()?.state)))
+                        .collect(),
+                    file: t,
+                    ..Default::default()
+                });
+            }
+        }
+        self.comments.set(threads);
+        self.comment_file.write().tombstones = tombstones;
+    }
+}
+
+/// Read the page's comment file once, when the notebook edits a page.
+pub fn use_comment_file(writing: Writing) {
+    use_hook(move || {
+        let Some(page) = writing.page.peek().clone() else {
+            return;
+        };
+        let mut state = writing.comment_file;
+        spawn(async move {
+            let PageSource { space, path, .. } = page;
+            match work(move || space.read_optional(&file::sidecar_path(&path))).await {
+                Ok(Some(found)) => match file::Sidecar::parse(&found.text) {
+                    Ok(saved) => {
+                        writing.load_comment_file(saved);
+                        let mut f = state.write();
+                        f.etag = found.etag;
+                        f.loaded = true;
+                    }
+                    // Unreadable: say so, and never overwrite it.
+                    Err(e) => state.write().error = Some(e),
+                },
+                Ok(None) => state.write().loaded = true,
+                Err(e) => state.write().error = Some(format!("Comments not loaded: {e}")),
+            }
+        });
+    });
 }
 
 /// Paints warm inline highlights behind/over anchored comment ranges using Parley geometry.
 #[component]
 pub fn CommentInk(writing: Writing, field: Field) -> Element {
-    let threads = writing.comments.read();
-    if threads.is_empty() {
+    let ranges = writing.comment_ranges.read();
+    if ranges.is_empty() {
         return rsx! {};
     }
     writing.ink.read();
@@ -604,23 +762,15 @@ pub fn CommentInk(writing: Writing, field: Field) -> Element {
     let active_id = *writing.active_comment.read();
     let md = writing.contents.read();
     let bounds = writing.range(field, &md);
-    let note = writing.note.peek();
-    let mut hits: Vec<(usize, Range<usize>, bool, bool)> = Vec::new();
-    for t in threads.iter() {
-        if t.resolved && active_id != Some(t.id) {
-            continue;
-        }
-        let Some(r) = resolve_thread_range(&note, &md, t) else {
-            continue;
-        };
-        let start = r.start.max(bounds.start);
-        let end = r.end.min(bounds.end);
-        if start < end {
-            hits.push((t.id, start..end, active_id == Some(t.id), t.resolved));
-        }
-    }
-    drop(note);
-    drop(threads);
+    let hits: Vec<(usize, Range<usize>, bool, bool)> = ranges
+        .iter()
+        .filter(|p| !p.resolved || active_id == Some(p.id))
+        .filter_map(|p| {
+            let (start, end) = (p.range.start.max(bounds.start), p.range.end.min(bounds.end));
+            (start < end).then_some((p.id, start..end, active_id == Some(p.id), p.resolved))
+        })
+        .collect();
+    drop(ranges);
     if hits.is_empty() {
         return rsx! {};
     }
@@ -628,10 +778,7 @@ pub fn CommentInk(writing: Writing, field: Field) -> Element {
     let Some(doc) = root.as_ref().map(|h| h.doc()) else {
         return rsx! {};
     };
-    let Some(node) = doc
-        .get_element_by_id(&field.id())
-        .and_then(|id| doc.get_node(id))
-    else {
+    let Some(node) = doc.get_element_by_id(&field.id()).and_then(|id| doc.get_node(id)) else {
         return rsx! {};
     };
     let Some(input) = node.element_data().and_then(|e| e.text_input_data()) else {
@@ -643,48 +790,18 @@ pub fn CommentInk(writing: Writing, field: Field) -> Element {
     let proj = writing.projection(field);
     let l = node.final_layout();
     let scale = f64::from(layout.scale());
-    let x_off = f64::from(
-        l.padding.left + l.border.left
-            - if input.is_multiline {
-                0.0
-            } else {
-                input.scroll_offset
-            },
-    );
-    let y_off = f64::from(
-        l.padding.top + l.border.top
-            - if input.is_multiline {
-                input.scroll_offset
-            } else {
-                0.0
-            },
-    ) + node.text_input_v_centering_offset(scale);
-
+    let x_off = f64::from(l.padding.left + l.border.left - if input.is_multiline { 0.0 } else { input.scroll_offset });
+    let y_off = f64::from(l.padding.top + l.border.top - if input.is_multiline { input.scroll_offset } else { 0.0 })
+        + node.text_input_v_centering_offset(scale);
     let mut rects: Vec<(usize, f64, f64, f64, f64, bool, bool)> = Vec::new();
     for (tid, range, is_active, is_resolved) in hits {
-        let c0 = parley::Cursor::from_byte_index(
-            layout,
-            proj.source_to_display(range.start),
-            parley::Affinity::Downstream,
-        );
-        let c1 = parley::Cursor::from_byte_index(
-            layout,
-            proj.source_to_display(range.end),
-            parley::Affinity::Downstream,
-        );
+        let c0 = parley::Cursor::from_byte_index(layout, proj.source_to_display(range.start), parley::Affinity::Downstream);
+        let c1 = parley::Cursor::from_byte_index(layout, proj.source_to_display(range.end), parley::Affinity::Downstream);
         for (rect, _) in parley::Selection::new(c0, c1).geometry(layout) {
             let w = (rect.x1 - rect.x0) / scale;
             let h = (rect.y1 - rect.y0) / scale;
             if w > 0.5 && h > 0.5 {
-                rects.push((
-                    tid,
-                    x_off + rect.x0 / scale,
-                    y_off + rect.y0 / scale,
-                    w,
-                    h,
-                    is_active,
-                    is_resolved,
-                ));
+                rects.push((tid, x_off + rect.x0 / scale, y_off + rect.y0 / scale, w, h, is_active, is_resolved));
             }
         }
     }
@@ -703,6 +820,14 @@ pub fn CommentInk(writing: Writing, field: Field) -> Element {
     }
 }
 
+/// A reply still arriving: its text comes from the stream, so a new chunk
+/// re-renders this message only.
+#[component]
+fn StreamingReply(writing: Writing, id: String, author: String) -> Element {
+    let body = writing.comment_stream.read().get(&id).cloned().unwrap_or_default();
+    rsx! { Message { author, body, ai: true, pending: true, style: MessageStyle::Thread } }
+}
+
 #[component]
 pub fn CommentsPane(writing: Writing) -> Element {
     let mut writing = writing;
@@ -710,362 +835,163 @@ pub fn CommentsPane(writing: Writing) -> Element {
         return rsx! {};
     }
     let mut filter = use_signal(|| CommentFilter::Open);
-    let mut draft_text = use_signal(String::new);
-    let mut reply_text = use_signal(String::new);
-    let mut reply_for = use_signal(|| None::<usize>);
-
-    let threads = writing.comments.read().clone();
-    let open_count = threads.iter().filter(|t| !t.resolved).count();
-    let resolved_count = threads.len().saturating_sub(open_count);
+    let threads = writing.comments.read();
+    let open_count = threads.iter().filter(|t| !t.file.resolved).count();
+    let resolved_count = threads.len() - open_count;
     let active_id = *writing.active_comment.read();
     let draft = writing.draft_comment.read().clone();
     let cur_filter = filter();
-
-    let visible: Vec<CommentThread> = threads
-        .into_iter()
+    let error = writing.comment_file.read().error.clone();
+    let segments = vec![
+        Segment { id: "filter-comments-open", label: "Open", tip: None, selected: cur_filter == CommentFilter::Open },
+        Segment { id: "filter-comments-resolved", label: "Resolved", tip: None, selected: cur_filter == CommentFilter::Resolved },
+        Segment { id: "filter-comments-all", label: "All", tip: None, selected: cur_filter == CommentFilter::All },
+    ];
+    let visible: Vec<&CommentThread> = threads
+        .iter()
         .filter(|t| match cur_filter {
-            CommentFilter::Open => !t.resolved,
-            CommentFilter::Resolved => t.resolved,
+            CommentFilter::Open => !t.file.resolved,
+            CommentFilter::Resolved => t.file.resolved,
             CommentFilter::All => true,
         })
         .collect();
-
+    let empty = visible.is_empty() && draft.is_none();
     rsx! {
         aside { id: "comments-pane", class: "comments-pane", aria_label: "Document comments",
             div { class: "comments-head",
                 div { class: "comments-head-row",
-                    div { class: "comments-title-wrap",
-                        span { class: "comments-title", "Comments" }
-                        if open_count > 0 {
-                            span { class: "comments-badge", "{open_count}" }
+                    span { class: "comments-title", "Comments" }
+                    if open_count > 0 { Badge { text: open_count.to_string(), tone: Tone::Warn } }
+                    span { class: "comments-grow" }
+                    Button { id: "close-comments", label: "Close comments", text: "×", variant: Variant::Ghost,
+                        onclick: move |_| writing.comments_open.set(false) }
+                }
+                Segmented { label: "Which threads", items: segments, onselect: move |i: usize| {
+                    filter.set([CommentFilter::Open, CommentFilter::Resolved, CommentFilter::All][i]);
+                } }
+                span { class: "comments-counts", "{open_count} open · {resolved_count} resolved" }
+            }
+            div { class: "comments-list",
+                if let Some(e) = error { Banner { text: e, tone: Tone::Alert } }
+                if let Some(draft) = draft {
+                    Card { id: "new-comment-card", class: "comment-card draft",
+                        div { class: "comment-card-head",
+                            span { class: "comment-quote", "{draft.quote}" }
+                            Badge { text: writing.comment_agent.read().alias.clone(), tone: Tone::Accent }
+                        }
+                        div { class: "comment-chips",
+                            for (label, ask) in [("Tighten", "Tighten this phrasing"), ("Polish", "Polish and make clearer"), ("Add detail", "Add field detail")] {
+                                Chip { label, onclick: move |_| writing.submit_draft_comment(ask) }
+                            }
+                        }
+                        Composer { placeholder: "Comment or ask the agent to edit…", send_label: "Post",
+                            field_id: "new-comment-input", send_id: "new-comment-post",
+                            onsend: move |text: String| writing.submit_draft_comment(&text),
+                            onescape: move |_| writing.draft_comment.set(None) }
+                        div { class: "comment-draft-foot",
+                            Button { id: "new-comment-cancel", label: "Cancel", variant: Variant::Link,
+                                onclick: move |_| writing.draft_comment.set(None) }
                         }
                     }
-                    button {
-                        id: "close-comments",
-                        class: "comments-close-btn",
-                        aria_label: "Close comments",
-                        title: "Close comments",
-                        onclick: move |_| writing.comments_open.set(false),
-                        "×"
+                }
+                if empty {
+                    div { class: "comments-empty",
+                        p { class: "comments-empty-title",
+                            if cur_filter == CommentFilter::Resolved { "No resolved comments yet." } else { "No open comments." }
+                        }
+                        p { class: "comments-empty-sub", "Select text in the note and click Comment (or ⌘⇧M) to ask the agent for scoped edits." }
                     }
                 }
-                div { class: "comments-filters", role: "tablist",
-                    button {
-                        id: "filter-comments-open",
-                        class: "comments-filter-btn",
-                        class: if cur_filter == CommentFilter::Open { "selected" },
-                        onclick: move |_| filter.set(CommentFilter::Open),
-                        "Open ({open_count})"
-                    }
-                    button {
-                        id: "filter-comments-resolved",
-                        class: "comments-filter-btn",
-                        class: if cur_filter == CommentFilter::Resolved { "selected" },
-                        onclick: move |_| filter.set(CommentFilter::Resolved),
-                        "Resolved ({resolved_count})"
-                    }
-                    button {
-                        id: "filter-comments-all",
-                        class: "comments-filter-btn",
-                        class: if cur_filter == CommentFilter::All { "selected" },
-                        onclick: move |_| filter.set(CommentFilter::All),
-                        "All"
+                for thread in visible {
+                    ThreadCard { key: "ct-{thread.id}", writing, id: thread.id, active: active_id == Some(thread.id) }
+                }
+            }
+        }
+    }
+}
+
+/// One thread: its quote, its messages, proposals and, when active, a reply box.
+#[component]
+fn ThreadCard(writing: Writing, id: usize, active: bool) -> Element {
+    let mut writing = writing;
+    let threads = writing.comments.read();
+    let Some(thread) = threads.iter().find(|t| t.id == id) else {
+        return rsx! {};
+    };
+    let tid = id;
+    let resolved = thread.file.resolved;
+    let current = writing.thread_text(thread);
+    let quote = current.clone();
+    rsx! {
+        Card { id: format!("comment-thread-{tid}"), class: format!("comment-card{}{}", if active { " active" } else { "" }, if resolved { " resolved" } else { "" }),
+            onclick: move |_| if *writing.active_comment.peek() != Some(tid) { writing.active_comment.set(Some(tid)) },
+            div { class: "comment-card-head",
+                Button { id: format!("comment-jump-{tid}"), label: "Jump to anchored text", text: quote, variant: Variant::Bare,
+                    class: "comment-quote-btn", stop: true, onclick: move |_| writing.jump_to_comment(tid) }
+                Button { id: format!("comment-resolve-{tid}"), label: if resolved { "Reopen thread" } else { "Resolve thread" },
+                    text: if resolved { "Reopen" } else { "Resolve" }, variant: Variant::Ghost, stop: true,
+                    onclick: move |_| writing.toggle_resolve_comment(tid) }
+                Button { id: format!("comment-delete-{tid}"), label: "Delete comment thread", text: "×", variant: Variant::Ghost,
+                    class: "remove", stop: true, onclick: move |_| writing.delete_comment_thread(tid) }
+            }
+            for (mi, m) in thread.file.messages.iter().enumerate() {
+                if thread.pending.as_ref() == Some(&m.id) {
+                    StreamingReply { key: "{m.id}", writing, id: m.id.clone(), author: m.author.clone() }
+                } else {
+                    Message { key: "{m.id}", author: m.author.clone(), body: m.body.clone(), ai: m.ai,
+                        failed: thread.failed.contains(&m.id), style: MessageStyle::Thread,
+                        if let Some(p) = m.proposal.clone() {
+                            ProposalView { writing, thread: tid, message: mi, fits: p.fits(&current), resolved, proposal: p }
+                        }
                     }
                 }
             }
-
-            div { class: "comments-list",
-                if let Some(draft) = draft {
-                    div { id: "new-comment-card", class: "comment-card draft",
-                        div { class: "comment-card-head",
-                            span { class: "comment-quote", "{draft.quote}" }
-                            span { class: "comment-ai-tag", {ai_sparkle(10)} "AI reply" }
-                        }
-                        div { class: "comment-quick-chips",
-                            button { class: "comment-chip",
-                                onclick: move |_| {
-                                    writing.submit_draft_comment("Tighten this phrasing");
-                                    draft_text.set(String::new());
-                                },
-                                "Tighten"
-                            }
-                            button { class: "comment-chip",
-                                onclick: move |_| {
-                                    writing.submit_draft_comment("Polish and make clearer");
-                                    draft_text.set(String::new());
-                                },
-                                "Polish"
-                            }
-                            button { class: "comment-chip",
-                                onclick: move |_| {
-                                    writing.submit_draft_comment("Add field detail");
-                                    draft_text.set(String::new());
-                                },
-                                "Add detail"
-                            }
-                        }
-                        div { class: "comment-input-row",
-                            input {
-                                id: "new-comment-input",
-                                class: "comment-input",
-                                placeholder: "Comment or ask Claude to edit…",
-                                value: "{draft_text}",
-                                oninput: move |e| {
-                                    e.stop_propagation();
-                                    draft_text.set(e.value());
-                                },
-                                onkeydown: move |e| {
-                                    if e.key() == Key::Named(NamedKey::Enter) {
-                                        e.prevent_default();
-                                        e.stop_propagation();
-                                        let v = draft_text.peek().clone();
-                                        writing.submit_draft_comment(&v);
-                                        draft_text.set(String::new());
-                                    } else if e.key() == Key::Named(NamedKey::Escape) {
-                                        e.prevent_default();
-                                        e.stop_propagation();
-                                        writing.draft_comment.set(None);
-                                        draft_text.set(String::new());
-                                    }
-                                },
-                            }
-                            button {
-                                id: "new-comment-post",
-                                class: "comment-send-btn",
-                                onclick: move |_| {
-                                    let v = draft_text.peek().clone();
-                                    writing.submit_draft_comment(&v);
-                                    draft_text.set(String::new());
-                                },
-                                "Post"
-                            }
-                        }
-                        div { class: "comment-draft-foot",
-                            button {
-                                id: "new-comment-cancel",
-                                class: "comment-link-btn",
-                                onclick: move |_| {
-                                    writing.draft_comment.set(None);
-                                    draft_text.set(String::new());
-                                },
-                                "Cancel"
-                            }
+            if active {
+                div { class: "comment-reply",
+                    div { class: "comment-chips",
+                        for (label, ask) in [("Shorten", "Shorten this"), ("Polish", "Polish phrasing"), ("Try another", "Try another option")] {
+                            Chip { label, stop: true, onclick: move |_| writing.reply_to_comment(tid, ask) }
                         }
                     }
+                    Composer { placeholder: "Reply or ask the agent to act…", send_label: "Ask",
+                        field_id: format!("comment-reply-{tid}"), send_id: format!("comment-send-{tid}"),
+                        onsend: move |text: String| writing.reply_to_comment(tid, &text) }
                 }
+            }
+        }
+    }
+}
 
-                if visible.is_empty() && writing.draft_comment.read().is_none() {
-                    div { class: "comments-empty",
-                        p { class: "comments-empty-title",
-                            if cur_filter == CommentFilter::Resolved {
-                                "No resolved comments yet."
-                            } else {
-                                "No open comments."
-                            }
-                        }
-                        p { class: "comments-empty-sub",
-                            "Select text in the note and click Comment (or ⌘⇧M) to ask Claude for scoped edits."
-                        }
+/// A proposed replacement: the change, then Apply, Undo, or — when the text
+/// under the thread is no longer what it was made for — Ask again.
+#[component]
+fn ProposalView(writing: Writing, thread: usize, message: usize, proposal: file::Proposal, fits: bool, resolved: bool) -> Element {
+    let (tid, mi) = (thread, message);
+    let applied = proposal.state == ProposalState::Applied;
+    rsx! {
+        div { class: "comment-diff",
+            div { class: "comment-diff-head", {Icon::Sparkle.svg("i")} span { "{proposal.label}" } }
+            div { class: "comment-diff-lines",
+                div { class: "comment-diff-del", "- {proposal.old}" }
+                div { class: "comment-diff-add", "+ {proposal.new}" }
+            }
+            div { class: "comment-diff-actions",
+                if !fits {
+                    span { class: "comment-stale", "The text changed since this suggestion." }
+                    Button { id: format!("comment-ask-again-{tid}-{mi}"), label: "Ask again", stop: true,
+                        onclick: move |_| writing.reply_to_comment(tid, "The selected text changed. Propose the edit again for the current text.") }
+                } else if applied {
+                    Button { id: format!("comment-undo-{tid}-{mi}"), label: "Applied · Undo", icon: Icon::Check, text: "Applied · Undo", stop: true,
+                        class: "applied", onclick: move |_| writing.undo_comment_proposal(tid, mi) }
+                    if !resolved {
+                        Button { id: format!("comment-resolve-after-{tid}-{mi}"), label: "Resolve", stop: true,
+                            onclick: move |_| writing.toggle_resolve_comment(tid) }
                     }
-                }
-
-                for thread in visible {
-                    {
-                        let tid = thread.id;
-                        let is_active = active_id == Some(tid);
-                        let is_resolved = thread.resolved;
-                        let input_val = if *reply_for.read() == Some(tid) {
-                            reply_text.read().clone()
-                        } else {
-                            String::new()
-                        };
-                        rsx! {
-                            div {
-                                key: "ct-{tid}",
-                                id: format!("comment-thread-{tid}"),
-                                class: "comment-card",
-                                class: if is_active { "active" },
-                                class: if is_resolved { "resolved" },
-                                onclick: move |_| {
-                                    if *writing.active_comment.peek() != Some(tid) {
-                                        writing.active_comment.set(Some(tid));
-                                    }
-                                },
-                                div { class: "comment-card-head",
-                                    button {
-                                        id: format!("comment-jump-{tid}"),
-                                        class: "comment-quote-btn",
-                                        title: "Jump to anchored text",
-                                        onclick: move |e| {
-                                            e.stop_propagation();
-                                            writing.jump_to_comment(tid);
-                                        },
-                                        "{thread.quote}"
-                                    }
-                                    div { class: "comment-head-actions",
-                                        button {
-                                            id: format!("comment-resolve-{tid}"),
-                                            class: "comment-mini-btn",
-                                            title: if is_resolved { "Reopen thread" } else { "Resolve thread" },
-                                            onclick: move |e| {
-                                                e.stop_propagation();
-                                                writing.toggle_resolve_comment(tid);
-                                            },
-                                            if is_resolved { "Reopen" } else { "Resolve" }
-                                        }
-                                        button {
-                                            id: format!("comment-delete-{tid}"),
-                                            class: "comment-mini-btn remove",
-                                            aria_label: "Delete comment thread",
-                                            title: "Delete thread",
-                                            onclick: move |e| {
-                                                e.stop_propagation();
-                                                writing.delete_comment_thread(tid);
-                                            },
-                                            "×"
-                                        }
-                                    }
-                                }
-                                for msg in thread.messages {
-                                    {
-                                        let mid = msg.id;
-                                        rsx! {
-                                            div { key: "cm-{mid}", class: "comment-msg",
-                                                div { class: "comment-msg-meta",
-                                                    span { class: "comment-avatar", class: if msg.is_ai { "ai" },
-                                                        if msg.is_ai { {ai_sparkle(10)} } else { "Y" }
-                                                    }
-                                                    span { class: "comment-author", "{msg.author}" }
-                                                }
-                                                p { class: "comment-msg-body", "{msg.body}" }
-                                                if let Some(prop) = msg.proposal {
-                                                    {
-                                                        let pid = prop.id;
-                                                        let applied = prop.applied;
-                                                        rsx! {
-                                                            div { class: "comment-diff",
-                                                                div { class: "comment-diff-head",
-                                                                    {ai_sparkle(10)}
-                                                                    span { "{prop.label}" }
-                                                                }
-                                                                div { class: "comment-diff-lines",
-                                                                    div { class: "comment-diff-del", "- {prop.old_text}" }
-                                                                    div { class: "comment-diff-add", "+ {prop.new_text}" }
-                                                                }
-                                                                div { class: "comment-diff-actions",
-                                                                    if applied {
-                                                                        button {
-                                                                            id: format!("comment-undo-{tid}-{pid}"),
-                                                                            class: "comment-act-btn applied",
-                                                                            onclick: move |e| {
-                                                                                e.stop_propagation();
-                                                                                writing.undo_comment_proposal(tid, pid);
-                                                                            },
-                                                                            {check_icon()}
-                                                                            "Applied · Undo"
-                                                                        }
-                                                                        if !is_resolved {
-                                                                            button {
-                                                                                id: format!("comment-resolve-after-{tid}-{pid}"),
-                                                                                class: "comment-act-btn",
-                                                                                onclick: move |e| {
-                                                                                    e.stop_propagation();
-                                                                                    writing.toggle_resolve_comment(tid);
-                                                                                },
-                                                                                "Resolve"
-                                                                            }
-                                                                        }
-                                                                    } else {
-                                                                        button {
-                                                                            id: format!("comment-apply-{tid}-{pid}"),
-                                                                            class: "comment-act-btn primary",
-                                                                            onclick: move |e| {
-                                                                                e.stop_propagation();
-                                                                                writing.apply_comment_proposal(tid, pid);
-                                                                            },
-                                                                            "Apply to doc"
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                if is_active {
-                                    div { class: "comment-reply-wrap",
-                                        div { class: "comment-quick-chips",
-                                            button { class: "comment-chip",
-                                                onclick: move |e| {
-                                                    e.stop_propagation();
-                                                    writing.reply_to_comment(tid, "Shorten this");
-                                                },
-                                                "Shorten"
-                                            }
-                                            button { class: "comment-chip",
-                                                onclick: move |e| {
-                                                    e.stop_propagation();
-                                                    writing.reply_to_comment(tid, "Polish phrasing");
-                                                },
-                                                "Polish"
-                                            }
-                                            button { class: "comment-chip",
-                                                onclick: move |e| {
-                                                    e.stop_propagation();
-                                                    writing.reply_to_comment(tid, "Try another option");
-                                                },
-                                                "Try another"
-                                            }
-                                        }
-                                        div { class: "comment-input-row",
-                                            input {
-                                                id: format!("comment-reply-{tid}"),
-                                                class: "comment-input",
-                                                placeholder: "Reply or ask Claude to act…",
-                                                value: "{input_val}",
-                                                oninput: move |e| {
-                                                    e.stop_propagation();
-                                                    reply_for.set(Some(tid));
-                                                    reply_text.set(e.value());
-                                                },
-                                                onkeydown: move |e| {
-                                                    if e.key() == Key::Named(NamedKey::Enter) {
-                                                        e.prevent_default();
-                                                        e.stop_propagation();
-                                                        let v = if *reply_for.peek() == Some(tid) {
-                                                            reply_text.peek().clone()
-                                                        } else {
-                                                            String::new()
-                                                        };
-                                                        writing.reply_to_comment(tid, &v);
-                                                        reply_text.set(String::new());
-                                                    }
-                                                },
-                                            }
-                                            button {
-                                                id: format!("comment-send-{tid}"),
-                                                class: "comment-send-btn",
-                                                onclick: move |e| {
-                                                    e.stop_propagation();
-                                                    let v = if *reply_for.peek() == Some(tid) {
-                                                        reply_text.peek().clone()
-                                                    } else {
-                                                        String::new()
-                                                    };
-                                                    writing.reply_to_comment(tid, &v);
-                                                    reply_text.set(String::new());
-                                                },
-                                                "Ask"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                } else if proposal.state == ProposalState::Dismissed {
+                    span { class: "comment-stale", "Dismissed." }
+                } else {
+                    Button { id: format!("comment-apply-{tid}-{mi}"), label: "Apply to doc", variant: Variant::Primary, stop: true,
+                        onclick: move |_| writing.apply_comment_proposal(tid, mi) }
                 }
             }
         }

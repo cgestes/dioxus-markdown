@@ -31,7 +31,9 @@ preserves concurrent edits and a recovery window.
 2. **Calm, Distraction-Free Paper Canvas**
    - No heavy branded top header, no permanent formatting ribbon.
    - Contextual UI appears only where and when needed (inline empty-line icons, selection format bar, docked table action bar).
-3. **Out of Scope (for UX polish)**
+3. **One Design System**
+   - Every window is built from the components in `src/native/ui/` (buttons, chips, segmented switch, tabs, fields, composer, checkboxes, cards, rows, messages, read-only Markdown, popovers, menus, toolbars, icons and marks), including the editor's own chrome (mode bar, format bar, slash/block/table menus, empty-line tools, status bar). Headings, prose and tables share one type scale (`--font-h*`, `--font-prose*`, `--font-table*`), so a read-only page reads like the page in Rich mode, styled by `assets/ui.css` from the tokens in `assets/theme.css`. Features compose them and add layout only: no per-feature button, card, row, Markdown or checkbox styles. `margin ui` shows every component in every state. See `docs/design-system.md`.
+4. **Out of Scope (for UX polish)**
    - **Split view** (`View::Split`) is retained only as a regression baseline; do not spend UX effort polishing Split view, but keep existing Split tests passing.
 
 ---
@@ -40,7 +42,7 @@ preserves concurrent edits and a recovery window.
 
 - **Top-Anchored Mode Bar (`#mode-bar`):**
   - Slim, sticky top bar (`height: 36px`), borderless `--page` background, centered.
-  - Contains the segmented view/mode switch (`Rich | Live | Split | Source`), compact icon buttons (`Table`, `Undo`, `Redo`), and the **Debug Display toggle** (`#toggle-debug`, tooltip `Toggle debug display (F8)`).
+  - Contains the segmented view/mode switch (`ui::Segmented`: `Rich | Live | Split | Source`), compact icon buttons (`ui::Button` `Icon` variant: `Table`, `Undo`, `Redo`, `Comments`), and the **Debug Display toggle** (`#toggle-debug`, tooltip `Toggle debug display (F8)`). A notebook editing a page of the space ends the bar with the page's path, its state and **Save** (`#save-page`).
   - Must fit cleanly on narrow viewports down to `375px` without wrapping or overflowing.
 - **Debug Display / Inspector (`F8` or `#toggle-debug`):**
   - Toggles field outlines, active caret highlight, live status strip, and JSON report export (`F9` / Save button).
@@ -137,12 +139,12 @@ preserves concurrent edits and a recovery window.
 ## 7. Tables
 
 - **Visual Design:**
-  - Pine header with `6px` rounded corners, subtle interior row hairlines, no stray bottom line on the last row (with matching `6px` rounded bottom corners), steady column widths while typing (no jitter), aligned cell hit areas (`left`, `center`, `right`).
+  - Light header (`--wash` background, small `--muted` 600 labels, a 1px `--line-strong` rule under it) with `6px` rounded corners, rows divided by `--line` hairlines; the accent appears only for focus and selection (cell ring, range cells, current cell), no stray bottom line on the last row (with matching `6px` rounded bottom corners), steady column widths while typing (no jitter), aligned cell hit areas (`left`, `center`, `right`).
   - No floating column/row toolbars, no edge `+` column/row buttons, and no `"Cell xx"` single-cell footer clutter.
 - **Minimal Menu-Only Controls (Hovered/Active Column & Row Only):**
   - Controls appear **only for the currently hovered (or focused/menu-open) column and row** — keeping all other columns and rows completely clean.
-  - **Column header menu (`⌄` inside header cell):** The hovered/active column header displays a subtle downward chevron icon (`ToolIcon::ChevronDown`) directly inside the pine header bar (right side for left/center columns, left side for right-aligned columns). Clicking it opens the column menu anchored directly under the chevron with **alignment icons (`AlignLeft` / `AlignCenter` / `AlignRight`)**, Move Left/Right, Insert Left/Right, and Delete Column.
-  - **Row menu (`⌄` beside data row):** The hovered/active data row displays a single downward chevron icon (`ToolIcon::ChevronDown`) to its left. Clicking it opens the row menu with Move Up/Down, Insert Above/Below, and Delete Row.
+  - **Column header menu (`⌄` inside header cell):** The hovered/active column header displays a subtle downward chevron icon (`ui::Icon::ChevronDown`) directly inside the light header (right side for left/center columns, left side for right-aligned columns). Clicking it opens the column menu anchored directly under the chevron with **alignment icons (`AlignLeft` / `AlignCenter` / `AlignRight`)**, Move Left/Right, Insert Left/Right, and Delete Column.
+  - **Row menu (`⌄` beside data row):** The hovered/active data row displays a single downward chevron icon (`ui::Icon::ChevronDown`) to its left. Clicking it opens the row menu with Move Up/Down, Insert Above/Below, and Delete Row.
   - **Bottom range strip (`#table-bar-{t}`):** Hidden for single-cell editing; appears only when a multi-cell rectangular range is selected (`B2 – C3 · N cells  Clear  Del rows  Del cols`).
 - **Keyboard & Pointer:**
   - `Tab` / `Shift+Tab` move horizontally (growing a new row at the last cell); `Enter` / `Shift+Enter` move vertically.
@@ -188,7 +190,20 @@ preserves concurrent edits and a recovery window.
 
 ---
 
-## 10. Upcoming Rules & Additions (Backlog)
+- **One reply path:** the mock and the real agent both implement `hub::AgentChat` and stream through `worker::turn`; the reply streams into its message (only that message re-renders), and a final ` ```margin-edit ` block (label, `---`, replacement) becomes the proposal and is never shown as text.
+- **Real backend (pages of the space):** an editor opened from the Topics window on a live, paired page asks the read-only ZeroClaw agent `scribe` (`comment_agent` in `topics.json`) instead of the mock. Each thread is its own session (`margin-comment-<id>`). The first turn carries the reply contract and the page; every turn carries the section or table cell, the selection and the request. **Apply** and **Undo** act only while the text under the thread is what the proposal expects; otherwise the thread offers *Ask again* (staleness is derived, never stored). Threads are saved to `_margin/comments/<page>.json` in the space, anchored by quote and context and merged on 412; conversation changes save at once, anchors and applied states are saved with the page. They re-attach after edits made outside Margin. A comment file that cannot be read or written shows a banner in the pane. See `docs/comments-backend.md`.
+
+## 10. Topics Window (`margin topics`)
+
+- **Sources:** the SilverBullet space is the source of truth for topics and documents (`GET/PUT /.fs`); ZeroClaw provides conversations (`GET /api/sessions`, `GET /api/sessions/{key}/messages`) and chat (`/ws/chat`). Both are reached over the tailnet; the device token lives in the Keychain in release builds and in a private file next to `topics.json` in dev builds (every rebuild is a binary the Keychain no longer trusts), never in a file in the repo.
+- **Topics:** every top-level folder except `Library/` and `Repositories/` is a topic; sub-folders are sub-topics; each page in `people/` and every page a README route targets is a topic of its own. Titles come from the page's first heading, up to an em dash.
+- **Facets:** Overview renders the topic's README (else its main page, never `log.md` or `questions.md`). Discussions are the sessions whose key contains a chat id routed to the topic in the space README, plus Margin's `topic-<id>` chat; tool results and tool-calling steps are never shown. Calendar lists open rows of `reminders.md` whose source file is in the folder or whose id starts with the topic's stem. Questions read `questions.md`. A facet without content is hidden.
+- **Today:** reminders of the next three weeks across topics, each shown once under the topic it belongs to directly; recent discussions; shopping lists rolled up from topic lists.
+- **Editing:** a doc opens in the Live editor, which owns the page (`NotebookOptions::page`); **Save** in its bar writes with `If-Match` and reports a conflict instead of overwriting a newer version, then saves the comment anchors for the saved text.
+- **Chat:** one WebSocket per turn; the first message of a fresh topic session carries the topic's title and space path; tool approvals are answered from the panel.
+- **Demo:** `--demo` renders the same window from `topics_demo.rs`; both modes build one `topics_view::Workspace`, so every UX change applies to both.
+
+## 11. Upcoming Rules & Additions (Backlog)
 
 - Global right-hand AI Chat tab & real LLM provider backend
 - Persistent sidecar storage for comments alongside `.md` files

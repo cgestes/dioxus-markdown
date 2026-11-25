@@ -23,6 +23,8 @@ mod markdown;
 mod marker_view;
 #[path = "native/navigation.rs"]
 mod navigation;
+#[path = "native/page.rs"]
+mod page;
 #[path = "native/personal.rs"]
 mod personal;
 #[path = "native/pointer.rs"]
@@ -37,24 +39,36 @@ mod selection_model;
 mod slash;
 #[path = "native/split.rs"]
 mod split;
+#[path = "native/topics.rs"]
+mod topics;
+#[path = "native/topics_cli.rs"]
+mod topics_cli;
+#[path = "native/topics_demo.rs"]
+mod topics_demo;
+#[path = "native/topics_live.rs"]
+mod topics_live;
+#[path = "native/topics_view.rs"]
+mod topics_view;
 #[path = "native/typefaces.rs"]
 mod typefaces;
+#[path = "native/ui/mod.rs"]
+mod ui;
+#[path = "native/worker.rs"]
+mod worker;
 use margin_editor_core::table;
 #[path = "native/writing.rs"]
 mod writing;
 
 use dioxus_native::{NodeHandle, prelude::*};
 use document::{BlockKind, Sections};
+use ui::Icon;
 use margin_editor_core::checkbox::markdown_markers;
 use margin_editor_core::note::Note;
 use writing::Writing;
 
 const SAMPLE: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x].\n\n## Listening stops\n\n| Stop | Listen for | Take |\n| :--- | :--- | ---: |\n| North lock | Water through the gate | 45 s |\n| Footbridge | Steps on the steel deck | 30 s |\n\n- [ ] Leave **ten seconds** of silence.\n- [x] Set the recorder to `48 kHz`.";
+/// The editor's own styles; tokens and components come from `ui::CSS`.
 const CSS: &str = concat!(
-    include_str!("../assets/theme.css"),
-    "\n",
-    include_str!("../assets/table.css"),
-    "\n",
     include_str!("native/editor.css"),
     "\n",
     include_str!("native/split.css"),
@@ -64,10 +78,25 @@ const CSS: &str = concat!(
     include_str!("native/comments.css"),
 );
 
+/// `margin ui` (or `margin --gallery`) shows the design system's gallery.
+fn gallery_requested() -> bool {
+    std::env::args().skip(1).any(|a| a == "ui" || a == "--gallery")
+}
+
 fn main() {
+    if let Some(code) = topics_cli::cli(&std::env::args().skip(1).collect::<Vec<_>>()) {
+        std::process::exit(code);
+    }
+    let (width, height) = if topics::Start::from_args().is_some() {
+        (1320.0, 860.0)
+    } else if gallery_requested() {
+        (1180.0, 900.0)
+    } else {
+        (920.0, 650.0)
+    };
     let window = dioxus_native::WindowAttributes::default()
         .with_title("Margin")
-        .with_surface_size(dioxus_native::LogicalSize::new(920.0, 650.0));
+        .with_surface_size(dioxus_native::LogicalSize::new(width, height));
     #[cfg(target_os = "macos")]
     macos::launch(window);
     #[cfg(not(target_os = "macos"))]
@@ -85,131 +114,6 @@ fn report<T>(result: loro::LoroResult<T>, mut message: Signal<String>) {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum ToolIcon {
-    Bold,
-    Italic,
-    Strike,
-    Code,
-    Link,
-    List,
-    Task,
-    Quote,
-    Rule,
-    Image,
-    Grip,
-    ChevronDown,
-    AlignLeft,
-    AlignCenter,
-    AlignRight,
-    Comment,
-    Bug,
-    Table,
-    Undo,
-    Redo,
-}
-
-impl ToolIcon {
-    fn draw(self) -> Element {
-        if self == Self::Grip {
-            return rsx! {
-                span { class: "tool-icon", aria_hidden: "true",
-                    svg { width: "16", height: "16", view_box: "0 0 24 24", fill: "currentColor",
-                        circle { cx: "9", cy: "6", r: "1.6" }
-                        circle { cx: "15", cy: "6", r: "1.6" }
-                        circle { cx: "9", cy: "12", r: "1.6" }
-                        circle { cx: "15", cy: "12", r: "1.6" }
-                        circle { cx: "9", cy: "18", r: "1.6" }
-                        circle { cx: "15", cy: "18", r: "1.6" }
-                    }
-                }
-            };
-        }
-        let path = match self {
-            Self::Bold => "M6 4h8a4 4 0 0 1 0 8H6zm0 8h9a4 4 0 0 1 0 8H6z",
-            Self::Italic => "M19 4h-9m4 16H5M15 4 9 20",
-            Self::Strike => {
-                "M17.5 6.5C16.5 4.8 14.8 4 12 4c-3.5 0-5.4 1.7-5.4 4 0 1.5.8 2.6 2.3 3.3M4 12h16m-5.8 1.4c2 .8 3 1.7 3 3.3 0 2.2-2 3.7-5.4 3.7-2.5 0-4.6-.8-6-2.5"
-            }
-            Self::Code => "m8 7-5 5 5 5m8-10 5 5-5 5",
-            Self::Link => {
-                "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
-            }
-            Self::List => "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
-            Self::Task => "m9 11 3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
-            Self::Quote => "M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1Zm12 0c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1Z",
-            Self::Rule => "M4 12h16",
-            Self::Image => "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3.5 5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM21 15l-5-5L5 21",
-            Self::Grip => "M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01",
-            Self::ChevronDown => "m6 9 6 6 6-6",
-            Self::AlignLeft => "M4 6h16M4 12h10M4 18h14",
-            Self::AlignCenter => "M4 6h16M7 12h10M5 18h14",
-            Self::AlignRight => "M4 6h16M10 12h10M6 18h14",
-            Self::Comment => "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
-            Self::Bug => "m8 2 1.88 1.88M14.12 3.88 16 2M9 7.13v-1a3.003 3.003 0 1 1 6 0v1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6ZM12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4",
-            Self::Table => {
-                "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM3 9h18M9 3v18"
-            }
-            Self::Undo => "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
-            Self::Redo => "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
-        };
-        rsx! { span { class: "tool-icon", aria_hidden: "true", svg { width: "16", height: "16", view_box: "0 0 24 24",
-            fill: "none", stroke: "currentColor", stroke_width: "1.7", stroke_linecap: "round",
-            stroke_linejoin: "round", path { d: path }
-        } } }
-    }
-}
-
-#[component]
-fn EditorButton(
-    label: &'static str,
-    glyph: Option<&'static str>,
-    tip: Option<&'static str>,
-    icon: Option<ToolIcon>,
-    class: Option<&'static str>,
-    id: Option<String>,
-    selected: Option<bool>,
-    expanded: Option<bool>,
-    #[props(default)] disabled: bool,
-    onactivate: EventHandler<()>,
-) -> Element {
-    let mut space_down = use_signal(|| false);
-    let class = class.unwrap_or_default();
-    rsx! {
-        button {
-            id, disabled, aria_disabled: disabled.then_some("true"), aria_label: label, title: tip.unwrap_or(label), class: "{class}", class: if selected == Some(true) { "selected" },
-            aria_expanded: expanded.map(|s| if s { "true" } else { "false" }),
-            aria_pressed: selected.map(|s| if s { "true" } else { "false" }),
-            onclick: move |_| onactivate.call(()),
-            onkeydown: move |event| {
-                if event.is_composing() || event.modifiers().intersects(Modifiers::CONTROL | Modifiers::META | Modifiers::ALT) { return; }
-                match event.key() {
-                    Key::Named(NamedKey::Enter) => {
-                        event.prevent_default();
-                        if !event.is_auto_repeating() { onactivate.call(()); }
-                    }
-                    Key::Character(s) if s == " " => {
-                        event.prevent_default();
-                        if !event.is_auto_repeating() { space_down.set(true); }
-                    }
-                    _ => {}
-                }
-            },
-            onkeyup: move |event| {
-                if matches!(event.key(), Key::Character(s) if s == " ") && *space_down.peek() {
-                    event.prevent_default();
-                    space_down.set(false);
-                    onactivate.call(());
-                }
-            },
-            onblur: move |_| space_down.set(false),
-            if let Some(icon) = icon { {icon.draw()} }
-            if let Some(text) = glyph.or_else(|| icon.is_none().then_some(label)) {
-                span { class: "tool-caption", "{text}" }
-            }
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Field {
@@ -326,20 +230,70 @@ fn mounted_field(event: MountedEvent, field: Field, request: FocusRequest) {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 enum View {
+    #[default]
     Live,
     Split,
     Source,
 }
 
+/// Which comments a notebook starts with, and who answers them.
+#[derive(Clone, Default, PartialEq)]
+enum Comments {
+    /// None yet; the local stand-in answers.
+    #[default]
+    Empty,
+    /// Two sample threads on the sample note; the stand-in answers.
+    Sample,
+    /// The page's agent answers (see `comments::CommentAgent`).
+    Agent(comments::CommentAgent),
+}
+
+/// How a notebook opens.
+#[derive(Clone, Default, PartialEq)]
+struct NotebookOptions {
+    view: View,
+    /// Show the debug inspector from the start.
+    inspect: bool,
+    comments: Comments,
+    /// The page of the space this notebook edits: it then loads and saves
+    /// the page's comment file, and its bar has Save.
+    page: Option<page::PageSource>,
+    /// Set when another window hosts the editor (the Topics window): the
+    /// editor's bar then starts with the host's way back and ends with its
+    /// actions, and the page aligns with the host's column.
+    host: Option<HostBar>,
+}
+
+/// The host's part of an embedded editor's bar.
+#[derive(Clone, PartialEq)]
+struct HostBar {
+    back: String,
+    onback: EventHandler<()>,
+    /// Where the page is, after the back button: `house-systems.md`.
+    crumb: String,
+    actions: Vec<HostAction>,
+}
+
+#[derive(Clone, PartialEq)]
+struct HostAction {
+    label: String,
+    icon: Icon,
+    onclick: EventHandler<()>,
+}
+
 fn app() -> Element {
+    if let Some(start) = topics::Start::from_args() {
+        return rsx! { topics::Shell { start } };
+    }
+    if gallery_requested() {
+        return rsx! { ui::gallery::Gallery {} };
+    }
     if std::env::args().any(|arg| arg == "--test-window") {
         return notebook_view(
             "# Input check\n\nabcd\nefgh\nijkl\nmnop\n\n| A | B |\n| --- | --- |\n| one | two |\n| three | four |",
-            View::Live,
-            true,
-            false,
+            NotebookOptions { inspect: true, ..Default::default() },
         );
     }
     let split = std::env::args().any(|arg| arg == "--split");
@@ -356,14 +310,24 @@ fn app() -> Element {
     rsx! { personal::Desktop { split } }
 }
 
+/// The sample note's options: sample comment threads unless inspecting.
+fn sample_options(split: bool, inspect: bool) -> NotebookOptions {
+    NotebookOptions {
+        view: if split { View::Split } else { View::Live },
+        inspect,
+        comments: if inspect { Comments::Empty } else { Comments::Sample },
+        ..Default::default()
+    }
+}
+
 #[component]
 fn SampleEditor(split: bool, inspect: bool) -> Element {
-    notebook_view(SAMPLE, if split { View::Split } else { View::Live }, inspect, !inspect)
+    notebook_view(SAMPLE, sample_options(split, inspect))
 }
 
 #[cfg(test)]
 fn notebook(initial: &'static str) -> Element {
-    notebook_view(initial, View::Live, false, false)
+    notebook_view(initial, NotebookOptions::default())
 }
 
 fn sync_file_arg() -> Option<std::path::PathBuf> {
@@ -401,15 +365,17 @@ fn SyncFileEditor(path: std::path::PathBuf, split: bool, inspect: bool) -> Eleme
         Err(error) => return rsx! { p { role: "alert", "Couldn’t open the sync file. {error}" } },
     };
     use_context_provider(|| file);
-    notebook_view(SAMPLE, if split { View::Split } else { View::Live }, inspect, !inspect)
+    notebook_view(SAMPLE, sample_options(split, inspect))
 }
 
-fn notebook_view(
-    initial: &str,
-    initial_view: View,
-    inspect_at_start: bool,
-    seed_comments: bool,
-) -> Element {
+fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
+    let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, page: page_source, host } = options;
+    let embedded = host.is_some();
+    let seed_comments = start_comments == Comments::Sample;
+    let agent = match start_comments {
+        Comments::Agent(agent) => agent,
+        _ => comments::CommentAgent::mock(),
+    };
     let personal = use_signal(try_consume_context::<personal::Session>);
     let menu = use_hook(try_consume_context::<personal::Menu>);
     let sync_file = use_hook(try_consume_context::<SyncFile>);
@@ -435,7 +401,7 @@ fn notebook_view(
     let mut comments_open = use_signal(move || seed_comments && initial_view == View::Live);
     let active_comment = use_signal(move || {
         if seed_comments {
-            comments.peek().iter().find(|t| !t.resolved).map(|t| t.id)
+            comments.peek().iter().find(|t| !t.file.resolved).map(|t| t.id)
         } else {
             None
         }
@@ -525,7 +491,7 @@ fn notebook_view(
         drag: use_signal(|| None),
         pressed_box: use_signal(|| None),
         mouse_box: use_signal(|| None),
-        edit_mode: use_signal(|| projection::EditMode::Markdown),
+        edit_mode: use_signal(move || if embedded { projection::EditMode::Rich } else { projection::EditMode::Markdown }),
         cursor_source: use_signal(|| None),
         parsed: use_memo(move || projection::parse_markdown(&contents.read())),
         dom_dirty: use_signal(|| true),
@@ -551,9 +517,22 @@ fn notebook_view(
         comments_open,
         active_comment,
         draft_comment,
+        comment_agent: use_signal(move || agent),
+        comment_file: use_signal(comments::CommentFile::default),
+        comment_stream: use_signal(Default::default),
+        comment_ranges: use_memo(move || {
+            let md = contents.read();
+            comments::ranges(&note.read(), &md, &comments.read())
+        }),
+        page_state: use_signal({
+            let etag = page_source.as_ref().and_then(|p| p.etag.clone());
+            move || page::PageState { etag, saved_rev: *doc_rev.peek(), ..Default::default() }
+        }),
+        page: use_signal(move || page_source),
     };
     #[cfg(test)]
     use_context_provider(|| writing);
+    comments::use_comment_file(writing);
     let mut inspecting = use_signal(|| inspect_at_start);
     let mut trace =
         use_signal(|| inspector::Trace::new(if inspect_at_start { initial } else { "" }));
@@ -726,8 +705,9 @@ fn notebook_view(
         inspecting.set(next);
     };
     rsx! {
+        style { "{ui::CSS}" }
         style { "{CSS}" }
-        main { class: "notebook", class: if view()==View::Split { "split-view" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
+        main { class: "notebook", class: if embedded { "embedded" }, class: if view()==View::Split { "split-view" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
             onpointerdown: move |event| { writing.clear_goal(); writing.dismiss_menu_at(event.client_coordinates().x,event.client_coordinates().y); },
             onpointermove: move |e| writing.pointer_move(e),
             onpointerup: move |_| writing.end_drag(),
@@ -763,25 +743,40 @@ fn notebook_view(
             div { id: "mode-bar", class: "mode-dock",
                 nav { class: "mode-pill-bar", aria_label: "Editor tools",
                     if let Some(personal::Menu(mut open)) = menu {
-                        EditorButton { label: "Notes", id: "vault-notes", expanded: open(), onactivate: move |_| { let visible = open(); open.set(!visible); } }
+                        ui::Button { id: "vault-notes", label: "Notes", text: "Notes", expanded: open(), onclick: move |_| { let visible = open(); open.set(!visible); } }
                     }
-                    div { class: "mode", role: "group", aria_label: "Markdown view",
-                        EditorButton { label: "Rich", id: "rich-mode", tip: "Rich editing (delimiters stay hidden)", selected: is_rich, onactivate: move |_| set_edit_mode(projection::EditMode::Rich) }
-                        EditorButton { label: "Live", id: "live-mode", tip: "Keyboard-first Markdown live editing", selected: is_md_live, onactivate: move |_| set_edit_mode(projection::EditMode::Markdown) }
-                        EditorButton { label: "Split", id: "split-mode", selected: view()==View::Split, onactivate: move |_| change_view(View::Split) }
-                        EditorButton { label: "Source", id: "source-mode", selected: view()==View::Source, onactivate: move |_| change_view(View::Source) }
+                    if let Some(h) = host.as_ref() {
+                        div { class: "dock-host",
+                            ui::Button { id: "doc-back", label: h.back.clone(), text: h.back.clone(), icon: Icon::Back, variant: ui::Variant::Ghost, onclick: { let back = h.onback; move |_| back.call(()) } }
+                            span { class: "dock-crumb", "{h.crumb}" }
+                        }
+                        span { class: "dock-spacer" }
                     }
-                    EditorButton { id: "insert-table", class: "dock-icon-btn", label: "Insert table", tip: "Insert Markdown table", icon: ToolIcon::Table, onactivate: move |_| writing.insert_table(source()) }
+                    ui::Segmented { label: "Markdown view",
+                        items: vec![
+                            ui::Segment { id: "rich-mode", label: "Rich", tip: Some("Rich editing (delimiters stay hidden)"), selected: is_rich },
+                            ui::Segment { id: "live-mode", label: "Live", tip: Some("Keyboard-first Markdown live editing"), selected: is_md_live },
+                            ui::Segment { id: "split-mode", label: "Split", tip: None, selected: view() == View::Split },
+                            ui::Segment { id: "source-mode", label: "Source", tip: None, selected: view() == View::Source },
+                        ],
+                        onselect: move |i: usize| match i {
+                            0 => set_edit_mode(projection::EditMode::Rich),
+                            1 => set_edit_mode(projection::EditMode::Markdown),
+                            2 => change_view(View::Split),
+                            _ => change_view(View::Source),
+                        },
+                    }
+                    ui::Button { id: "insert-table", variant: ui::Variant::Icon, label: "Insert table", tip: "Insert Markdown table", icon: Icon::Table, onclick: move |_| writing.insert_table(source()) }
                     if newer_build() {
-                        EditorButton { id: "restart-app", label: "Restart", tip: "A newer build is ready. Restart Margin to run it",
-                            class: "restart-app", onactivate: move |_| restart::restart_app() }
+                        ui::Button { id: "restart-app", label: "Restart", tip: "A newer build is ready. Restart Margin to run it",
+                            class: "restart-app", onclick: move |_| restart::restart_app() }
                     }
                     div { class: "history-tools", role: "group", aria_label: "History",
-                        EditorButton { id: "undo", class: "dock-icon-btn", label: "Undo", tip: undo_tip, icon: ToolIcon::Undo, disabled: !note.read().can_undo(), onactivate: move |_| writing.history(source(), false) }
-                        EditorButton { id: "redo", class: "dock-icon-btn", label: "Redo", tip: redo_tip, icon: ToolIcon::Redo, disabled: !note.read().can_redo(), onactivate: move |_| writing.history(source(), true) }
+                        ui::Button { id: "undo", variant: ui::Variant::Icon, label: "Undo", tip: undo_tip, icon: Icon::Undo, disabled: !note.read().can_undo(), onclick: move |_| writing.history(source(), false) }
+                        ui::Button { id: "redo", variant: ui::Variant::Icon, label: "Redo", tip: redo_tip, icon: Icon::Redo, disabled: !note.read().can_redo(), onclick: move |_| writing.history(source(), true) }
                     }
                     {
-                        let open_comments = writing.comments.read().iter().filter(|t| !t.resolved).count();
+                        let open_comments = writing.comments.read().iter().filter(|t| !t.file.resolved).count();
                         let panel_open = (writing.comments_open)() && !source();
                         let tip = if cfg!(target_os = "macos") {
                             "Toggle comments (⌘⇧M to comment on selection)"
@@ -789,30 +784,32 @@ fn notebook_view(
                             "Toggle comments (Ctrl+Shift+M to comment on selection)"
                         };
                         rsx! {
-                            button {
-                                id: "toggle-comments",
-                                class: "dock-icon-btn dock-comments-btn",
-                                class: if panel_open { "selected" },
-                                aria_label: "Comments",
-                                title: tip,
-                                aria_pressed: if panel_open { "true" } else { "false" },
-                                onclick: move |_| {
-                                    if source() {
-                                        change_view(View::Live);
-                                        comments_open.set(true);
-                                    } else {
-                                        let next = !*comments_open.peek();
-                                        comments_open.set(next);
-                                    }
-                                },
-                                {ToolIcon::Comment.draw()}
+                            span { class: "dock-comments",
+                                ui::Button { id: "toggle-comments", variant: ui::Variant::Icon, label: "Comments", tip, icon: Icon::Comment,
+                                    selected: panel_open,
+                                    onclick: move |_| {
+                                        if source() {
+                                            change_view(View::Live);
+                                            comments_open.set(true);
+                                        } else {
+                                            let next = !*comments_open.peek();
+                                            comments_open.set(next);
+                                        }
+                                    },
+                                }
                                 if open_comments > 0 {
                                     span { class: "dock-comments-dot", aria_hidden: "true" }
                                 }
                             }
                         }
                     }
-                    EditorButton { id: "toggle-debug", class: "dock-icon-btn", label: "Debug display", tip: "Toggle debug display (F8)", icon: ToolIcon::Bug, selected: inspecting() && !source(), onactivate: move |_| toggle_debug() }
+                    ui::Button { id: "toggle-debug", variant: ui::Variant::Icon, label: "Debug display", tip: "Toggle debug display (F8)", icon: Icon::Bug, selected: inspecting() && !source(), onclick: move |_| toggle_debug() }
+                    page::PageBar { writing }
+                    if let Some(h) = host.as_ref() {
+                        for action in h.actions.iter() {
+                            ui::Button { label: action.label.clone(), text: action.label.clone(), icon: action.icon, onclick: { let go = action.onclick; move |_| go.call(()) } }
+                        }
+                    }
                 }
             }
             if inspecting() && !source() {
@@ -914,7 +911,7 @@ fn notebook_view(
                     } }
                     if !source() && hint_at.is_some() {
                         span { id: "marker-hint", "{hint}" }
-                        EditorButton { id: action_id.to_owned(), label: action, onactivate: move |_| {
+                        ui::Button { id: action_id.to_owned(), variant: ui::Variant::Link, label: action, onclick: move |_| {
                             if raw { writing.keep_literal(); } else { writing.toggle_literal(); }
                         } }
                     } else if !source() && writing.parked_selection.read().is_some() {

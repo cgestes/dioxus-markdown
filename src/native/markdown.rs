@@ -225,6 +225,9 @@ pub struct Ink {
     y: f32,
     width: f32,
     height: f32,
+    /// Letter spacing that makes the painted run exactly as wide as the
+    /// regular text beneath it (Rich mode bold and italic).
+    letter: f32,
 }
 
 impl Ink {
@@ -237,6 +240,7 @@ impl Ink {
             y,
             width,
             height,
+            letter,
             ..
         } = self;
         rsx! {
@@ -253,7 +257,11 @@ impl Ink {
                 class: if style & RULE != 0 { "rule" },
                 class: if style & PUNCTUATION != 0 { "punctuation" },
                 class: if style & DONE != 0 { "done" },
-                style: "left:{x}px; top:{y}px; width:{width}px; height:{height}px; line-height:{height}px;",
+                style: if letter != 0.0 {
+                    format!("left:{x}px; top:{y}px; width:{width}px; height:{height}px; line-height:{height}px; letter-spacing:{letter:.3}px;")
+                } else {
+                    format!("left:{x}px; top:{y}px; width:{width}px; height:{height}px; line-height:{height}px;")
+                },
                 if style == BULLET {
                     "•"
                 } else if style == QUOTE_MARK {
@@ -333,6 +341,9 @@ impl Writing {
             + node.text_input_v_centering_offset(f64::from(scale)) as f32;
         let bottom = top + l.content_box_height() * scale;
         let tokens = &proj.tokens;
+        // Rich mode sets prose in a proportional face: a bold or italic run is
+        // wider or narrower than the regular glyphs it covers.
+        let rich = *self.edit_mode.peek() == super::projection::EditMode::Rich;
         let mut result = Vec::new();
         for line in layout.lines() {
             let m = line.metrics();
@@ -388,6 +399,18 @@ impl Writing {
                     } else {
                         (last_x + right.advance() - x) / scale
                     };
+                    let fitted = rich
+                        && token.style & (STRONG | ITALIC) != 0
+                        && token.style & (HEADING | CODE | PUNCTUATION) == 0;
+                    let letter = fitted
+                        .then(|| {
+                            let weight = if token.style & STRONG != 0 { 600.0 } else { 400.0 };
+                            let natural = super::typefaces::prose_width(slice, run.font_size(), weight, token.style & ITALIC != 0)?;
+                            let chars = slice.chars().count().max(1) as f32;
+                            Some((width * scale - natural) / chars / scale)
+                        })
+                        .flatten()
+                        .unwrap_or(0.0);
                     result.push(Ink {
                         field,
                         at: token.source_start + (start - token.display.start),
@@ -397,6 +420,7 @@ impl Writing {
                         y: top_inset + (m.block_min_coord - top) / scale,
                         width,
                         height: (m.block_max_coord - m.block_min_coord) / scale,
+                        letter,
                     });
                 }
             }

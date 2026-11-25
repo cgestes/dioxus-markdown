@@ -1,4 +1,5 @@
-use super::{EditorButton, Field, ToolIcon, Writing, report};
+use super::{Field, Icon, Writing, report};
+use crate::ui::{Button, Toolbar, ToolbarLook, ToolbarSep, Variant};
 use dioxus_native::prelude::*;
 use margin_editor_core::format::{InlineSelection, Style};
 
@@ -166,23 +167,16 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
         return rsx! {};
     };
     rsx! {
-        div { id:"format-bar", class:"format-bar", role:"toolbar", aria_label:"Format selection",
-            style:"left:{x}px; top:{y}px;",
-            onpointerdown:move |e| e.prevent_default(),
-            for (i,style) in Style::ALL.into_iter().enumerate() {
-                EditorButton { key:"{i}", id:format!("format-{i}"), label:style.label(), tip:tips[i], icon:[ToolIcon::Bold,ToolIcon::Italic,ToolIcon::Strike,ToolIcon::Code,ToolIcon::Link][i], selected:active[i],
-                    onactivate:move |_| { writing.format(style); } }
+        Toolbar { id: "format-bar", class: "format-bar", label: "Format selection", look: ToolbarLook::Floating, keep_focus: true,
+            style: "left:{x}px; top:{y}px;",
+            for (i, style) in Style::ALL.into_iter().enumerate() {
+                Button { key: "{i}", id: format!("format-{i}"), variant: Variant::Icon, label: style.label(), tip: tips[i],
+                    icon: [Icon::Bold, Icon::Italic, Icon::Strike, Icon::Code, Icon::Link][i], selected: active[i],
+                    onclick: move |_| { writing.format(style); } }
             }
-            span { class: "format-bar-sep", aria_hidden: "true" }
-            EditorButton {
-                id: "format-comment".to_owned(),
-                class: "format-comment-btn",
-                label: "Add comment",
-                glyph: "Comment",
-                tip: comment_tip,
-                icon: ToolIcon::Comment,
-                onactivate: move |_| { writing.start_comment_from_selection(); }
-            }
+            ToolbarSep {}
+            Button { id: "format-comment", class: "format-comment-btn", variant: Variant::Ghost, label: "Add comment", text: "Comment",
+                tip: comment_tip, icon: Icon::Comment, onclick: move |_| { writing.start_comment_from_selection(); } }
         }
     }
 }

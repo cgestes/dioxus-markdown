@@ -154,6 +154,22 @@ pub fn encoded(value: &str) -> String {
     value.replace('|', "\\|")
 }
 
+/// A value as it can sit in one cell: on one line, pipes escaped.
+pub fn cell_value(value: &str) -> String {
+    encoded(&value.replace(['\r', '\n'], " "))
+}
+
+/// The text of the nearest heading line above byte `at`, without its hashes.
+pub fn heading_above(md: &str, at: usize) -> Option<&str> {
+    let at = md.floor_char_boundary(at.min(md.len()));
+    md[..at]
+        .lines()
+        .rev()
+        .find(|l| l.starts_with('#'))
+        .map(|l| l.trim_start_matches('#').trim())
+        .filter(|h| !h.is_empty())
+}
+
 pub fn cell_to_source(raw: &str, byte: usize) -> usize {
     let mut display = 0;
     let mut at = 0;
@@ -169,6 +185,19 @@ pub fn cell_to_source(raw: &str, byte: usize) -> usize {
 }
 
 impl Table {
+    /// A cell's text, unescaped and trimmed.
+    pub fn cell_text(&self, md: &str, row: usize, col: usize) -> Option<String> {
+        let cell = self.rows.get(row)?.cells.get(col)?;
+        Some(decoded(&md[cell.text.clone()]).trim().to_string())
+    }
+
+    /// Every row's cell texts; the header first.
+    pub fn texts(&self, md: &str) -> Vec<Vec<String>> {
+        (0..self.rows.len())
+            .map(|r| (0..self.rows[r].cells.len()).filter_map(|c| self.cell_text(md, r, c)).collect())
+            .collect()
+    }
+
     pub fn width(&self) -> usize {
         self.align.len()
     }

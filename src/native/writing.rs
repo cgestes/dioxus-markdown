@@ -85,6 +85,17 @@ pub(super) struct Writing {
     pub comments_open: Signal<bool>,
     pub active_comment: Signal<Option<usize>>,
     pub draft_comment: Signal<Option<super::comments::DraftComment>>,
+    /// Who answers comments: the page's agent, or the local stand-in.
+    pub comment_agent: Signal<super::comments::CommentAgent>,
+    /// The page's comment file in the space, when the notebook edits a page.
+    pub comment_file: Signal<super::comments::CommentFile>,
+    /// Replies still arriving, by message id; only their bubbles re-render.
+    pub comment_stream: Signal<std::collections::HashMap<String, String>>,
+    /// Where every thread is now, and the text under it.
+    pub comment_ranges: Memo<Vec<super::comments::Placed>>,
+    /// The page this notebook edits, if any, and where it stands.
+    pub page: Signal<Option<super::page::PageSource>>,
+    pub page_state: Signal<super::page::PageState>,
 }
 
 impl Writing {

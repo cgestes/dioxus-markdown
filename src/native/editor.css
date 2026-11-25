@@ -1,6 +1,4 @@
-* { box-sizing: border-box; }
 ::selection { background: var(--selected-text); }
-body { margin: 0; color: var(--ink); background: var(--page); font: 14px var(--sans); }
 .notebook { display: flex; flex-direction: column; min-height: 100vh; }
 .mode-dock {
     position: sticky; top: 0; z-index: 6; flex: 0 0 auto;
@@ -11,43 +9,30 @@ body { margin: 0; color: var(--ink); background: var(--page); font: 14px var(--s
 .inspector-strip {
     position: fixed; top: 36px; left: 0; right: 0; height: 0; z-index: 10;
 }
-nav, .mode, .history-tools, button { display: flex; align-items: center; }
-nav { gap: 6px; }
-button {
+/* The editor's own controls (ui::Variant::Bare buttons). Scoped to the
+   notebook (and the vault screens around it), with no specificity of their
+   own, so ui-* components and other windows that embed a notebook keep their
+   look. */
+:where(.notebook) nav, .history-tools, :where(.notebook, .vault-startup, .vault-menu) button { display: flex; align-items: center; }
+:where(.notebook) nav { gap: 6px; }
+:where(.notebook, .vault-startup, .vault-menu) button {
     justify-content: center; gap: 6px; height: 28px; padding: 0 8px;
-    border: 1px solid transparent; border-radius: 6px; background: transparent;
-    color: var(--muted); font: 400 12px var(--sans); cursor: pointer; user-select: none;
+    border: 1px solid transparent; border-radius: var(--radius); background: transparent;
+    color: var(--muted); font: var(--font-ui); cursor: pointer; user-select: none;
 }
-button:hover { background: var(--pale); color: var(--accent-deep); }
-button:active { background: var(--line); }
+:where(.notebook, .vault-startup, .vault-menu) button:hover { background: var(--pale); color: var(--accent-deep); }
+:where(.notebook, .vault-startup, .vault-menu) button:active { background: var(--line); }
+:where(.notebook, .vault-startup, .vault-menu) button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+:where(.notebook, .vault-startup, .vault-menu) button:disabled { color: var(--faint); opacity: .36; background: transparent; cursor: default; }
 .restart-app { color: var(--accent-deep); border-color: var(--accent-deep); }
-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-button:disabled { color: #8e9b93; opacity: .36; background: transparent; cursor: default; }
-.tool-caption, .tool-icon { pointer-events: none; }
-.tool-icon { width: 14px; height: 14px; }
-.tool-icon svg { width: 14px; height: 14px; }
-.mode { padding: 2px; gap: 1px; background: #e6eae4; border: 1px solid var(--line); border-radius: 7px; }
-.mode button { height: 22px; min-width: 40px; padding: 0 7px; font-size: 11px; border-radius: 5px; }
-.mode button.selected { background: var(--surface); border-color: #d6ded5; color: var(--accent-deep); font-weight: 600; }
 .history-tools { padding-left: 5px; border-left: 1px solid var(--line); gap: 1px; }
-.dock-icon-btn { width: 26px; height: 24px; padding: 0; border-radius: 5px; }
-.dock-icon-btn.selected { background: var(--pale); color: var(--accent-deep); border-color: #c8ddd0; }
-.rich-mode .body-editor, .rich-mode .prose-block .md-ink { font: 400 15.5px/26px var(--body); }
-.rich-mode .prose-block .md-ink.strong { font-weight: 600; letter-spacing: -0.015em; }
-.rich-mode .prose-block .md-ink.code { font-family: var(--mono); font-size: 13px; }
-.empty-line-tools {
-    position: absolute; z-index: 4; display: flex; align-items: center; gap: 2px; height: 24px;
-    padding: 0 3px; border-radius: 6px; background: var(--page); user-select: none;
-}
-.empty-line-tools .empty-tool {
-    width: 24px; height: 22px; padding: 0; border: 0; border-radius: 4px;
-    color: var(--faint); background: transparent; opacity: 0.65;
-}
-.empty-line-tools .empty-tool.empty-heading { width: auto; min-width: 24px; padding: 0 4px; font: 600 10.5px/1 var(--sans); }
-.empty-line-tools .empty-tool .tool-icon { width: 13px; height: 13px; }
-.empty-line-tools .empty-tool .tool-icon svg { width: 13px; height: 13px; }
-.empty-line-tools .empty-tool:hover, .empty-line-tools .empty-tool:focus-visible { opacity: 1; color: var(--accent-deep); background: var(--pale); }
-.empty-tool-sep { width: 1px; height: 12px; background: var(--line); margin: 0 2px; }
+.mode-dock .ui-btn.icon { width: 26px; height: 24px; border-radius: 5px; }
+.rich-mode .body-editor, .rich-mode .prose-block .md-ink { font: var(--font-prose); }
+.rich-mode .prose-block .md-ink.strong { font-weight: 600; }
+/* Rich mode: code keeps the field's face so the chip spans exactly its text. */
+.rich-mode .prose-block .md-ink.code { font: var(--font-prose); }
+/* The empty-line tools are a ui::Toolbar (inline); placed next to the caret. */
+.empty-line-tools { position: absolute; z-index: 4; }
 
 .paper, .source-layout { position: relative; width: 100%; max-width: 812px; margin: 32px auto 0; padding: 0 46px 64px; }
 .source-layout { flex: 1 1 auto; display: flex; flex-direction: column; margin-top: 24px; padding-bottom: 24px; }
@@ -58,13 +43,13 @@ button:disabled { color: #8e9b93; opacity: .36; background: transparent; cursor:
 .note-title {
     display: block; width: 100%; min-height: 44px; margin: 0; padding: 0;
     border: 0; background: transparent; color: var(--ink);
-    font: 600 34px/1.2 var(--display); letter-spacing: -0.03em; white-space: pre-wrap; overflow: hidden; resize: none;
+    font: var(--font-h1); letter-spacing: var(--track-h1); white-space: pre-wrap; overflow: hidden; resize: none;
 }
-.note-title.h2 { font-size: 24px; line-height: 1.25; letter-spacing: -0.025em; }
-.note-title.h3 { font-size: 19px; line-height: 1.3; letter-spacing: -0.02em; }
-.note-title.h4 { font-size: 16.5px; line-height: 1.35; letter-spacing: -0.015em; }
-.note-title.h5 { font-size: 15px; line-height: 1.4; letter-spacing: -0.01em; }
-.note-title.h6 { font-size: 13.5px; line-height: 1.4; letter-spacing: 0; }
+.note-title.h2 { font: var(--font-h2); letter-spacing: var(--track-h2); }
+.note-title.h3 { font: var(--font-h3); letter-spacing: var(--track-h3); }
+.note-title.h4 { font: var(--font-h4); letter-spacing: var(--track-h4); }
+.note-title.h5 { font: var(--font-h5); letter-spacing: var(--track-h5); }
+.note-title.h6 { font: var(--font-h6); letter-spacing: var(--track-h6); }
 .section-heading { margin-top: 14px; }
 .section-heading .note-title { min-height: 34px; }
 .section-heading .note-title.h1 { min-height: 42px; }
@@ -72,18 +57,18 @@ button:disabled { color: #8e9b93; opacity: .36; background: transparent; cursor:
 .section-heading .note-title.h4 { min-height: 25px; }
 .section-heading .note-title.h5 { min-height: 23px; }
 .section-heading .note-title.h6 { min-height: 21px; }
-.title-row .md-ink { color: inherit; font: 600 34px/1.2 var(--display); letter-spacing: -0.03em; }
-.title-row .note-title.h2 ~ .md-ink { font-size: 24px; line-height: 1.25; letter-spacing: -0.025em; }
-.title-row .note-title.h3 ~ .md-ink { font-size: 19px; line-height: 1.3; letter-spacing: -0.02em; }
-.title-row .note-title.h4 ~ .md-ink { font-size: 16.5px; line-height: 1.35; letter-spacing: -0.015em; }
-.title-row .note-title.h5 ~ .md-ink { font-size: 15px; line-height: 1.4; letter-spacing: -0.01em; }
-.title-row .note-title.h6 ~ .md-ink { font-size: 13.5px; line-height: 1.4; letter-spacing: 0; }
+.title-row .md-ink { color: inherit; font: var(--font-h1); letter-spacing: var(--track-h1); }
+.title-row .note-title.h2 ~ .md-ink { font: var(--font-h2); letter-spacing: var(--track-h2); }
+.title-row .note-title.h3 ~ .md-ink { font: var(--font-h3); letter-spacing: var(--track-h3); }
+.title-row .note-title.h4 ~ .md-ink { font: var(--font-h4); letter-spacing: var(--track-h4); }
+.title-row .note-title.h5 ~ .md-ink { font: var(--font-h5); letter-spacing: var(--track-h5); }
+.title-row .note-title.h6 ~ .md-ink { font: var(--font-h6); letter-spacing: var(--track-h6); }
 .block-handle-anchor {
     position: absolute; left: -34px; width: 34px; padding-right: 14px; z-index: 5;
     display: flex; align-items: center; user-select: none;
 }
 .block-handle {
-    width: 20px; height: 22px; padding: 0; border: 0; border-radius: 5px;
+    width: 20px; height: 22px; padding: 0; border: 0; border-radius: var(--radius-s);
     color: var(--muted); background: transparent; opacity: 0; cursor: grab; user-select: none;
 }
 .paper:hover .block-handle { opacity: 0.28; }
@@ -104,40 +89,12 @@ button:disabled { color: #8e9b93; opacity: .36; background: transparent; cursor:
     position: absolute; left: -4px; top: -2.75px; width: 8px; height: 8px;
     border-radius: 50%; background: var(--accent);
 }
-.block-menu {
-    position: absolute; left: 0; top: 26px; z-index: 12; width: 132px;
-    display: flex; flex-direction: column; gap: 1px; padding: 4px;
-    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px;
-    box-shadow: 0 6px 20px #18362a24;
-}
-.block-menu button {
-    justify-content: flex-start; gap: 8px; height: 26px; padding: 0 8px;
-    border: 0; border-radius: 5px; font: 400 12px var(--sans); color: var(--ink);
-}
-.block-menu button:hover { background: var(--wash); color: var(--accent-deep); }
-.block-menu button.remove:hover { background: var(--alert-wash); color: var(--alert); }
-.bm-glyph { width: 12px; text-align: center; color: var(--muted); font: 600 11px var(--mono); pointer-events: none; }
-.slash-menu {
-    position: fixed; z-index: 14; width: 216px; max-height: 280px; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 1px; padding: 4px;
-    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px;
-    box-shadow: 0 8px 26px #18362a26;
-}
-.slash-item {
-    justify-content: flex-start; gap: 8px; width: 100%; height: 28px; padding: 0 8px;
-    border: 0; border-radius: 6px; background: transparent; color: var(--ink);
-    font: 400 12.5px var(--sans);
-}
-.slash-item.selected, .slash-item:hover { background: var(--pale); color: var(--accent-deep); }
-.slash-badge {
-    width: 20px; display: flex; align-items: center; justify-content: center;
-    color: var(--muted); font: 600 10.5px var(--sans); flex: 0 0 20px;
-}
-.slash-title { flex: 1 1 auto; text-align: left; }
-.slash-hint { color: var(--faint); font: 400 10.5px var(--mono); }
+/* Menus are ui::Menu popovers; these only place them. */
+.block-menu { position: absolute; left: 0; top: 26px; z-index: 12; width: 172px; }
+.slash-menu { position: fixed; z-index: 14; width: 236px; max-height: 320px; overflow-y: auto; }
 .note-title:focus, .blank-editor:focus, textarea.body-editor:focus { outline: 0; }
-.blank-editor { display: block; width: 100%; height: 22px; padding: 0; margin: 0; border: 0; background: transparent; font: 13.5px var(--mono); }
-.body-editor, .prose-block .md-ink { color: var(--ink); font: 400 14px/25px var(--mono); }
+.blank-editor { display: block; width: 100%; height: 22px; padding: 0; margin: 0; border: 0; background: transparent; font: var(--font-source); }
+.body-editor, .prose-block .md-ink { color: var(--ink); font: var(--font-prose-mono); }
 .cell-field .md-ink { color: inherit; font: inherit; }
 textarea.body-editor {
     display: block; width: 100%; min-height: 235px; padding: 0; margin: 0;
@@ -147,8 +104,8 @@ textarea.body-editor {
 .marker-slot { position: absolute; pointer-events: auto; cursor: pointer; user-select: none; }
 .md-ink, .marker-slot { background: var(--page); }
 .md-ink { white-space: pre; }
-.md-ink.punctuation { color: rgba(86, 101, 94, 0.34); }
-.md-ink.strong, .prose-block .md-ink.strong { font-weight: 600; color: #0b1612; }
+.md-ink.punctuation { color: var(--punct); }
+.md-ink.strong, .prose-block .md-ink.strong { font-weight: 600; color: var(--ink-strong); }
 .cell-field .md-ink.strong { letter-spacing: -0.028em; }
 .md-ink.emphasis { font-style: italic; }
 .md-ink.code { font-family: var(--mono); background: var(--pale); color: var(--accent-deep); border-radius: 3px; }
@@ -168,20 +125,11 @@ textarea.body-editor {
     position: absolute; z-index: 3; width: 1.5px;
     background: var(--accent-deep); pointer-events: none; user-select: none;
 }
-.ledger-head .caret-ink { background: var(--ledger-header-ink); }
+.ledger-head .caret-ink { background: var(--accent-deep); }
 .marker-slot, .grid-edge { display: flex; align-items: center; justify-content: center; }
-.marker-face { flex: 0 0 15px; width: 15px; height: 15px; border: 1.25px solid #7d9387; border-radius: 4px; background: var(--page); }
-.marker-face.hovered, .marker-slot:hover .marker-face { border-color: var(--accent); background: var(--wash); }
-.marker-face.checked { background: var(--accent); border-color: var(--accent); }
-.marker-face.checked.hovered, .marker-slot:hover .marker-face.checked { background: var(--accent-deep); border-color: var(--accent-deep); }
-.marker-tick { position: absolute; width: 5px; height: 9px; border: solid white; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); margin-top: -1px; }
-.marker-face.selected { outline: 2px solid #7ab3fa; }
 
 /* Split uses its own reading grid. Live shares its surface and controls with the browser. */
 .read-table { position: relative; margin-right: -30px; padding-right: 30px; padding-bottom: 27px; }
-.grid-scroll { overflow-x: auto; }
-.grid-row { display: flex; width: 100%; }
-.ledger .grid-scroll { border-radius: 6px; }
 .cell-slot {
     position: relative; display: flex; align-items: stretch;
     flex: 1 1 0; min-width: 88px; height: var(--ledger-row); padding: 0 var(--ledger-pad);
@@ -206,12 +154,9 @@ textarea.body-editor {
 .grid-edge { position: absolute; pointer-events: none; }
 .grid-edge.col { right: 0; top: 0; bottom: 27px; width: 30px; }
 .grid-edge.row { left: 0; right: 30px; bottom: 0; height: 27px; }
-.ledger .grid-edge.col { width: var(--ledger-rail); bottom: var(--ledger-foot); }
-.ledger .grid-edge.row { right: var(--ledger-rail); height: var(--ledger-foot); }
-.read-table .grid-edge button {
-    height: 22px; width: 23px; padding: 0; border: 1px solid var(--line-strong); border-radius: 6px;
-    background: var(--wash); color: var(--accent-deep); font: 16px var(--sans);
-}
+.ledger .grid-edge.col { width: var(--ledger-rail); bottom: 0; }
+.ledger .grid-edge.row { right: var(--ledger-rail); bottom: calc(0px - var(--ledger-foot)); height: var(--ledger-foot); }
+.read-table .grid-edge .ui-btn.icon { width: 23px; height: 22px; border: 1px solid var(--line-strong); background: var(--wash); color: var(--accent-deep); }
 .grid-edge button, .ledger .ledger-tools, .ledger .ledger-tools button,
 .ledger .ledger-col-strip, .ledger .ledger-row-strip, .ledger .ledger-axis-btn { opacity: 0; pointer-events: none; }
 .grid-edge button { pointer-events: none; }
@@ -248,29 +193,29 @@ textarea.body-editor {
 .ledger.engaged .ledger-tools button, .ledger:hover .ledger-tools button, .ledger .ledger-tools button:focus {
     opacity: 1; pointer-events: auto;
 }
-.ledger .table-menu { display: flex; flex-direction: column; width: 320px; max-width: calc(100% - var(--ledger-rail) - 12px); max-height: 75vh; overflow-y: auto; }
-.ledger .table-menu.scope-actions { width: max-content; }
-.ledger .ledger-menu:focus { outline: 0; }
 .ledger .cell-slot.is-editing { outline: 0; }
 .range-outline, .cell-outline { position: absolute; inset: 0 -1px -1px 0; pointer-events: none; border-style: solid; border-color: var(--ledger-ring); }
 .cell-outline { border-width: 2px; border-color: var(--cell-ring); }
 .cell-slot:last-child .range-outline, .cell-slot:last-child .cell-outline { right: 0; }
-.format-bar { position: fixed; z-index: 9; display: flex; align-items: center; gap: 2px; width: auto; min-width: 190px; max-width: calc(100vw - 16px); height: 39px; padding: 3px 5px; background: var(--toolbar); border: 1px solid var(--toolbar-edge); border-radius: 10px; box-shadow: 0 4px 14px #163d3033; }
-.format-bar button { width: 34px; height: 30px; padding: 0; color: var(--toolbar-ink); border-radius: 6px; }
-.format-bar button:hover, .format-bar button:focus-visible, .format-bar button.selected { color: white; background: var(--toolbar-hover); }
+/* The format bar is a ui::Toolbar (floating); placed over the selection. */
+.format-bar { position: fixed; z-index: 9; width: auto; min-width: 190px; max-width: calc(100vw - 16px); }
 
 .statusbar {
     display: flex; align-items: center; gap: 8px; min-height: 32px; margin-top: auto;
-    padding: 3px 20px; border-top: 1px solid var(--line); color: var(--muted); font: 11px var(--sans);
+    padding: 3px 20px; border-top: 1px solid var(--line); color: var(--muted); font: var(--font-hint);
 }
 .status-sep { width: 1px; height: 11px; background: var(--line); }
-.status-words { color: var(--muted); font: 400 11px var(--sans); }
-.status-right { margin-left: auto; display: flex; align-items: center; gap: 8px; font: 400 10.5px var(--mono); color: var(--muted); }
-.statusbar > button { height: 24px; padding: 0 6px; color: var(--accent); font: 600 11px var(--sans); }
+.status-words { color: var(--muted); }
+.status-right { margin-left: auto; display: flex; align-items: center; gap: 8px; font: var(--font-mono-ui); color: var(--muted); }
 #marker-hint, .parked-hint { padding-left: 8px; border-left: 1px solid var(--line); }
-.source-layout textarea { flex: 1 1 auto; width: 100%; height: calc(100vh - 128px); min-height: 260px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 14px/23px var(--mono); }
+.source-layout textarea { flex: 1 1 auto; width: 100%; height: calc(100vh - 128px); min-height: 260px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: var(--font-prose-mono); }
 .source-layout textarea:focus { outline: 1px solid var(--accent); }
-.error { margin: 8px 28px; color: var(--alert); font: 13px var(--sans); }
+.error { margin: 8px 28px; color: var(--alert); font: var(--font-ui); }
+/* The page a notebook edits: its path, state and Save, at the end of the dock. */
+.page-bar { display: flex; align-items: center; gap: var(--space-2); margin-left: var(--space-2); padding-left: var(--space-2); border-left: 1px solid var(--line); }
+.page-path { color: var(--muted); font: var(--font-mono-ui); }
+.page-note { color: var(--faint); font: var(--font-hint); }
+.page-bar .ui-btn { height: 24px; }
 
 @media (max-width: 650px) {
     .paper, .source-layout { margin-top: 32px; padding-left: 42px; padding-right: 28px; }
@@ -279,8 +224,8 @@ textarea.body-editor {
 @media (max-width: 485px) {
     .mode-dock { padding: 4px 6px; }
     .mode-pill-bar { gap: 3px; }
-    .mode button { min-width: 34px; padding: 0 5px; font-size: 11px; }
-    .dock-icon-btn { width: 24px; }
+    .mode-dock .ui-segment { min-width: 34px; padding: 0 5px; }
+    .mode-dock .ui-btn.icon { width: 24px; }
     .note-title, .title-row .md-ink { min-height: 38px; font-size: 28px; }
     .note-title.h2, .title-row .note-title.h2 ~ .md-ink { font-size: 21px; }
 }
@@ -294,3 +239,15 @@ textarea.body-editor {
 .vault-startup p { color: var(--muted); }
 .vault-actions { display: flex; gap: 8px; }
 .vault-actions button { border-color: var(--line-strong); }
+
+/* Hosted in another window (Topics): the dock is the host's pane bar, and the
+   page lines up with the host's column instead of centering itself. The block
+   handles sit in the column's margin. */
+.notebook.embedded { min-height: 0; }
+.notebook.embedded .mode-pill-bar { flex: 1 1 auto; min-width: 0; }
+.notebook.embedded .page-path { display: none; }
+.notebook.embedded .paper, .notebook.embedded .source-layout { max-width: 760px; margin: var(--space-5) 0 0; padding: 0 0 64px; }
+.notebook.embedded.split-view { max-width: none; padding: 0; }
+.notebook.embedded .block-handle-anchor { left: -26px; width: 26px; padding-right: 6px; }
+.notebook.embedded .block-drop-line { left: 0; right: 0; }
+.notebook.embedded .statusbar { padding-left: 0; padding-right: 0; }

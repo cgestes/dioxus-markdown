@@ -2366,19 +2366,19 @@ fn anchored_comments_create_reply_apply_undo_and_resolve() {
     });
     render(&mut doc);
     // Apply seeded thread 1 proposal (inside table cell) even after the prefix shift!
-    click(&mut doc, "comment-apply-1-1001");
+    click(&mut doc, "comment-apply-1-1");
     assert!(
         markdown(&doc).contains("| North lock | Water through the gate (XY stereo, 80 Hz HPF) | 45 s |"),
         "applying cell proposal after doc edit above must hit exact cell: {}",
         markdown(&doc)
     );
     assert!(
-        doc.inner.borrow().get_element_by_id("comment-undo-1-1001").is_some(),
+        doc.inner.borrow().get_element_by_id("comment-undo-1-1").is_some(),
         "applied proposal must stay visible with Undo button"
     );
 
     // Undo the applied proposal — restores original table cell cleanly.
-    click(&mut doc, "comment-undo-1-1001");
+    click(&mut doc, "comment-undo-1-1");
     assert!(
         markdown(&doc).contains("| North lock | Water through the gate | 45 s |"),
         "undoing proposal must restore original text: {}",
@@ -2417,7 +2417,7 @@ fn anchored_comments_create_reply_apply_undo_and_resolve() {
     assert!(doc.inner.borrow().get_element_by_id("comment-hl-3").is_some());
 
     // Apply the AI proposal from thread 3.
-    click(&mut doc, "comment-apply-3-1003");
+    click(&mut doc, "comment-apply-3-1");
     assert!(
         markdown(&doc).contains("Rain cover sealed"),
         "new comment AI proposal must update Markdown: {}",
@@ -2437,6 +2437,7 @@ fn anchored_comments_create_reply_apply_undo_and_resolve() {
             .iter()
             .find(|t| t.id == 3)
             .unwrap()
+            .file
             .messages
             .len()
     });
@@ -2455,6 +2456,79 @@ fn anchored_comments_create_reply_apply_undo_and_resolve() {
     assert!(doc.inner.borrow().get_element_by_id("comments-pane").is_none());
     click(&mut doc, "toggle-comments");
     assert!(doc.inner.borrow().get_element_by_id("comments-pane").is_some());
+}
+
+#[test]
+fn comment_proposals_go_stale_instead_of_overwriting_edited_text() {
+    let mut doc = editor();
+    open_markdown(&mut doc, super::SAMPLE, 0);
+    doc.vdom.in_scope(ScopeId::APP, || {
+        let mut w = consume_context::<Writing>();
+        let seeded = comments::seed_sample_comments(&w.note.peek());
+        w.comments.set(seeded);
+        w.active_comment.set(Some(1));
+        w.comments_open.set(true);
+    });
+    render(&mut doc);
+    // Someone rewrites the commented cell after the suggestion was made.
+    let at = markdown(&doc).find("Water through the gate").unwrap();
+    doc.vdom.in_scope(ScopeId::APP, || {
+        let mut w = consume_context::<Writing>();
+        w.note.write().replace(at..at + "Water".len(), "Rain").unwrap();
+    });
+    render(&mut doc);
+    assert!(
+        doc.inner.borrow().get_element_by_id("comment-apply-1-1").is_none(),
+        "a proposal made for other text cannot be applied"
+    );
+    let md = markdown(&doc);
+    assert!(md.contains("| North lock | Rain through the gate | 45 s |"), "edited text kept: {md}");
+    assert!(
+        doc.inner.borrow().get_element_by_id("comment-ask-again-1-1").is_some(),
+        "a stale proposal offers to ask again"
+    );
+}
+
+#[test]
+fn comment_files_round_trip_and_reattach_after_outside_edits() {
+    let mut doc = editor();
+    open_markdown(&mut doc, super::SAMPLE, 0);
+    let saved = doc.vdom.in_scope(ScopeId::APP, || {
+        let mut w = consume_context::<Writing>();
+        let mut seeded = comments::seed_sample_comments(&w.note.peek());
+        for (i, t) in seeded.iter_mut().enumerate() {
+            t.file.id = format!("t{i}");
+            for (j, m) in t.file.messages.iter_mut().enumerate() {
+                m.id = format!("m{i}{j}");
+            }
+        }
+        seeded[1].file.resolved = true;
+        w.comments.set(seeded);
+        w.comment_file_now("field-notes.md")
+    });
+    assert_eq!(saved.threads.len(), 2);
+    assert_eq!(saved.threads[0].anchor.exact, "Water through the gate");
+    // The page changed elsewhere: the agent added a line above both quotes.
+    let edited = format!("Intro added by the agent.\n\n{}", super::SAMPLE);
+    let mut other = editor();
+    open_markdown(&mut other, &edited, 0);
+    other.vdom.in_scope(ScopeId::APP, || {
+        let w = consume_context::<Writing>();
+        let json = saved.to_json();
+        w.load_comment_file(margin_editor_core::comments::Sidecar::parse(&json).unwrap());
+        let threads = w.comments.peek();
+        let md = w.note.peek().markdown();
+        assert_eq!(threads.len(), 2);
+        for t in threads.iter() {
+            let cursors = t.cursors.as_ref().expect("re-attached");
+            let range = w.note.peek().resolve_anchor_in(&md, cursors).unwrap();
+            assert_eq!(md[range].to_string(), t.file.anchor.exact);
+        }
+        assert_eq!(threads[0].file.id, "t0");
+        assert!(threads[1].file.resolved);
+        assert_eq!(threads[0].file.messages[1].proposal.as_ref().unwrap().new, "Water through the gate (XY stereo, 80 Hz HPF)");
+        assert!(threads[0].seen.is_some(), "the agent already answered on this thread");
+    });
 }
 
 #[path = "tests/live_workflows.rs"]
@@ -2483,8 +2557,8 @@ fn personal_editor_persists_input_and_keeps_diagnostics_on_device() -> anyhow::R
         serde_json::from_slice(&vault.private_value(&starter)?.unwrap())?;
     assert_eq!(threads.len(), 2);
     for thread in threads {
-        let range = field_notes.resolve_anchor(thread.anchor.as_ref().unwrap()).unwrap();
-        assert_eq!(&super::SAMPLE[range], thread.quote);
+        let range = field_notes.resolve_anchor(thread.cursors.as_ref().unwrap()).unwrap();
+        assert_eq!(&super::SAMPLE[range], thread.file.anchor.exact);
     }
     let room = vault.new_note("# Diary\n\nHello", true)?;
     let (note, seq) = vault.load(&room)?;

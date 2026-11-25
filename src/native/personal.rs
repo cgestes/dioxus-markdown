@@ -269,7 +269,9 @@ fn PrivateEditor(room: String, split: bool) -> Element {
         let threads = vault
             .private_value(&room)
             .and_then(|bytes| match bytes {
-                Some(b) => Ok(serde_json::from_slice(&b)?),
+                // Threads saved in an older shape are dropped rather than
+                // keeping the note from opening.
+                Some(b) => Ok(serde_json::from_slice(&b).unwrap_or_default()),
                 None => Ok(Vec::new()),
             })
             .map_err(|e| e.to_string())?;
@@ -286,13 +288,17 @@ fn PrivateEditor(room: String, split: bool) -> Element {
         Err(error) => return rsx! {p{role:"alert","Could not open private note. {error}"}},
     };
     let show_discussion = session.room == session.vault.field_notes_room()
-        && session.threads.iter().any(|thread| !thread.resolved);
+        && session.threads.iter().any(|thread| !thread.file.resolved);
     use_context_provider(|| session);
+    // The vault's own threads come from the session; `Sample` only opens the
+    // discussion pane on them.
     notebook_view(
         "",
-        if split { View::Split } else { View::Live },
-        false,
-        show_discussion,
+        super::NotebookOptions {
+            view: if split { View::Split } else { View::Live },
+            comments: if show_discussion { super::Comments::Sample } else { super::Comments::Empty },
+            ..Default::default()
+        },
     )
 }
 

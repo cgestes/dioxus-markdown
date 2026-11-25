@@ -1,0 +1,143 @@
+/* Topics window: the design in mockup/topics.html, for Blitz. Layout only:
+   components (buttons, cards, rows, tiles, messages, Markdown, checkboxes)
+   bring their styles from ui.css, colours from theme.css. */
+
+.topics {
+    display: flex; flex-direction: row; width: 100%; height: 100vh; overflow: hidden;
+    font: 400 var(--text-body)/1.45 var(--sans); color: var(--ink); background: var(--page);
+}
+.topics * { box-sizing: border-box; }
+.topics .tag { font: 400 var(--text-label) var(--mono); color: var(--faint); }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.topics .side {
+    display: flex; flex-direction: column; gap: 2px; flex: 0 0 220px; width: 220px; height: 100%;
+    padding: var(--space-4) 10px var(--space-3); overflow-y: auto; background: var(--rail); border-right: 1px solid var(--line);
+}
+.topics .search {
+    display: flex; align-items: center; gap: var(--space-2); width: 100%; height: 32px; margin: 0 0 var(--space-2); padding: 0 10px;
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--faint); line-height: 22px;
+}
+.topics .search input { height: 22px; }
+.topics .lbl {
+    margin: 14px var(--space-2) 4px; color: var(--faint);
+    font: 600 var(--text-label) var(--sans); letter-spacing: .08em; text-transform: uppercase;
+}
+.topics .sfoot {
+    margin-top: auto; padding: 10px var(--space-2) 2px;
+    border-top: 1px solid var(--line); color: var(--faint); font: 400 var(--text-label)/1.6 var(--mono);
+}
+.topics .sfoot strong { color: var(--ink); font-weight: 600; }
+.topics .sdot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 4px; background: var(--ok); }
+.topics .sdot.bad { background: var(--alert); }
+.topics .sfoot .refresh { margin-top: 4px; }
+
+/* ── Page ────────────────────────────────────────────────────────────── */
+.topics .main { flex: 1 1 auto; min-width: 0; height: 100%; padding: var(--space-4) 26px 32px; overflow-y: auto; }
+.topics .main > .ui-banner { margin-bottom: var(--space-3); }
+.topics .crumb { min-height: 16px; margin-bottom: 4px; color: var(--faint); font-size: var(--text-small); }
+.topics .head { display: flex; align-items: center; gap: 14px; }
+.topics .head h1 { margin: 0; color: var(--ink); font: 400 var(--text-display)/1.1 var(--display); }
+.topics .head .meta { margin-top: 3px; color: var(--faint); font-size: 12px; }
+.topics .head .grow { flex: 1 1 auto; min-width: 0; }
+.topics .tabs { margin: var(--space-4) 0; }
+.topics .empty {
+    padding: 28px var(--space-4); border: 1px dashed var(--line-strong); border-radius: var(--radius-l);
+    color: var(--faint); text-align: center;
+}
+.topics .empty.small { padding: var(--space-3); }
+.topics .loading { padding: var(--space-5) 0; color: var(--faint); }
+.topics .grp {
+    margin: var(--space-4) 0 6px; color: var(--faint);
+    font: 600 var(--text-label) var(--sans); letter-spacing: .08em; text-transform: uppercase;
+}
+
+/* ── Overview ────────────────────────────────────────────────────────── */
+.topics .ov { display: flex; flex-direction: row; align-items: flex-start; gap: 14px; }
+.topics .ov.spaced { margin-top: var(--space-4); }
+.topics .ov-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.topics .ov-col.l { flex: 1.25 1 0; }
+.topics .ov-col.r { flex: 1 1 0; }
+.topics .brief p { margin: 0; color: var(--ink); font: 400 var(--text-title)/1.32 var(--display); }
+.topics .brief .by { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--faint); font-size: var(--text-small); }
+.topics .brief .by .i { width: 13px; height: 13px; }
+.topics .facts { display: flex; flex-direction: column; gap: 6px; font: 400 12px var(--mono); }
+.topics .facts div { display: flex; gap: 10px; }
+.topics .facts span { flex: 0 0 84px; color: var(--faint); }
+
+/* ── Discussions ─────────────────────────────────────────────────────── */
+.topics .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--space-3); }
+.topics .turns {
+    display: flex; flex-direction: column; gap: 6px; margin: var(--space-2) 0 2px; padding: var(--space-2) var(--space-3);
+    border-left: 2px solid var(--line); font-size: 12.5px; font-weight: 400;
+}
+.topics .turns b { margin-right: 4px; font-weight: 600; }
+
+/* ── Docs, procedures, lists, code ───────────────────────────────────── */
+.topics .grid3 { display: flex; flex-wrap: wrap; gap: 10px; }
+.topics .doc {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    flex: 0 0 auto; width: calc(33.333% - 7px); padding: var(--space-3);
+}
+.topics .doc .nm { font-weight: 600; overflow-wrap: anywhere; }
+.topics .doc .m { color: var(--faint); font: 400 var(--text-mono) var(--mono); }
+.topics .two { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
+.topics .two > .ui-card { flex: 0 0 auto; width: calc(50% - 7px); }
+.topics .proc h4 { margin: 0 0 2px; font: 400 22px/1.15 var(--display); }
+.topics .proc .m { margin-bottom: 10px; color: var(--faint); font: 400 var(--text-mono) var(--mono); }
+.topics .proc .ui-btn.link { margin-top: 6px; }
+.topics pre.code {
+    margin: 0; padding: var(--space-3) 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--wash); color: var(--ink); font: 400 12px/1.55 var(--mono); white-space: pre;
+}
+
+/* ── Inbox ───────────────────────────────────────────────────────────── */
+.topics .stack { display: flex; flex-direction: column; gap: 14px; }
+.topics .stack .ui-row-title { font-size: 15px; }
+.topics .sug { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); }
+.topics .filed { margin-top: var(--space-2); color: var(--accent); font-size: 12px; }
+
+/* ── Page editor and transcripts ─────────────────────────────────────── */
+.topics .dock-note { color: var(--faint); font: var(--font-mono-ui); }
+.topics .editor-host { min-height: 400px; background: var(--page); }
+.topics .editor-host .notebook { min-height: 0; }
+.topics .editor-host .comments-pane { top: 0; max-height: calc(100vh - 120px); }
+.topics .transcript { display: flex; flex-direction: column; gap: 14px; max-width: 760px; padding-top: 14px; }
+
+/* ── Chat ────────────────────────────────────────────────────────────── */
+.topics .chat {
+    display: flex; flex-direction: column; flex: 0 0 300px; width: 300px; height: 100%; min-width: 0;
+    background: var(--surface); border-left: 1px solid var(--line);
+}
+.topics .chead { flex: 0 0 auto; padding: var(--space-4) var(--space-4) var(--space-3); border-bottom: 1px solid var(--line); }
+.topics .chead .t { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.topics .chead .s { margin-top: 3px; color: var(--faint); font: 400 var(--text-label) var(--mono); }
+.topics .live { display: flex; align-items: center; gap: 5px; margin-left: auto; color: var(--faint); font: 400 var(--text-label) var(--mono); }
+.topics .live b { width: 6px; height: 6px; border-radius: 3px; background: var(--line-strong); }
+.topics .live.on b { background: var(--ok); }
+.topics .msgs { display: flex; flex-direction: column; gap: var(--space-3); flex: 1 1 auto; min-height: 0; padding: 14px var(--space-4); overflow-y: auto; }
+.topics .ctx {
+    display: flex; align-items: center; gap: 7px; padding: 7px 10px;
+    border: 1px dashed var(--line-strong); border-radius: var(--radius); color: var(--muted); font-size: var(--text-small);
+}
+.topics .ctx .i { width: 13px; height: 13px; color: var(--accent); }
+.topics .approval { display: flex; flex-direction: column; gap: var(--space-2); }
+.topics .row-btns { display: flex; gap: var(--space-2); }
+.topics .qa { display: flex; flex-wrap: wrap; flex: 0 0 auto; gap: 6px; padding: 0 var(--space-4) 10px; }
+.topics .comp { flex: 0 0 auto; margin: 0 var(--space-3) var(--space-3); }
+.topics .pair {
+    display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-3); padding: var(--space-3);
+    border: 1px solid var(--line); border-radius: var(--radius-l); background: var(--wash); font-size: 12.5px;
+}
+.topics .pair p { margin: 0; color: var(--muted); }
+.topics .pair-field {
+    display: flex; height: 30px; padding: 0 9px; border: 1px solid var(--line-strong); border-radius: var(--radius);
+    background: var(--surface); font: 400 var(--text-body)/30px var(--mono);
+}
+
+/* ── Narrow windows ──────────────────────────────────────────────────── */
+@media (max-width: 1080px) {
+    .topics .ov { flex-direction: column; align-items: stretch; }
+    .topics .two > .ui-card { width: 100%; }
+    .topics .doc { width: calc(50% - 5px); }
+}

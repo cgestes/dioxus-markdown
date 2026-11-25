@@ -1,28 +1,133 @@
 /* The desktop window and the standalone notebook use the same paper and inks. */
 :root {
   --page: #fcfbf8;
-  --rail: #f1f3ee;
+  --rail: #f3f2ef;
   --surface: #ffffff;
-  --ink: #222f2b;
-  --muted: #56655e;
-  --faint: #66756c;
-  --line: #d9e0d8;
-  --line-strong: #bccbc1;
-  --accent: #246253;
-  --accent-deep: #194b40;
-  --pale: #e1eee6;
-  --wash: #f0f6f1;
-  --toolbar: #213d34;
-  --toolbar-edge: #355348;
-  --toolbar-ink: #eff5ed;
-  --toolbar-hover: #476657;
-  --selected-text: rgba(105, 172, 145, .32);
+  --ink: #22211f;
+  --muted: #5c5953;
+  --faint: #75716a;
+  --line: #e3e0da;
+  --line-strong: #cac6be;
+  /* Accent ramp. One hue drives buttons, tabs, links, table headers,
+     selection and the dark toolbar. Alternatives that keep AA contrast for
+     white text (accent / deep / pale / wash / soft / ring / toolbar):
+       Ocean  #1f6feb #1550b5 #dde9fd #f0f5ff #c7dafb #8db4f6 #142640
+       Lagoon #0b7f95 #075e6e #d6f1f5 #edf8fa #bfe5ec #6fc3d3 #0c2a31
+       Jade   #0a7f55 #066043 #d9f5e8 #effaf4 #bfe9d4 #6fd0a5 #0f2e24 */
+  --accent: #5b5bd6;
+  --accent-deep: #4342ad;
+  --pale: #e7e7fb;
+  --wash: #f4f4fd;
+  --accent-soft: #d3d3f7;
+  --accent-ring: #9e9df0;
+  --accent-a08: rgba(91, 91, 214, .08);
+  --accent-a28: rgba(91, 91, 214, .28);
+  --toolbar: #25244f;
+  --toolbar-edge: #3a3970;
+  --toolbar-ink: #f1f1fd;
+  --toolbar-hover: #4a4990;
+  --selected-text: rgba(91, 91, 214, .22);
+  --ink-strong: #0f0e0c;
+  --punct: rgba(92, 89, 83, .34);
+  --shadow-pop: 0 6px 20px rgba(22, 21, 44, .14);
+  --shadow-menu: 0 8px 26px rgba(22, 21, 44, .15);
+  --shadow-bar: 0 4px 14px rgba(22, 21, 44, .2);
+  --shadow-side: -8px 0 24px rgba(22, 21, 44, .12);
   --alert: #944a34;
   --alert-wash: #f9eee8;
   --sans: "Geist", -apple-system, system-ui, sans-serif;
   --display: "Geist", -apple-system, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
   --body: "Geist", -apple-system, system-ui, sans-serif;
+  --on-accent: #ffffff;
+
+  /* Status */
+  --ok: #3f9a6e;
+  --info: #2c6a91;
+  --info-wash: #e2edf5;
+  --warn: #c97a16;
+  --warn-ink: #5f4c17;
+  --warn-wash: #f8f2e1;
+  --warn-line: #e3d3a8;
+  --alert-line: #e3c4b8;
+
+  /* Where a conversation comes from */
+  --telegram: var(--info);
+  --telegram-wash: var(--info-wash);
+  --slack: #6d4479;
+  --slack-wash: #eee6f0;
+  --chat: var(--accent);
+  --chat-wash: var(--pale);
+
+  /* Tile hues: ink on wash */
+  --hue-slate: #2f5d75;
+  --hue-slate-wash: #e3ebf0;
+  --hue-rose: #9a4a42;
+  --hue-rose-wash: #f5e5e3;
+  --hue-clay: #8a5532;
+  --hue-clay-wash: #f3e7dc;
+  --hue-ochre: #7a6220;
+  --hue-ochre-wash: #f2ecd6;
+  --hue-plum: #6a4a82;
+  --hue-plum-wash: #ece5f1;
+  --hue-pine: var(--accent);
+  --hue-pine-wash: var(--pale);
+
+  /* Shape and space */
+  --radius-s: 4px;
+  --radius: 7px;
+  --radius-l: 10px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  /* Type scale */
+  --text-display: 34px;
+  --text-title: 20px;
+  --text-heading: 15px;
+  --text-control: 12.5px;
+  --text-body: 13px;
+  --text-small: 11.5px;
+  --text-label: 10.5px;
+  --text-mono: 11px;
+
+  /* Headings: one scale for the editor's fields and every read-only page
+     (`.ui-md`), so a page reads the same edited and rendered. */
+  --font-h1: 600 34px/1.2 var(--display);
+  --font-h2: 600 24px/1.25 var(--display);
+  --font-h3: 600 19px/1.3 var(--display);
+  --font-h4: 600 16.5px/1.35 var(--display);
+  --font-h5: 600 15px/1.4 var(--display);
+  --font-h6: 600 13.5px/1.4 var(--display);
+  --track-h1: -0.03em;
+  --track-h2: -0.025em;
+  --track-h3: -0.02em;
+  --track-h4: -0.015em;
+  --track-h5: -0.01em;
+  --track-h6: 0;
+
+  /* Prose: Rich and read-only pages; Live keeps Markdown in mono. */
+  --font-prose: 400 15.5px/26px var(--body);
+  --font-prose-mono: 400 14px/25px var(--mono);
+  --font-source: 400 13.5px/22px var(--mono);
+  --text-code: 13px;
+
+  /* Interface roles */
+  --font-ui: 400 var(--text-body) var(--sans);
+  --font-control: 600 var(--text-control) var(--sans);
+  --font-hint: 400 var(--text-small) var(--sans);
+  --font-label: 600 var(--text-label) var(--sans);
+  --font-mono-ui: 400 var(--text-mono) var(--mono);
+  --track-label: .08em;
+
+  /* Tables: a light header, accent only for focus and selection. */
+  --font-table: 400 13.5px/20px var(--sans);
+  --font-table-head: 600 var(--text-small)/18px var(--sans);
+  --font-table-label: 500 13.5px/20px var(--sans);
+  --font-table-number: 400 12.5px/20px var(--mono);
 }
 
 .brand {
@@ -53,5 +158,5 @@
   background: #f7f6de;
   transform: skewY(-13deg);
 }
-.brandmark i:first-child { top: 9px; left: 6px; width: 2px; background: #a4cabb; }
-.brandmark i:nth-child(2) { top: 7.5px; left: 10px; width: 2px; background: #d1e3cf; }
+.brandmark i:first-child { top: 9px; left: 6px; width: 2px; background: var(--accent-ring); }
+.brandmark i:nth-child(2) { top: 7.5px; left: 10px; width: 2px; background: var(--accent-soft); }

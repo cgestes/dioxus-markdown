@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Margin Topics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; padding: 12px; background: var(--background, #fff); color: var(--foreground, #171717); font-family: var(--font-sans, system-ui, sans-serif); }
+  .cap { margin: 10px 2px 0; font-size: 12px; color: var(--muted-foreground, #6b6b6b); }
+  .cap code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; }
+
+  /* ── Margin paper palette, scoped to the mockup ─────────────────────────── */
+  .mg {
+    --m-page: #fcfbf8; --m-rail: #f1f3ee; --m-surface: #ffffff; --m-ink: #222f2b; --m-muted: #56655e;
+    --m-faint: #66756c; --m-line: #d9e0d8; --m-line2: #bccbc1; --m-acc: #246253; --m-accd: #194b40;
+    --m-pale: #e1eee6; --m-wash: #f0f6f1; --m-alert: #944a34; --m-alertw: #f9eee8;
+    --m-sans: "DM Sans", system-ui, sans-serif; --m-disp: "Instrument Serif", Georgia, serif; --m-mono: "IBM Plex Mono", ui-monospace, monospace;
+    color-scheme: light;
+    font: 13px/1.45 var(--m-sans); color: var(--m-ink); background: var(--m-page);
+    border: 1px solid var(--m-line2); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(20,40,30,.06), 0 8px 28px rgba(20,40,30,.08);
+  }
+  .mg * { box-sizing: border-box; }
+  :where(.mg) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  .mg .i { width: 16px; height: 16px; flex: none; }
+
+  .tb { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; background: var(--m-rail); border-bottom: 1px solid var(--m-line); }
+  .dots { display: flex; gap: 6px; } .dots i { width: 11px; height: 11px; border-radius: 50%; background: #d9dcd5; }
+  .tb .ttl { flex: 1; text-align: center; font-size: 12px; color: var(--m-muted); }
+  .conn { display: flex; align-items: center; gap: 6px; font: 11px var(--m-mono); color: var(--m-muted); white-space: nowrap; }
+  .conn b { width: 7px; height: 7px; border-radius: 50%; background: #3f9a6e; box-shadow: 0 0 0 3px rgba(63,154,110,.16); }
+
+  .app { display: grid; grid-template-columns: 212px minmax(0, 1fr) 292px; min-height: 660px; }
+
+  /* sidebar */
+  .side { background: var(--m-rail); border-right: 1px solid var(--m-line); padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-bottom: 8px; border: 1px solid var(--m-line); border-radius: 8px; background: var(--m-surface); color: var(--m-faint); width: 100%; }
+  .search span { flex: 1; text-align: left; }
+  kbd { font: 10.5px var(--m-mono); color: var(--m-faint); background: var(--m-rail); border: 1px solid var(--m-line); border-radius: 4px; padding: 0 4px; }
+  .nav { display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 8px; border-radius: 7px; color: var(--m-ink); text-align: left; }
+  .nav:hover { background: rgba(36,98,83,.07); }
+  .nav.on { background: var(--m-surface); box-shadow: 0 0 0 1px var(--m-line); }
+  .nav .n { flex: 1; min-width: 0; }
+  .badge { font: 500 10.5px var(--m-mono); background: var(--m-pale); color: var(--m-accd); border-radius: 9px; padding: 1px 6px; }
+  .badge.warm { background: var(--m-alertw); color: var(--m-alert); }
+  .lbl { margin: 14px 8px 4px; font: 600 10.5px var(--m-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--m-faint); }
+  .tile { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; flex: none; background: var(--tb); color: var(--tf); }
+  .tile .i { width: 15px; height: 15px; }
+  .tile.mini { width: 16px; height: 16px; border-radius: 4px; } .tile.mini .i { width: 11px; height: 11px; }
+  .tile.big { width: 40px; height: 40px; border-radius: 11px; } .tile.big .i { width: 22px; height: 22px; }
+  .trow .n { display: flex; flex-direction: column; line-height: 1.25; }
+  .trow small { font: 10.5px var(--m-mono); color: var(--m-faint); }
+  .udot { width: 7px; height: 7px; border-radius: 50%; background: var(--m-acc); }
+  .child { padding-left: 22px; }
+  .child .tile { width: 20px; height: 20px; border-radius: 6px; } .child .tile .i { width: 13px; height: 13px; }
+  .sfoot { margin-top: auto; padding: 10px 8px 2px; border-top: 1px solid var(--m-line); font: 10.5px/1.5 var(--m-mono); color: var(--m-faint); }
+  .sfoot strong { color: var(--m-ink); font-weight: 500; }
+
+  /* main */
+  .main { padding: 20px 26px 28px; min-width: 0; container-type: inline-size; }
+  .crumb { font-size: 11.5px; color: var(--m-faint); margin-bottom: 4px; min-height: 16px; }
+  .head { display: flex; align-items: center; gap: 14px; }
+  .head h1 { margin: 0; font: 400 34px/1.05 var(--m-disp); letter-spacing: -.01em; }
+  .head .meta { font-size: 12px; color: var(--m-faint); margin-top: 3px; }
+  .head .grow { flex: 1; min-width: 0; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 7px; border: 1px solid var(--m-line); background: var(--m-surface); font-weight: 500; white-space: nowrap; }
+  .btn:hover { border-color: var(--m-line2); }
+  .btn.pri { background: var(--m-acc); border-color: var(--m-acc); color: #f3f8f4; }
+  .btn.pri:hover { background: var(--m-accd); }
+  .tabs { display: flex; gap: 2px; margin: 16px 0 16px; border-bottom: 1px solid var(--m-line); overflow-x: auto; scrollbar-width: none; }
+  .tab { display: flex; align-items: center; gap: 6px; padding: 8px 10px 9px; color: var(--m-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+  .tab:hover { color: var(--m-ink); }
+  .tab.on { color: var(--m-ink); border-color: var(--m-acc); font-weight: 500; }
+  .tab .c { font: 10.5px var(--m-mono); color: var(--m-faint); }
+
+  .ov { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+  @container (max-width: 600px) { .ov { grid-template-columns: 1fr; } .grid3 { grid-template-columns: 1fr 1fr !important; } }
+  .card { background: var(--m-surface); border: 1px solid var(--m-line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .ct { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; font: 600 10.5px var(--m-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--m-faint); }
+  .ct .i { width: 14px; height: 14px; }
+  .ct .lnk { margin-left: auto; text-transform: none; letter-spacing: 0; font: 500 11.5px var(--m-sans); color: var(--m-acc); }
+  .brief p { margin: 0; font: 400 20px/1.32 var(--m-disp); color: var(--m-ink); }
+  .brief .by { margin-top: 10px; font-size: 11.5px; color: var(--m-faint); display: flex; align-items: center; gap: 6px; }
+
+  .rows { display: flex; flex-direction: column; }
+  .row { display: flex; gap: 11px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--m-line); text-align: left; width: 100%; }
+  .rows > .row:first-child { border-top: 0; padding-top: 2px; }
+  .row .body { flex: 1; min-width: 0; }
+  .row .t { font-weight: 500; }
+  .row .s { color: var(--m-muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .when { font: 11px var(--m-mono); color: var(--m-faint); white-space: nowrap; }
+  .date { flex: none; width: 40px; text-align: center; border: 1px solid var(--m-line); border-radius: 7px; padding: 3px 0 4px; line-height: 1.1; }
+  .date small { display: block; font: 600 9.5px var(--m-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--m-alert); }
+  .date b { font: 500 16px var(--m-mono); }
+  .sub { font: 11px var(--m-mono); color: var(--m-faint); display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
+  .sub span { display: inline-flex; align-items: center; gap: 4px; } .sub .i { width: 12px; height: 12px; }
+  .src { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; }
+  .src .i { width: 14px; height: 14px; }
+  .src.tg { background: #e2edf5; color: #2c6a91; } .src.sl { background: #eee6f0; color: #6d4479; } .src.ch { background: var(--m-pale); color: var(--m-acc); }
+  .facts { display: flex; flex-direction: column; gap: 6px; font: 12px var(--m-mono); }
+  .facts div { display: flex; gap: 10px; } .facts span { color: var(--m-faint); min-width: 74px; }
+  .tag { font: 10.5px var(--m-mono); color: var(--m-faint); }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid var(--m-line); background: var(--m-surface); font-size: 12px; color: var(--m-muted); }
+  .chip.on { background: var(--m-ink); border-color: var(--m-ink); color: #f4f6f2; }
+  .chip .i { width: 13px; height: 13px; }
+  .grp { margin: 16px 0 6px; font: 600 10.5px var(--m-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--m-faint); }
+  .turns { margin: 8px 0 2px; padding: 8px 12px; border-left: 2px solid var(--m-line); display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+  .turns b { font-weight: 600; }
+
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .doc { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--m-line); border-radius: 10px; background: var(--m-surface); text-align: left; min-width: 0; }
+  .doc:hover { border-color: var(--m-line2); }
+  .kind { align-self: flex-start; font: 500 10px var(--m-mono); padding: 2px 6px; border-radius: 4px; background: var(--m-wash); color: var(--m-acc); }
+  .kind.PDF { background: var(--m-alertw); color: var(--m-alert); } .kind.IMG { background: #e2edf5; color: #2c6a91; }
+  .doc .nm { font-weight: 500; overflow-wrap: anywhere; } .doc .m { font: 11px var(--m-mono); color: var(--m-faint); }
+
+  .proc h4 { margin: 0 0 2px; font: 400 22px/1.15 var(--m-disp); }
+  .proc .m { font: 11px var(--m-mono); color: var(--m-faint); margin-bottom: 10px; }
+  .chk { display: flex; gap: 10px; align-items: flex-start; padding: 4px 0; text-align: left; width: 100%; }
+  .box { flex: none; width: 15px; height: 15px; margin-top: 2px; border: 1.5px solid var(--m-line2); border-radius: 3px; background: var(--m-surface); display: grid; place-items: center; }
+  .chk.done .box { background: var(--m-acc); border-color: var(--m-acc); }
+  .chk.done .box::after { content: ""; width: 7px; height: 4px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+  .chk.done .lt { color: var(--m-faint); text-decoration: line-through; text-decoration-color: var(--m-line2); }
+  .chk .tp { margin-left: auto; font: 10.5px var(--m-mono); color: var(--m-faint); white-space: nowrap; }
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .two { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; align-items: start; }
+
+  pre { margin: 0; padding: 12px 14px; background: var(--m-wash); border: 1px solid var(--m-line); border-radius: 8px; font: 12px/1.55 var(--m-mono); overflow-x: auto; color: #2a3a34; }
+  .fname { font: 500 12px var(--m-mono); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; color: var(--m-muted); }
+  .k { color: #7a4f8a; } .v { color: #2c6a91; } .cm { color: #7c8a83; font-style: italic; }
+
+  .sug { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .fileto { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px 0 4px; border-radius: 7px; border: 1px solid var(--m-line); background: var(--m-surface); font-size: 12px; }
+  .fileto .tile { width: 18px; height: 18px; border-radius: 5px; } .fileto .tile .i { width: 12px; height: 12px; }
+  .fileto em { font: normal 10.5px var(--m-mono); color: var(--m-faint); }
+  .fileto.best { border-color: var(--m-acc); box-shadow: inset 0 0 0 1px var(--m-acc); }
+  .filed { font-size: 12px; color: var(--m-acc); margin-top: 8px; }
+
+  /* chat */
+  .chat { border-left: 1px solid var(--m-line); background: var(--m-surface); display: flex; flex-direction: column; min-width: 0; }
+  .chead { padding: 14px 16px 12px; border-bottom: 1px solid var(--m-line); }
+  .chead .t { font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .chead .s { font: 10.5px var(--m-mono); color: var(--m-faint); margin-top: 3px; }
+  .live { margin-left: auto; font: 10.5px var(--m-mono); color: var(--m-faint); display: flex; align-items: center; gap: 5px; }
+  .live b { width: 6px; height: 6px; border-radius: 50%; background: var(--m-line2); }
+  .live.on b { background: #3f9a6e; animation: pulse 1s infinite alternate; }
+  @keyframes pulse { to { opacity: .3; } }
+  .msgs { flex: 1; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 470px; }
+  .ctx { display: flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px dashed var(--m-line2); border-radius: 8px; font-size: 11.5px; color: var(--m-muted); }
+  .ctx .i { width: 13px; height: 13px; color: var(--m-acc); }
+  .me { align-self: flex-end; max-width: 88%; background: var(--m-pale); color: var(--m-accd); padding: 8px 11px; border-radius: 12px 12px 3px 12px; font-size: 13px; }
+  .ag { max-width: 96%; font-size: 13px; }
+  .ag .who { font: 600 10.5px var(--m-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--m-acc); margin-bottom: 3px; display: flex; gap: 5px; align-items: center; }
+  .ag .who .i { width: 12px; height: 12px; }
+  .ag p { margin: 0 0 6px; } .ag ul { margin: 0; padding-left: 18px; }
+  .qa { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 10px; }
+  .qa button { height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid var(--m-line); font-size: 12px; color: var(--m-muted); background: var(--m-page); }
+  .qa button:hover { color: var(--m-ink); border-color: var(--m-line2); }
+  .comp { margin: 0 12px 12px; border: 1px solid var(--m-line2); border-radius: 10px; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 11px; background: var(--m-surface); }
+  .comp:focus-within { border-color: var(--m-acc); box-shadow: 0 0 0 3px rgba(36,98,83,.12); }
+  .comp textarea { flex: 1; border: 0; outline: 0; resize: none; font: 13px/1.4 var(--m-sans); color: var(--m-ink); background: transparent; min-height: 22px; max-height: 90px; padding: 3px 0; }
+  .comp textarea::placeholder { color: var(--m-faint); }
+  .send { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--m-acc) !important; color: #fff !important; }
+
+  @media (max-width: 1000px) {
+    .app { grid-template-columns: 200px minmax(0, 1fr); }
+    .chat { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--m-line); }
+    .msgs { max-height: 320px; }
+  }
+  @media (max-width: 640px) {
+    .app { grid-template-columns: 1fr; }
+    .side { border-right: 0; border-bottom: 1px solid var(--m-line); }
+    .sfoot { display: none; }
+    .main { padding: 16px; }
+    .head .btn span { display: none; }
+    .tb .ttl { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="mg" id="mg">
+  <div class="tb"><div class="dots"><i></i><i></i><i></i></div><div class="ttl">Margin — Topics</div>
+    <div class="conn"><b></b>home.tailnet.ts.net · 23 ms</div></div>
+  <div class="app">
+    <aside class="side" id="side"></aside>
+    <main class="main" id="main"></main>
+    <section class="chat" id="chat"></section>
+  </div>
+</div>
+<p class="cap">Interactive mockup with sample data: click topics, tabs, checkboxes, Inbox suggestions, and send a chat message. It is not connected — in Margin the chat goes to ZeroClaw <code>/ws/chat</code> as session <code>topic-&lt;slug&gt;</code>.</p>
+
+<script>
+const P = {
+  car: '<path d="M5 17H3v-4l2-5h14l2 5v4h-2"/><path d="M5 13h14"/><circle cx="7.5" cy="17" r="2"/><circle cx="16.5" cy="17" r="2"/><path d="M9.5 17h5"/>',
+  rings: '<circle cx="9" cy="14.5" r="5"/><circle cx="15" cy="14.5" r="5"/><path d="M10 6.5 12 4l2 2.5"/>',
+  home: '<path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
+  drop: '<path d="M12 3.5s6 6.4 6 10.8a6 6 0 0 1-12 0c0-4.4 6-10.8 6-10.8z"/>',
+  gutter: '<path d="M3 7h18l-2.5 4h-13z"/><path d="M16 11v9"/>',
+  sliders: '<path d="M6 4v16M12 4v16M18 4v16"/><circle cx="6" cy="9" r="2.2" fill="currentColor"/><circle cx="12" cy="15" r="2.2" fill="currentColor"/><circle cx="18" cy="7" r="2.2" fill="currentColor"/>',
+  users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.6c2.6.2 4.5 2.1 4.5 5.4"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/>',
+  cal: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  inbox: '<path d="M4 13 6.5 5h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  rep: '<path d="m17 3 3 3-3 3"/><path d="M4 12v-1a5 5 0 0 1 5-5h11"/><path d="m7 21-3-3 3-3"/><path d="M20 12v1a5 5 0 0 1-5 5H4"/>',
+  to: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  file: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>',
+  spark: '<path d="M12 3v5M12 16v5M3 12h5M16 12h5M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M6.3 17.7l2.5-2.5M15.2 8.8l2.5-2.5"/>',
+  tg: '<path d="m21 4-18 7.4 6.6 2.1L12 20l3.3-4.4L20.2 19z"/><path d="m9.6 13.5 6.2-5.3"/>',
+  sl: '<path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/>',
+  ch: '<path d="M4 5h16v11h-9l-5 4v-4H4z"/>',
+  book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+  code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
+  pin: '<path d="M12 16v5M9 3h6l-1 6 3 3v2H7v-2l3-3z"/>',
+  chat2: '<path d="M4 5h16v11h-9l-5 4v-4H4z"/><path d="M8 10h8"/>',
+  send: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+};
+const ic = (n, c = '') => `<svg class="i ${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
+const HUE = { slate: ['#e3ebf0', '#2f5d75'], rose: ['#f5e5e3', '#9a4a42'], clay: ['#f3e7dc', '#8a5532'], ochre: ['#f2ecd6', '#7a6220'], plum: ['#ece5f1', '#6a4a82'], pine: ['#e1eee6', '#246253'] };
+const tile = (t, size) => `<span class="tile${size ? ' ' + size : ''}" style="--tb:${HUE[t.hue][0]};--tf:${HUE[t.hue][1]}">${ic(t.icon)}</span>`;
+const SRC = { tg: 'Telegram', sl: 'Slack', ch: 'Chat' };
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+const TOPICS = [
+  { id: 'mazda', title: 'Mazda', icon: 'car', hue: 'slate', next: 'WOF · 14 Dec', unread: true,
+    brief: 'WOF is due Monday 14 December; the garage can take it Friday 9am. The last service flagged front brake pads at about 30%. Rego is paid until August 2027.',
+    briefBy: 'from 23 messages · 2 h ago',
+    cal: [
+      { dw: 'Mon', dn: '14', t: 'WOF due', cron: '0 9 14 12 *', to: 'Telegram › Car' },
+      { dw: 'Tue', dn: '5', mon: 'Jan', t: 'Book 60,000 km service', cron: '0 9 5 1 *', to: 'Telegram › Car' },
+      { dw: 'Sun', dn: '1', mon: 'Aug', t: 'Rego renewal (2027)', cron: '0 9 1 8 *', to: 'Telegram › Car' },
+    ],
+    threads: [
+      { src: 'tg', where: 'Home › Car', t: 'WOF booking', s: 'Garage can do Friday 9am — want me to add it to the calendar?', when: '2 h', n: 5, unread: true,
+        turns: [['you', 'When is the WOF due again?'], ['agent', 'Monday 14 Dec. The garage has Friday 9am free.'], ['you', 'Book Friday.']] },
+      { src: 'ch', where: 'Margin chat', t: 'Tyre pressure for the road trip', s: '36 psi front, 34 rear when loaded; check cold.', when: 'Mon', n: 4 },
+      { src: 'sl', where: '#facilities', t: 'Car park permit renewal', s: 'Form sent to facilities, permit valid to March.', when: '12 Nov', n: 3 },
+    ],
+    docs: [{ k: 'PDF', n: 'Service invoice — Oct 2026.pdf', m: '212 KB · 14 Oct' }, { k: 'PDF', n: 'Rego receipt 2026.pdf', m: '88 KB · 2 Aug' }, { k: 'MD', n: 'Car details.md', m: 'note · edited 3 Nov' }, { k: 'IMG', n: 'Tyre placard.jpg', m: '1.2 MB · 9 Sep' }],
+    procs: [
+      { t: 'Before a long drive', m: '5 steps · last run 3 Oct', steps: [['Tyres: 36 front / 34 rear psi, cold', 1], ['Washer fluid topped up', 1], ['Oil level between marks', 0], ['Spare + jack in boot', 0], ['Download offline maps', 0]] },
+      { t: 'Replace cabin air filter', m: '4 steps · every 15,000 km', steps: [['Empty glovebox, unclip the damper', 0], ['Press sides, lower the glovebox', 0], ['Swap filter — arrow points down', 0], ['Reassemble, fan on max to check', 0]] },
+    ],
+    lists: [{ t: 'To buy', items: [['Front wiper blades 600 / 400 mm', 0], ['12 V tyre inflator', 0], ['Microfibre cloths', 1]] }],
+    facts: [['rego', 'paid to Aug 2027'], ['odometer', '≈ 57,800 km'], ['tyres', '225/55 R19'], ['brakes', 'front pads ~30% (Oct)']],
+    chat: [['ctx', 'Mazda · brief, 4 facts, 2 procedures'], ['me', 'Can you book the WOF for Friday?'], ['ag', '<p>I added <b>[mazda] WOF — garage Fri 9:00</b> and a reminder Thursday 18:00 in the Car thread.</p><p>Want me to ask the garage to quote the brake pads while it’s in?</p>']] },
+
+  { id: 'wedding', title: 'Wedding N&C', icon: 'rings', hue: 'rose', next: 'Deposit · 2 Dec', unread: true,
+    brief: 'Venue confirmed for Saturday 20 March. The deposit is due Wednesday. 64 of 90 RSVPs are in; the catering tasting is Saturday 12 December at 11:00.',
+    briefBy: 'from 41 messages · this morning',
+    cal: [
+      { dw: 'Wed', dn: '2', t: 'Venue deposit due', cron: '0 9 2 12 *', to: 'Telegram › Wedding' },
+      { dw: 'Sat', dn: '12', t: 'Catering tasting 11:00', cron: '0 8 12 12 *', to: 'Telegram › Wedding' },
+      { dw: 'Fri', dn: '15', mon: 'Jan', t: 'RSVP chase-up round 2', cron: '0 10 15 1 *', to: 'Telegram › Wedding' },
+      { dw: 'Sat', dn: '20', mon: 'Mar', t: 'Wedding day', cron: 'date in topic.md', to: '—' },
+    ],
+    threads: [
+      { src: 'tg', where: 'N&C wedding group', t: 'Tasting time', s: 'Can we move the tasting to 11? Caterer said yes.', when: '1 h', n: 7, unread: true },
+      { src: 'ch', where: 'Margin chat', t: 'Seating plan draft', s: 'Grouped by household; 3 tables still unbalanced.', when: 'Sun', n: 9 },
+      { src: 'tg', where: 'N&C wedding group', t: 'Playlist ideas', s: '12 songs added to the shared list.', when: 'Thu', n: 15 },
+    ],
+    docs: [{ k: 'MD', n: 'Guest list.md', m: 'table · 90 rows' }, { k: 'MD', n: 'Budget.md', m: 'table · edited today' }, { k: 'PDF', n: 'Venue contract.pdf', m: '540 KB · 30 Oct' }, { k: 'IMG', n: 'Mood board.jpg', m: '3.4 MB · 18 Oct' }],
+    procs: [{ t: 'RSVP follow-up', m: '4 steps · run before each deadline', steps: [['Export missing RSVPs from Guest list', 1], ['Draft reminder message', 1], ['Send via Telegram / SMS', 0], ['Update counts in Budget', 0]] }],
+    lists: [{ t: 'Catering ideas', items: [['Grazing table instead of entrée', 0], ['Vegetarian main — mushroom wellington', 0], ['Late-night snack: sliders', 1]] }],
+    facts: [['date', 'Sat 20 Mar 2027'], ['guests', '90 invited · 64 RSVP'], ['venue', 'deposit 30%, due 2 Dec']],
+    chat: [['ctx', 'Wedding N&C · brief, 3 facts, guest list'], ['me', 'Who hasn’t replied yet?'], ['ag', '<p>26 guests across 14 households. The biggest gaps are the cousins’ table (7) and work friends (5). Shall I draft the reminder?</p>']] },
+
+  { id: 'house', title: 'Noisy Marae', icon: 'home', hue: 'clay', next: 'Plumber · Thu', unread: false,
+    children: [{ id: 'hot-water', title: 'Hot water', note: 'chauffe-eau', icon: 'drop' }, { id: 'gutters', title: 'Gutters', note: 'gouttières', icon: 'gutter' }],
+    brief: 'The hot water cylinder trips its element about once a week; a plumber is booked Thursday 10:00. The south gutters overflow in heavy rain — clean and add guards before winter.',
+    briefBy: 'from 31 messages · yesterday',
+    cal: [
+      { dw: 'Thu', dn: '26', t: 'Plumber — hot water cylinder, 10:00', cron: '0 8 26 11 *', to: 'Telegram › House' },
+      { dw: 'Sun', dn: '29', t: 'Check cylinder ≥ 60 °C', cron: '0 18 * * 0', rep: true, to: 'Telegram › House' },
+      { dw: 'Sat', dn: '27', mon: 'Mar', t: 'Clean gutters before winter', cron: '0 9 27 3 *', to: 'Telegram › House' },
+    ],
+    threads: [
+      { src: 'tg', where: 'Home › House', t: 'Hot water cold again', s: 'Element tripped at 6am; reset the breaker, back to 62 °C by 8.', when: 'Yesterday', n: 6,
+        turns: [['you', 'No hot water again 😩'], ['agent', 'Third trip this month. Reset steps are in “Reset the cylinder”. I’ve added it to the plumber notes.'], ['you', 'Reset, it’s heating.']] },
+      { src: 'ch', where: 'Margin chat', t: 'Heat-pump cylinder vs. new element', s: 'Payback ≈ 4.5 years at current tariff; quotes compared.', when: 'Fri', n: 11 },
+      { src: 'sl', where: '#house', t: 'Gutter guard options', s: 'Mesh vs. brush — mesh for the south side.', when: '9 Nov', n: 4 },
+    ],
+    docs: [{ k: 'PDF', n: 'Cylinder manual.pdf', m: '2.1 MB' }, { k: 'PDF', n: 'Plumber quote.pdf', m: '96 KB · 20 Nov' }, { k: 'IMG', n: 'South gutters (4 photos)', m: '8 Nov' }, { k: 'MD', n: 'House systems.md', m: 'note · breakers, valves, filters' }],
+    procs: [
+      { t: 'Reset the hot water cylinder', m: '5 steps · used 3× this month', steps: [['Switch off “HWC” breaker (board, row 2)', 1], ['Wait 30 s, switch back on', 1], ['Check thermostat light after 5 min', 1], ['If it trips again: leave off, message plumber', 0], ['Log the trip time in the timeline', 0]] },
+      { t: 'Clean & flush gutters', m: '4 steps · yearly, March', steps: [['Ladder + stand-off on the south side', 0], ['Scoop debris, bag it', 0], ['Flush downpipes with the hose', 0], ['Fit mesh guards', 0]] },
+    ],
+    lists: [{ t: 'Hardware store', items: [['Gutter guard mesh, 10 m', 0], ['Downpipe elbow 80 mm', 0], ['Hose fitting for flushing', 1]] }],
+    code: { f: 'home-assistant/hot_water_boost.yaml', c: `<span class="cm"># Boost the cylinder before morning showers if it fell below 55 °C</span>
+<span class="k">alias</span>: <span class="v">Hot water boost</span>
+<span class="k">trigger</span>:
+  - <span class="k">platform</span>: time
+    <span class="k">at</span>: <span class="v">"05:30:00"</span>
+<span class="k">condition</span>:
+  - <span class="k">condition</span>: numeric_state
+    <span class="k">entity_id</span>: sensor.cylinder_temp
+    <span class="k">below</span>: 55
+<span class="k">action</span>:
+  - <span class="k">service</span>: switch.turn_on
+    <span class="k">target</span>: { <span class="k">entity_id</span>: switch.hwc_element }` },
+    facts: [['cylinder', '180 L, 3 kW element'], ['breaker', 'board row 2 “HWC”'], ['plumber', 'Thu 26 Nov 10:00'], ['gutters', 'south side overflows']],
+    chat: [['ctx', 'Noisy Marae · brief, 4 facts, 2 procedures, 1 automation'], ['me', 'Is 60 °C the right setpoint?'], ['ag', '<p>Yes — keep it at <b>60 °C or above</b> to stop Legionella growing; use a tempering valve so taps stay at 55 °C. Your automation only boosts below 55 °C, so that’s consistent.</p>']] },
+
+  { id: 'modular', title: 'Modular', icon: 'sliders', hue: 'ochre', next: 'Wishlist · Fri', unread: false,
+    brief: 'The rack is 2 × 104 HP with 23 HP free and about 400 mA of +12 V headroom. The shortlist for the next module is a dual VCA or a sequencer.',
+    briefBy: 'from 12 messages · 3 days ago',
+    cal: [{ dw: 'Fri', dn: '27', t: 'Black Friday — check wishlist prices', cron: '0 8 27 11 *', to: 'Telegram › Modular' }],
+    threads: [
+      { src: 'ch', where: 'Margin chat', t: 'Which VCA fits in 8 HP?', s: 'Three candidates under 8 HP, all < 60 mA on +12 V.', when: 'Sat', n: 6 },
+      { src: 'tg', where: 'Home › Modular', t: 'Patch idea: generative bells', s: 'Voice note transcribed; patch saved to Patches.md.', when: '15 Nov', n: 2 },
+    ],
+    docs: [{ k: 'MD', n: 'Collection.md', m: 'table · 31 modules' }, { k: 'IMG', n: 'Rack layout 2×104HP.png', m: '640 KB' }, { k: 'MD', n: 'Patches.md', m: 'note · 14 patches' }, { k: 'PDF', n: 'Manuals (9)', m: 'folder' }],
+    procs: [{ t: 'Before buying a module', m: '4 steps', steps: [['Fits free HP (23 HP)', 1], ['Power: +12 V / −12 V within headroom', 0], ['Depth OK for the case', 0], ['Second-hand price check', 0]] }],
+    lists: [{ t: 'Wishlist', items: [['Dual VCA (≤ 8 HP)', 0], ['Trigger sequencer', 0], ['Spare ribbon cables', 0]] }],
+    code: { f: 'scripts/power_budget.py', c: `<span class="cm"># Sum module draw from Collection.md and compare to the PSU</span>
+<span class="k">rows</span> = parse_table(<span class="v">"Collection.md"</span>)
+<span class="k">used</span> = sum(r[<span class="v">"+12V mA"</span>] <span class="k">for</span> r <span class="k">in</span> rows <span class="k">if</span> r[<span class="v">"status"</span>] == <span class="v">"racked"</span>)
+print(f<span class="v">"+12 V: {used} / 1200 mA"</span>)` },
+    facts: [['case', '2 × 104 HP'], ['free', '23 HP'], ['+12 V', '≈ 400 mA headroom'], ['budget', '≈ $450']],
+    chat: [['ctx', 'Modular · brief, collection table, wishlist'], ['me', 'Does a 12 HP sequencer fit?'], ['ag', '<p>Yes: 23 HP free, so 11 HP would be left. It draws 110 mA on +12 V, which leaves about 290 mA of headroom.</p>']] },
+
+  { id: 'people', title: 'People', icon: 'users', hue: 'pine', next: 'Alex · 6 Dec', unread: false,
+    brief: '18 people. Two birthdays in December (Alex on the 6th, Mum on the 17th). You last called Mum 12 days ago.',
+    briefBy: 'from person notes · today',
+    cal: [
+      { dw: 'Sun', dn: '6', t: 'Alex’s birthday', cron: '0 9 6 12 *', rep: true, to: 'Telegram › People' },
+      { dw: 'Thu', dn: '17', t: 'Mum’s birthday — call', cron: '0 9 17 12 *', rep: true, to: 'Telegram › People' },
+    ],
+    threads: [{ src: 'ch', where: 'Margin chat', t: 'Gift for Mum', s: 'Shortlist: a garden voucher or a framed print.', when: 'Wed', n: 5 }],
+    docs: [{ k: 'MD', n: 'Mum.md', m: 'person · birthday, sizes, likes' }, { k: 'MD', n: 'Alex.md', m: 'person · kids, last seen' }, { k: 'MD', n: 'Neighbours.md', m: 'person · 3 entries' }],
+    procs: [], lists: [{ t: 'Gift ideas', items: [['Mum — garden voucher', 0], ['Alex — climbing gym pass', 0]] }],
+    facts: [['people', '18 notes'], ['next', 'Alex · 6 Dec']],
+    chat: [['ctx', 'People · 18 person notes'], ['me', 'What did Alex’s kids want last year?'], ['ag', '<p>From the note: Lego sets for both, and the youngest asked for a scooter.</p>']] },
+
+  { id: 'nikki', title: 'Nikki', sub: 'Osom wife', icon: 'heart', hue: 'plum', next: 'Anniversary · 12 Jan', unread: false,
+    brief: 'Anniversary is Tuesday 12 January — book dinner by the 2nd. Groceries ideas and gift ideas are kept here. (Sample content.)',
+    briefBy: 'from 9 messages · 4 days ago',
+    cal: [
+      { dw: 'Fri', dn: '27', t: 'Flowers on the way home?', cron: '0 16 * * 5', rep: true, to: 'Telegram (DM)' },
+      { dw: 'Sat', dn: '2', mon: 'Jan', t: 'Book anniversary dinner', cron: '0 10 2 1 *', to: 'Telegram (DM)' },
+      { dw: 'Tue', dn: '12', mon: 'Jan', t: 'Anniversary', cron: '0 8 12 1 *', rep: true, to: 'Telegram (DM)' },
+    ],
+    threads: [{ src: 'ch', where: 'Margin chat', t: 'Anniversary dinner shortlist', s: 'Three places with a 7:30 table; one has a garden.', when: 'Thu', n: 6 }, { src: 'tg', where: 'DM', t: 'Groceries ideas', s: 'Added: ripe mangoes, dark chocolate (70%).', when: 'Sun', n: 2 }],
+    docs: [{ k: 'MD', n: 'Nikki.md', m: 'person · sizes, likes, dates' }, { k: 'MD', n: 'Date ideas.md', m: 'note · 11 ideas' }],
+    procs: [],
+    lists: [
+      { t: 'Groceries ideas', kind: 'groceries', items: [['Ripe mangoes', 0], ['Dark chocolate 70%', 0], ['Fresh basil', 1], ['Sparkling water', 0]] },
+      { t: 'Gift ideas', items: [['Pottery class for two', 0], ['Linen scarf', 0]] },
+    ],
+    facts: [['anniversary', '12 Jan'], ['likes', 'mango, dark chocolate (sample)']],
+    chat: [['ctx', 'Nikki · brief, 2 facts, 2 lists'], ['me', 'Remind me to book dinner'], ['ag', '<p>Done: <b>[nikki] Book anniversary dinner</b> on Sat 2 Jan, 10:00, sent to your Telegram DM.</p>']] },
+];
+
+const INBOX = [
+  { id: 1, src: 'tg', where: 'DM', t: 'Remind me to call the insurer about the windscreen chip', when: '25 min', sug: [['mazda', '0.74'], ['house', '0.12']] },
+  { id: 2, src: 'sl', where: '#general', t: 'Anyone selling a 6U case? Asking for a friend 😉', when: '3 h', sug: [['modular', '0.66']] },
+  { id: 3, src: 'ch', where: 'Margin chat', t: 'Pick up peonies on the way home Friday', when: 'Yesterday', sug: [['nikki', '0.71'], ['wedding', '0.18']] },
+];
+
+const S = { view: 'topic', topic: 'house', child: null, tab: 'overview', filter: 'all', open: null, filed: {}, streaming: false };
+const T = id => TOPICS.find(t => t.id === id);
+
+function side() {
+  const nav = (v, icon, label, b, warm) => `<button class="nav${S.view === v ? ' on' : ''}" data-view="${v}">${ic(icon)}<span class="n">${label}</span>${b ? `<span class="badge${warm ? ' warm' : ''}">${b}</span>` : ''}</button>`;
+  const left = INBOX.filter(x => !S.filed[x.id]).length;
+  let h = `<button class="search">${ic('search')}<span>Search</span><kbd>⌘⇧F</kbd></button>`;
+  h += nav('today', 'cal', 'Today', 4) + nav('inbox', 'inbox', 'Inbox', left || '', true);
+  h += '<div class="lbl">Topics</div>';
+  for (const t of TOPICS) {
+    const on = S.view === 'topic' && S.topic === t.id && !S.child;
+    h += `<button class="nav trow${on ? ' on' : ''}" data-topic="${t.id}">${tile(t)}<span class="n">${esc(t.title)}<small>${t.next}</small></span>${t.unread ? '<span class="udot"></span>' : ''}</button>`;
+    for (const c of t.children || []) {
+      const con = S.view === 'topic' && S.child === c.id;
+      h += `<button class="nav trow child${con ? ' on' : ''}" data-topic="${t.id}" data-child="${c.id}">${tile({ ...t, icon: c.icon })}<span class="n">${c.title}<small>${c.note}</small></span></button>`;
+    }
+  }
+  h += `<div class="sfoot"><strong>ZeroClaw</strong> · agent <strong>home</strong><br>home.tailnet.ts.net<br>paired · this Mac · 23 ms</div>`;
+  document.getElementById('side').innerHTML = h;
+}
+
+const dateBox = c => `<span class="date"><small>${c.mon || c.dw}</small><b>${c.dn}</b></span>`;
+const calRow = (c, topic) => `<div class="row">${dateBox(c)}<div class="body"><div class="t">${esc(c.t)}</div><div class="sub">${topic ? `<span>${tile(topic, 'mini')}${esc(topic.title)}</span>` : ''}${c.rep ? `<span>${ic('rep')}repeats</span>` : ''}<span>${ic('to')}${c.to}</span></div></div></div>`;
+const thrRow = (th, i, topic) => {
+  const open = S.open === `${topic ? topic.id : ''}${i}` && th.turns;
+  return `<button class="row" data-thread="${topic ? topic.id : ''}${i}"><span class="src ${th.src}">${ic(th.src)}</span><div class="body"><div class="t">${esc(th.t)}${th.unread ? ' <span class="udot" style="display:inline-block;vertical-align:middle;margin-left:4px"></span>' : ''}</div><div class="s">${esc(th.s)}</div><div class="sub"><span>${SRC[th.src]} · ${esc(th.where)}</span>${th.n ? `<span>${th.n} msgs</span>` : ''}${topic ? `<span>${esc(topic.title)}</span>` : ''}</div>${open ? `<div class="turns">${th.turns.map(([w, x]) => `<div><b>${w}</b> ${esc(x)}</div>`).join('')}</div>` : ''}</div><span class="when">${th.when}</span></button>`;
+};
+const checklist = (items, key) => items.map(([x, d], j) => `<button class="chk${d ? ' done' : ''}" data-chk="${key}:${j}"><span class="box"></span><span class="lt">${esc(x)}</span></button>`).join('');
+
+function topicPage(t) {
+  const child = (t.children || []).find(c => c.id === S.child);
+  const tabs = [['overview', 'Overview'], ['disc', 'Discussions', t.threads.length], ['cal', 'Calendar', t.cal.length], ['docs', 'Docs', t.docs.length], ['procs', 'Procedures', t.procs.length], ['lists', 'Lists', t.lists.length], ['code', 'Code', t.code ? 1 : 0]]
+    .filter(([k, , n]) => k === 'overview' || n);
+  if (!tabs.some(([k]) => k === S.tab)) S.tab = 'overview';
+  const srcs = [...new Set(t.threads.map(x => SRC[x.src]))].join(' · ');
+  let h = `<div class="crumb">${child ? `${esc(t.title)} / ${child.title} <span class="tag">· ${child.note}</span>` : (t.sub ? esc(t.sub) : '&nbsp;')}</div>`;
+  h += `<div class="head">${tile(child ? { ...t, icon: child.icon } : t, 'big')}<div class="grow"><h1>${child ? child.title : esc(t.title)}</h1><div class="meta">${srcs} · ${t.threads.reduce((a, x) => a + (x.n || 0), 0)} messages · vault <span class="tag">topics/${t.id}${child ? '/' + child.id : ''}</span></div></div>
+    <button class="btn">${ic('plus')}<span>Note</span></button><button class="btn pri">${ic('cal')}<span>Reminder</span></button></div>`;
+  h += `<div class="tabs">${tabs.map(([k, l, n]) => `<button class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}${n ? `<span class="c">${n}</span>` : ''}</button>`).join('')}</div>`;
+
+  if (S.tab === 'overview') {
+    h += `<div class="ov">
+      <section class="card brief"><h3 class="ct">${ic('spark')}Brief</h3><p>${esc(t.brief)}</p><div class="by">${ic('spark')}Kept up to date by the agent · ${t.briefBy}</div></section>
+      <section class="card"><h3 class="ct">${ic('cal')}Next up<button class="lnk" data-tab="cal">All ${t.cal.length} →</button></h3><div class="rows">${t.cal.slice(0, 3).map(c => calRow(c)).join('')}</div></section>
+      <section class="card"><h3 class="ct">${ic('chat2')}Recent discussions<button class="lnk" data-tab="disc">All →</button></h3><div class="rows">${t.threads.slice(0, 3).map((x, i) => thrRow(x, i)).join('')}</div></section>
+      <section class="card"><h3 class="ct">${ic('pin')}Known facts<span class="lnk tag" style="color:var(--m-faint)">memory · topic:${t.id}</span></h3><div class="facts">${t.facts.map(([k, v]) => `<div><span>${k}</span>${esc(v)}</div>`).join('')}</div></section>
+      ${t.procs.length ? `<section class="card"><h3 class="ct">${ic('book')}Procedures<button class="lnk" data-tab="procs">Open →</button></h3><div class="rows">${t.procs.map(p => `<div class="row"><div class="body"><div class="t">${esc(p.t)}</div><div class="sub"><span>${p.m}</span></div></div></div>`).join('')}</div></section>` : ''}
+      <section class="card"><h3 class="ct">${ic('file')}Docs<button class="lnk" data-tab="docs">All ${t.docs.length} →</button></h3><div class="rows">${t.docs.slice(0, 3).map(d => `<div class="row"><span class="kind ${d.k}">${d.k}</span><div class="body"><div class="t">${esc(d.n)}</div><div class="sub"><span>${d.m}</span></div></div></div>`).join('')}</div></section>
+    </div>`;
+  } else if (S.tab === 'disc') {
+    const chips = ['all', 'tg', 'sl', 'ch'].map(f => `<button class="chip${S.filter === f ? ' on' : ''}" data-filter="${f}">${f === 'all' ? 'All' : ic(f) + SRC[f]}</button>`).join('');
+    const rows = t.threads.map((x, i) => [x, i]).filter(([x]) => S.filter === 'all' || x.src === S.filter);
+    h += `<div class="chips">${chips}</div><div class="card"><div class="rows">${rows.map(([x, i]) => thrRow(x, i)).join('') || '<div class="row"><div class="body s">Nothing from this source yet.</div></div>'}</div></div>`;
+  } else if (S.tab === 'cal') {
+    h += `<div class="card"><div class="rows">${t.cal.map(c => `<div class="row">${dateBox(c)}<div class="body"><div class="t">${esc(c.t)}</div><div class="sub">${c.rep ? `<span>${ic('rep')}repeats</span>` : ''}<span>${ic('to')}${c.to}</span><span>cron <b style="font-weight:500">${c.cron}</b></span></div></div><span class="when">[${t.id}]</span></div>`).join('')}</div></div>
+      <p class="tag" style="margin-top:10px">ZeroClaw cron jobs named <b>[${t.id}] …</b> · created with POST /api/cron · delivered to the topic’s Telegram thread</p>`;
+  } else if (S.tab === 'docs') {
+    h += `<div class="grid3">${t.docs.map(d => `<button class="doc"><span class="kind ${d.k}">${d.k}</span><span class="nm">${esc(d.n)}</span><span class="m">${d.m}</span></button>`).join('')}</div>`;
+  } else if (S.tab === 'procs') {
+    h += `<div class="two">${t.procs.map((p, i) => `<section class="card proc"><h4>${esc(p.t)}</h4><div class="m">${p.m} · procedures/${p.t.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md</div>${checklist(p.steps, `p${t.id}${i}`)}</section>`).join('')}</div>`;
+  } else if (S.tab === 'lists') {
+    h += `<div class="two">${t.lists.map((l, i) => `<section class="card proc"><h4>${esc(l.t)}</h4><div class="m">lists/${l.t.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md${l.kind ? ' · rolls up into Today › Shopping' : ''}</div>${checklist(l.items, `l${t.id}${i}`)}</section>`).join('')}</div>`;
+  } else if (S.tab === 'code') {
+    h += `<section class="card"><div class="fname">${ic('code')}${t.code.f}</div><pre>${t.code.c}</pre></section>`;
+  }
+  return h;
+}
+
+function today() {
+  const all = TOPICS.flatMap(t => t.cal.filter(c => !c.mon).map(c => [c, t])).sort((a, b) => order(a[0]) - order(b[0])).slice(0, 6);
+  const fresh = TOPICS.flatMap(t => t.threads.filter(x => x.unread).map((x, i) => [x, t.threads.indexOf(x), t]));
+  const shop = TOPICS.flatMap(t => t.lists.filter(l => l.kind === 'groceries' || /Hardware/.test(l.t)).flatMap((l, li) => l.items.map((it, j) => [it, t, `l${t.id}${t.lists.indexOf(l)}:${j}`])));
+  return `<div class="crumb">Tuesday 24 November</div><div class="head"><div class="grow"><h1>Today</h1><div class="meta">${all.length} reminders this fortnight · ${fresh.length} new discussions · across ${TOPICS.length} topics</div></div></div>
+  <div class="ov" style="margin-top:18px">
+    <section class="card"><h3 class="ct">${ic('cal')}Coming up</h3><div class="rows">${all.map(([c, t]) => calRow(c, t)).join('')}</div></section>
+    <section class="card"><h3 class="ct">${ic('chat2')}New since yesterday</h3><div class="rows">${fresh.map(([x, i, t]) => thrRow(x, i, t)).join('')}</div></section>
+    <section class="card proc"><h3 class="ct">${ic('list')}Shopping<span class="lnk tag" style="color:var(--m-faint)">rolled up from topic lists</span></h3>${shop.map(([[x, d], t, key]) => `<button class="chk${d ? ' done' : ''}" data-chk="${key}"><span class="box"></span><span class="lt">${esc(x)}</span><span class="tp">${esc(t.title)}</span></button>`).join('')}</section>
+  </div>`;
+}
+function order(c) { const day = +c.dn; return (day >= 24 ? 0 : 1) * 100 + day; }
+
+function inbox() {
+  let h = `<div class="crumb">&nbsp;</div><div class="head"><div class="grow"><h1>Inbox</h1><div class="meta">Turns the hub couldn’t file with confidence ≥ 0.8. Your choices become examples for the classifier.</div></div></div><div class="stack" style="margin-top:18px">`;
+  for (const x of INBOX) {
+    const f = S.filed[x.id];
+    h += `<section class="card"><div class="row" style="border:0;padding:0"><span class="src ${x.src}">${ic(x.src)}</span><div class="body"><div class="t" style="font-weight:400;font-size:14px">${esc(x.t)}</div><div class="sub"><span>${SRC[x.src]} · ${esc(x.where)}</span></div>
+      ${f ? `<div class="filed">${f === 'none' ? 'Dismissed — not a topic.' : `Filed to ${esc(T(f).title)} ✓`}</div>` :
+      `<div class="sug">${x.sug.map(([id, p], k) => `<button class="fileto${k ? '' : ' best'}" data-file="${x.id}:${id}">${tile(T(id))}${esc(T(id).title)}<em>${p}</em></button>`).join('')}<button class="fileto" data-file="${x.id}:none" style="padding-left:9px">Not a topic</button></div>`}
+      </div><span class="when">${x.when}</span></div></section>`;
+  }
+  return h + '</div>';
+}
+
+function main() {
+  const el = document.getElementById('main');
+  el.innerHTML = S.view === 'today' ? today() : S.view === 'inbox' ? inbox() : topicPage(T(S.topic));
+}
+
+function chat() {
+  const t = S.view === 'topic' ? T(S.topic) : null;
+  const sid = t ? `topic-${t.id}` : 'main';
+  const msgs = t ? t.chat : [['ctx', 'General · all topics'], ['me', 'What needs doing this week?'], ['ag', '<p>Four things: plumber Thursday 10:00, Black Friday wishlist check, cylinder temperature on Sunday, and the venue deposit next Wednesday.</p>']];
+  const name = t ? t.title : 'General';
+  document.getElementById('chat').innerHTML = `
+    <div class="chead"><div class="t">${ic('chat2')}Chat · ${esc(name)}<span class="live${S.streaming ? ' on' : ''}" id="live"><b></b>${S.streaming ? 'streaming' : 'idle'}</span></div><div class="s">session ${sid} · agent home · /ws/chat</div></div>
+    <div class="msgs" id="msgs">${msgs.map(([r, x]) => r === 'ctx' ? `<div class="ctx">${ic('spark')}Context loaded — ${esc(x)}</div>` : r === 'me' ? `<div class="me">${esc(x)}</div>` : `<div class="ag"><div class="who">${ic('spark')}agent</div>${x}</div>`).join('')}</div>
+    <div class="qa">${(t ? ['Summarize this week', 'Add reminder', 'What’s next?'] : ['Plan my week', 'What’s overdue?']).map(q => `<button data-q="${q}">${q}</button>`).join('')}</div>
+    <form class="comp" id="comp"><textarea id="ta" rows="1" placeholder="Ask about ${esc(name)}…"></textarea><button class="send" aria-label="Send">${ic('send')}</button></form>`;
+  const m = document.getElementById('msgs'); m.scrollTop = m.scrollHeight;
+}
+
+function send(text) {
+  if (!text.trim() || S.streaming) return;
+  const t = S.view === 'topic' ? T(S.topic) : null;
+  const list = t ? t.chat : null;
+  const reply = `<p>(Mockup) In Margin this goes over <b>/ws/chat</b> as session <b>${t ? 'topic-' + t.id : 'main'}</b>; the reply streams back as <b>chunk</b> frames and is saved when <b>done</b> arrives.</p>`;
+  if (list) list.push(['me', text]);
+  chat();
+  const m = document.getElementById('msgs');
+  if (!list) m.insertAdjacentHTML('beforeend', `<div class="me">${esc(text)}</div>`);
+  m.insertAdjacentHTML('beforeend', `<div class="ag"><div class="who">${ic('spark')}agent</div><div id="stream"></div></div>`);
+  S.streaming = true; const live = document.getElementById('live'); live.className = 'live on'; live.lastChild.textContent = 'streaming';
+  const words = reply.split(' '); let i = 0;
+  const timer = setInterval(() => {
+    i++; const st = document.getElementById('stream');
+    if (!st) { clearInterval(timer); S.streaming = false; if (list) list.push(['ag', reply]); return; }
+    st.innerHTML = words.slice(0, i).join(' ');
+    m.scrollTop = m.scrollHeight;
+    if (i >= words.length) { clearInterval(timer); S.streaming = false; if (list) list.push(['ag', reply]); live.className = 'live'; live.lastChild.textContent = 'idle'; }
+  }, 45);
+}
+
+function render() { side(); main(); chat(); }
+
+document.getElementById('mg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.view) { S.view = d.view; S.open = null; render(); }
+  else if (d.topic) { S.view = 'topic'; S.topic = d.topic; S.child = d.child || null; S.tab = 'overview'; S.filter = 'all'; S.open = null; T(d.topic).unread = false; render(); }
+  else if (d.tab) { S.tab = d.tab; S.open = null; main(); }
+  else if (d.filter) { S.filter = d.filter; main(); }
+  else if (d.thread !== undefined) { S.open = S.open === d.thread ? null : d.thread; main(); }
+  else if (d.chk) {
+    const [key, j] = d.chk.split(':'); const kind = key[0];
+    const t = TOPICS.find(t => key.startsWith(kind + t.id)); const idx = +key.slice(1 + t.id.length);
+    const arr = kind === 'p' ? t.procs[idx].steps : t.lists[idx].items; arr[+j][1] ^= 1; main();
+  }
+  else if (d.file) { const [id, to] = d.file.split(':'); S.filed[id] = to; render(); }
+  else if (d.q) { send(d.q); }
+});
+document.getElementById('mg').addEventListener('submit', e => { e.preventDefault(); const ta = document.getElementById('ta'); const v = ta.value; ta.value = ''; send(v); });
+document.getElementById('mg').addEventListener('keydown', e => { if (e.target.id === 'ta' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('comp').requestSubmit(); } });
+const [h0, h1] = location.hash.slice(1).split('/');
+if (h0 === 'today' || h0 === 'inbox') S.view = h0; else if (h0 && T(h0)) { S.topic = h0; if (h1) S.tab = h1; }
+render();
+</script>
+</body>
+</html>

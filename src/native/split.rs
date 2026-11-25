@@ -1,8 +1,8 @@
 //! One native text input owns the entire Markdown document. The facing page
 //! maps its shaped glyphs back to that input and never takes over typing.
-use super::{ByteSelection, EditorButton, Field, Writing, lists, mounted_field, report, selection};
+use super::{ByteSelection, Field, Writing, lists, mounted_field, report, selection};
 #[path = "reading.rs"]
-mod reading;
+pub(crate) mod reading;
 use dioxus_native::prelude::*;
 use margin_editor_core::{
     checkbox::{Input, Mode},

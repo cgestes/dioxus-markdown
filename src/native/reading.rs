@@ -1,5 +1,6 @@
 //! Hit testing in the read-only projection always targets the source input.
-use super::{EditorButton, Field, Source, report, selection};
+use super::{Field, Source, report, selection};
+use crate::ui;
 use dioxus_native::prelude::*;
 use margin_editor_core::{
     checkbox::{Input, Mode},
@@ -136,10 +137,9 @@ fn read_pointer(source: Source, blocks: Memo<Vec<Block>>, event: PointerEvent) {
     }
 }
 
+/// The preview's spans, with the checkbox ids `read_pointer` toggles.
 fn runs(p: &Passage) -> Element {
-    rsx! { for run in &p.runs {
-        span { class:"{run.style}", id: (run.style=="box").then(||format!("reading-box-{}",run.from)), "{run.text}" }
-    } }
+    crate::ui::runs(p, true)
 }
 
 // Follow the source caret when its reading line leaves the preview viewport.
@@ -195,7 +195,7 @@ pub(super) fn Reading(source: Source) -> Element {
     rsx! {
         section {class:"split-preview", aria_label:"Formatted preview",
             div {class:"pane-label","Preview"}
-            div {id:"reading-page",class:"reading-page", onpointerdown:move|e|read_pointer(source,blocks,e),
+            div {id:"reading-page",class:"reading-page ui-md", onpointerdown:move|e|read_pointer(source,blocks,e),
                 for (i,block) in blocks.read().iter().enumerate() {
                     match block {
                         Block::Text{passage:p} => rsx! {
@@ -205,21 +205,25 @@ pub(super) fn Reading(source: Source) -> Element {
                             let start=*from;
                             let can_delete = align.len()>1 && tables.iter().find(|t|t.range.start==start)
                                 .and_then(|t|source.selected_cell(t,range)).is_some();
+                            let last = rows.len().saturating_sub(1);
                             rsx! {div {key:"t-{i}",id:"reading-block-{i}",class:"grid-block read-table",class:if (*from..=*to).contains(&head) {"engaged"},
-                                div {class:"grid-scroll",id:"reading-scroll-{from}",role:"table",
-                                    for (r,row) in rows.iter().enumerate() {
-                                        div {class:"grid-row",role:"row",
-                                            for (c,p) in row.iter().enumerate() {
-                                                div {class:"read-cell",class:if r==0 {"column-head"},role:if r==0{"columnheader"}else{"cell"}, id:passage_id(start,r,c),text_align:align[c],flex_grow:widths[c].to_string(), {runs(p)} }
+                                // The same table as the editor's and every read-only view's.
+                                div {class:"ledger read-ledger",
+                                    div {class:"grid-scroll",id:"reading-scroll-{from}",role:"table",
+                                        for (r,row) in rows.iter().enumerate() {
+                                            div {class:"grid-row",class:if r==last {"ledger-last"},role:"row",
+                                                for (c,p) in row.iter().enumerate() {
+                                                    div {class:"ledger-cell read-cell",class:if r==0 {"ledger-head column-head"} else {"ledger-data"},role:if r==0{"columnheader"}else{"cell"}, id:passage_id(start,r,c),text_align:align[c],flex_grow:widths[c].to_string(), {runs(p)} }
+                                                }
                                             }
                                         }
                                     }
                                 }
-                                div {class:"grid-edge col", EditorButton {id:format!("reading-column-{start}"),label:"Add column",glyph:"+",onactivate:move |_|source.grow(start,true,0)}}
+                                div {class:"grid-edge col", ui::Button {id:format!("reading-column-{start}"),variant:ui::Variant::Icon,label:"Add column",icon:ui::Icon::Plus,onclick:move |_|source.grow(start,true,0)}}
                                 if can_delete {div {class:"column-action",
-                                    EditorButton {id:format!("reading-delete-column-{start}"),label:"Delete column",glyph:"−",onactivate:move |_|source.delete_column(start)}
+                                    ui::Button {id:format!("reading-delete-column-{start}"),variant:ui::Variant::Icon,danger:true,label:"Delete column",text:"−",onclick:move |_|source.delete_column(start)}
                                 }}
-                                div {class:"grid-edge row", EditorButton {id:format!("reading-row-{start}"),label:"Add row",glyph:"+",onactivate:move |_|source.grow(start,false,0)}}
+                                div {class:"grid-edge row", ui::Button {id:format!("reading-row-{start}"),variant:ui::Variant::Icon,label:"Add row",icon:ui::Icon::Plus,onclick:move |_|source.grow(start,false,0)}}
                             }}
                         }
                     }

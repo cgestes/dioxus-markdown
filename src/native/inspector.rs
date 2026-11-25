@@ -233,9 +233,8 @@ pub(super) fn Inspector(mut writing: Writing, trace: Signal<Trace>, desktop: boo
             if !status.is_empty() { "   ·   " }
             span { id: "inspect-save-status", aria_live: "polite", "{status}" }
         }
-        button { class: "inspect-save", id: "save-inspection", aria_label: "Save inspection report", tabindex: "-1",
-            title: "Save Markdown, selection and recent inputs (F9)",
-            onpointerdown: move |e| e.prevent_default(),
+        crate::ui::Button { class: "inspect-save", id: "save-inspection", variant: crate::ui::Variant::Ghost, label: "Save inspection report",
+            text: "Save report", tip: "Save Markdown, selection and recent inputs (F9)", keep_focus: true, focusable: false,
             onclick: move |_| {
                 let prior = snapshot(writing);
                 save(writing, trace);
@@ -243,7 +242,8 @@ pub(super) fn Inspector(mut writing: Writing, trace: Signal<Trace>, desktop: boo
                     (prior.focused.as_deref().and_then(Field::from_input_id), prior.local_bytes) {
                     writing.focus.set(Some((field, local)));
                 }
-            }, "Save report" }
+            }
+        }
         }
         if desktop { WindowTrace { writing, trace } }
     }

@@ -1,6 +1,7 @@
 use super::selection_model::SelectionInk;
 use super::table::{self, Table};
-use super::{EditorButton, Field, NodeHandle, Writing, mounted_field, report, selection};
+use super::{Field, NodeHandle, Writing, mounted_field, report, selection};
+use crate::ui::{Button, Menu, MenuItem, MenuRow, MenuSeparator, Toolbar, ToolbarLook, ToolbarSep, Variant};
 use dioxus_native::prelude::*;
 use pulldown_cmark::Alignment;
 
@@ -742,30 +743,19 @@ pub fn BlockHandle(writing: Writing, block_idx: usize, total: usize, top: i32) -
                         w.block_menu.set(next);
                     }
                 },
-                {super::ToolIcon::Grip.draw()}
+                {super::Icon::Grip.draw()}
             }
             if open {
-                div { id: "block-menu", class: "block-menu", role: "menu", aria_label: "Block menu",
-                    onpointerdown: move |e| {
-                        e.prevent_default();
-                        e.stop_propagation();
-                    },
-                    button { id: "block-move-up", role: "menuitem", disabled: block_idx == 0,
-                        onclick: move |_| writing.move_block_dir(block_idx, false),
-                        span { class: "bm-glyph", "↑" } "Move up"
-                    }
-                    button { id: "block-move-down", role: "menuitem", disabled: block_idx + 1 >= total,
-                        onclick: move |_| writing.move_block_dir(block_idx, true),
-                        span { class: "bm-glyph", "↓" } "Move down"
-                    }
-                    button { id: "block-duplicate", role: "menuitem",
-                        onclick: move |_| writing.duplicate_block_at(block_idx),
-                        span { class: "bm-glyph", "+" } "Duplicate"
-                    }
-                    button { id: "block-delete", class: "remove", role: "menuitem",
-                        onclick: move |_| writing.delete_block_at(block_idx),
-                        span { class: "bm-glyph", "×" } "Delete"
-                    }
+                Menu { id: "block-menu", class: "block-menu", label: "Block menu",
+                    MenuItem { id: "block-move-up", label: "Move up", badge: "↑", disabled: block_idx == 0,
+                        onclick: move |_| writing.move_block_dir(block_idx, false) }
+                    MenuItem { id: "block-move-down", label: "Move down", badge: "↓", disabled: block_idx + 1 >= total,
+                        onclick: move |_| writing.move_block_dir(block_idx, true) }
+                    MenuItem { id: "block-duplicate", label: "Duplicate", badge: "+",
+                        onclick: move |_| writing.duplicate_block_at(block_idx) }
+                    MenuSeparator {}
+                    MenuItem { id: "block-delete", label: "Delete", badge: "×", danger: true,
+                        onclick: move |_| writing.delete_block_at(block_idx) }
                 }
             }
         }
@@ -781,37 +771,35 @@ pub fn EmptyLineBar(writing: Writing, field: Field) -> Element {
         return rsx! {};
     }
     rsx! {
-        div {
+        Toolbar {
             id: "empty-line-tools",
             class: "empty-line-tools",
-            role: "toolbar",
-            aria_label: "Insert block",
+            label: "Insert block",
+            look: ToolbarLook::Inline,
+            keep_focus: true,
+            contain: true,
             style: "left:{x}px; top:{y}px;",
-            onpointerdown: move |e| {
-                e.prevent_default();
-                e.stop_propagation();
-            },
-            EditorButton { id: "empty-h1".to_owned(), class: "empty-tool empty-heading", label: "Heading 1", glyph: "H1", tip: "Heading 1 (⌘1)",
-                onactivate: move |_| { writing.set_heading_level(field, 1); } }
-            EditorButton { id: "empty-h2".to_owned(), class: "empty-tool empty-heading", label: "Heading 2", glyph: "H2", tip: "Heading 2 (⌘2)",
-                onactivate: move |_| { writing.set_heading_level(field, 2); } }
-            EditorButton { id: "empty-h3".to_owned(), class: "empty-tool empty-heading", label: "Heading 3", glyph: "H3", tip: "Heading 3 (⌘3)",
-                onactivate: move |_| { writing.set_heading_level(field, 3); } }
-            span { class: "empty-tool-sep", aria_hidden: "true" }
-            EditorButton { id: "empty-bullet".to_owned(), class: "empty-tool", label: "Bullet list", tip: "Bullet list", icon: super::ToolIcon::List,
-                onactivate: move |_| { writing.toggle_line_prefix("- "); } }
-            EditorButton { id: "empty-task".to_owned(), class: "empty-tool", label: "Checklist", tip: "Checklist (⌘Enter)", icon: super::ToolIcon::Task,
-                onactivate: move |_| { writing.toggle_line_task(field); } }
-            EditorButton { id: "empty-quote".to_owned(), class: "empty-tool", label: "Quote", tip: "Blockquote", icon: super::ToolIcon::Quote,
-                onactivate: move |_| { writing.toggle_line_prefix("> "); } }
-            EditorButton { id: "empty-code".to_owned(), class: "empty-tool", label: "Code block", tip: "Code block", icon: super::ToolIcon::Code,
-                onactivate: move |_| { writing.insert_code_block(); } }
-            EditorButton { id: "empty-table".to_owned(), class: "empty-tool", label: "Table", tip: "Insert table", icon: super::ToolIcon::Table,
-                onactivate: move |_| { writing.insert_table(false); } }
-            EditorButton { id: "empty-image".to_owned(), class: "empty-tool", label: "Image", tip: "Insert image", icon: super::ToolIcon::Image,
-                onactivate: move |_| { writing.insert_image(); } }
-            EditorButton { id: "empty-rule".to_owned(), class: "empty-tool", label: "Divider", tip: "Horizontal rule", icon: super::ToolIcon::Rule,
-                onactivate: move |_| { writing.insert_rule(); } }
+            Button { id: "empty-h1", class: "empty-tool", variant: Variant::Icon, label: "Heading 1", text: "H1", tip: "Heading 1 (⌘1)",
+                onclick: move |_| { writing.set_heading_level(field, 1); } }
+            Button { id: "empty-h2", class: "empty-tool", variant: Variant::Icon, label: "Heading 2", text: "H2", tip: "Heading 2 (⌘2)",
+                onclick: move |_| { writing.set_heading_level(field, 2); } }
+            Button { id: "empty-h3", class: "empty-tool", variant: Variant::Icon, label: "Heading 3", text: "H3", tip: "Heading 3 (⌘3)",
+                onclick: move |_| { writing.set_heading_level(field, 3); } }
+            ToolbarSep {}
+            Button { id: "empty-bullet", class: "empty-tool", variant: Variant::Icon, label: "Bullet list", icon: super::Icon::List,
+                onclick: move |_| { writing.toggle_line_prefix("- "); } }
+            Button { id: "empty-task", class: "empty-tool", variant: Variant::Icon, label: "Checklist", tip: "Checklist (⌘Enter)", icon: super::Icon::Task,
+                onclick: move |_| { writing.toggle_line_task(field); } }
+            Button { id: "empty-quote", class: "empty-tool", variant: Variant::Icon, label: "Quote", tip: "Blockquote", icon: super::Icon::Quote,
+                onclick: move |_| { writing.toggle_line_prefix("> "); } }
+            Button { id: "empty-code", class: "empty-tool", variant: Variant::Icon, label: "Code block", icon: super::Icon::Code,
+                onclick: move |_| { writing.insert_code_block(); } }
+            Button { id: "empty-table", class: "empty-tool", variant: Variant::Icon, label: "Table", tip: "Insert table", icon: super::Icon::Table,
+                onclick: move |_| { writing.insert_table(false); } }
+            Button { id: "empty-image", class: "empty-tool", variant: Variant::Icon, label: "Image", tip: "Insert image", icon: super::Icon::Image,
+                onclick: move |_| { writing.insert_image(); } }
+            Button { id: "empty-rule", class: "empty-tool", variant: Variant::Icon, label: "Divider", tip: "Horizontal rule", icon: super::Icon::Rule,
+                onclick: move |_| { writing.insert_rule(); } }
         }
     }
 }
@@ -883,13 +871,14 @@ fn HeaderMenuBtn(
         div {
             class: wrap_cls,
             onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-            EditorButton {
+            Button {
                 id: format!("col-menu-btn-{index}-{col}"),
+                variant: Variant::Icon,
                 class: head_menu_cls,
                 label: "Column menu",
                 tip: "Column menu & alignment",
-                icon: super::ToolIcon::ChevronDown,
-                onactivate: move |_| {
+                icon: super::Icon::ChevronDown,
+                onclick: move |_| {
                     let mut w = writing;
                     let target = super::writing::TableMenu::Column(index, col);
                     let next = (*w.table_menu.peek() != Some(target)).then_some(target);
@@ -937,42 +926,30 @@ fn ColStrip(
                     class: "ledger-col-slot",
                     flex_grow: weight.to_string(),
                     if slot_c == c {
-                        div {
+                        Menu {
                             id: format!("col-menu-{index}-{c}"),
-                            class: "ledger-axis-menu col-menu",
-                            class: if align_start { "align-start" },
-                            class: if align_end { "align-end" },
-                            role: "menu",
-                            aria_label: format!("Column {} menu", c + 1),
-                            onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                            div { class: "ledger-axis-align",
-                                EditorButton { id: format!("align-left-{index}"), class: "ledger-mini", label: "Align left", tip: "Align left", icon: super::ToolIcon::AlignLeft, selected: matches!(col_align, Alignment::Left | Alignment::None),
-                                    onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
-                                EditorButton { id: format!("align-center-{index}"), class: "ledger-mini", label: "Align center", tip: "Align center", icon: super::ToolIcon::AlignCenter, selected: col_align == Alignment::Center,
-                                    onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
-                                EditorButton { id: format!("align-right-{index}"), class: "ledger-mini", label: "Align right", tip: "Align right", icon: super::ToolIcon::AlignRight, selected: col_align == Alignment::Right,
-                                    onactivate: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
+                            class: if align_start { "ledger-axis-menu col-menu align-start" } else if align_end { "ledger-axis-menu col-menu align-end" } else { "ledger-axis-menu col-menu" },
+                            label: format!("Column {} menu", c + 1),
+                            MenuRow {
+                                Button { id: format!("align-left-{index}"), variant: Variant::Icon, label: "Align left", icon: super::Icon::AlignLeft, selected: matches!(col_align, Alignment::Left | Alignment::None),
+                                    onclick: move |_| writing.align_columns(index, col_rect, Alignment::Left) }
+                                Button { id: format!("align-center-{index}"), variant: Variant::Icon, label: "Align center", icon: super::Icon::AlignCenter, selected: col_align == Alignment::Center,
+                                    onclick: move |_| writing.align_columns(index, col_rect, Alignment::Center) }
+                                Button { id: format!("align-right-{index}"), variant: Variant::Icon, label: "Align right", icon: super::Icon::AlignRight, selected: col_align == Alignment::Right,
+                                    onclick: move |_| writing.align_columns(index, col_rect, Alignment::Right) }
                             }
-                            button { id: format!("col-menu-move-left-{index}-{c}"), role: "menuitem", disabled: c == 0,
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, false); },
-                                span { class: "bm-glyph", "←" } "Move left"
-                            }
-                            button { id: format!("col-menu-move-right-{index}-{c}"), role: "menuitem", disabled: c + 1 >= width_count,
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, true); },
-                                span { class: "bm-glyph", "→" } "Move right"
-                            }
-                            button { id: format!("col-menu-insert-left-{index}-{c}"), role: "menuitem",
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c); },
-                                span { class: "bm-glyph", "+" } "Insert left"
-                            }
-                            button { id: format!("col-menu-insert-right-{index}-{c}"), role: "menuitem",
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c + 1); },
-                                span { class: "bm-glyph", "+" } "Insert right"
-                            }
-                            button { id: format!("col-menu-delete-{index}-{c}"), class: "remove", role: "menuitem", disabled: width_count <= 1, aria_disabled: if width_count <= 1 { "true" } else { "false" },
-                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.remove_axis(index, col_rect, true); },
-                                span { class: "bm-glyph", "×" } "Delete column"
-                            }
+                            MenuSeparator {}
+                            MenuItem { id: format!("col-menu-move-left-{index}-{c}"), label: "Move left", badge: "←", disabled: c == 0,
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, false); } }
+                            MenuItem { id: format!("col-menu-move-right-{index}-{c}"), label: "Move right", badge: "→", disabled: c + 1 >= width_count,
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_column_dir(index, active_row, c, true); } }
+                            MenuItem { id: format!("col-menu-insert-left-{index}-{c}"), label: "Insert left", badge: "+",
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c); } }
+                            MenuItem { id: format!("col-menu-insert-right-{index}-{c}"), label: "Insert right", badge: "+",
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_column_at(index, active_row, c + 1); } }
+                            MenuSeparator {}
+                            MenuItem { id: format!("col-menu-delete-{index}-{c}"), label: "Delete column", badge: "×", danger: true, disabled: width_count <= 1,
+                                onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.remove_axis(index, col_rect, true); } }
                         }
                     }
                 }
@@ -1024,13 +1001,13 @@ fn RowStrip(
                                 div {
                                     class: "ledger-axis-group",
                                     onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                                    EditorButton {
+                                    Button {
                                         id: format!("row-menu-btn-{index}-{r}"),
+                                        variant: Variant::Icon,
                                         class: row_menu_cls,
                                         label: "Row menu",
-                                        tip: "Row menu",
-                                        icon: super::ToolIcon::ChevronDown,
-                                        onactivate: move |_| {
+                                        icon: super::Icon::ChevronDown,
+                                        onclick: move |_| {
                                             let mut w = writing;
                                             let target = super::writing::TableMenu::Row(index, r);
                                             let next = (*w.table_menu.peek() != Some(target)).then_some(target);
@@ -1040,32 +1017,21 @@ fn RowStrip(
                                 }
                             }
                             if row_open {
-                                div {
+                                Menu {
                                     id: format!("row-menu-{index}-{r}"),
                                     class: "ledger-axis-menu row-menu",
-                                    role: "menu",
-                                    aria_label: format!("Row {} menu", r + 1),
-                                    onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
-                                    button { id: format!("row-menu-move-up-{index}-{r}"), role: "menuitem", disabled: r <= 1,
-                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_row_dir(index, r, active_col, false); },
-                                        span { class: "bm-glyph", "↑" } "Move up"
-                                    }
-                                    button { id: format!("row-menu-move-down-{index}-{r}"), role: "menuitem", disabled: r + 1 >= row_count,
-                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_row_dir(index, r, active_col, true); },
-                                        span { class: "bm-glyph", "↓" } "Move down"
-                                    }
-                                    button { id: format!("row-menu-insert-above-{index}-{r}"), role: "menuitem",
-                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_row_at(index, r, active_col); },
-                                        span { class: "bm-glyph", "+" } "Insert above"
-                                    }
-                                    button { id: format!("row-menu-insert-below-{index}-{r}"), role: "menuitem",
-                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_row_at(index, r + 1, active_col); },
-                                        span { class: "bm-glyph", "+" } "Insert below"
-                                    }
-                                    button { id: format!("row-menu-delete-{index}-{r}"), class: "remove", role: "menuitem",
-                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.remove_axis(index, row_rect, false); },
-                                        span { class: "bm-glyph", "×" } "Delete row"
-                                    }
+                                    label: format!("Row {} menu", r + 1),
+                                    MenuItem { id: format!("row-menu-move-up-{index}-{r}"), label: "Move up", badge: "↑", disabled: r <= 1,
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_row_dir(index, r, active_col, false); } }
+                                    MenuItem { id: format!("row-menu-move-down-{index}-{r}"), label: "Move down", badge: "↓", disabled: r + 1 >= row_count,
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.move_row_dir(index, r, active_col, true); } }
+                                    MenuItem { id: format!("row-menu-insert-above-{index}-{r}"), label: "Insert above", badge: "+",
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_row_at(index, r, active_col); } }
+                                    MenuItem { id: format!("row-menu-insert-below-{index}-{r}"), label: "Insert below", badge: "+",
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.insert_row_at(index, r + 1, active_col); } }
+                                    MenuSeparator {}
+                                    MenuItem { id: format!("row-menu-delete-{index}-{r}"), label: "Delete row", badge: "×", danger: true,
+                                        onclick: move |_| { hovered_col.set(None); hovered_row.set(None); writing.remove_axis(index, row_rect, false); } }
                                 }
                             }
                         }
@@ -1330,16 +1296,16 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                     {
                         let [r, c] = rect.head;
                         rsx! {
-                            div { id: "table-bar-{index}", class: "ledger-bar-group",
-                                onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
+                            Toolbar { id: "table-bar-{index}", class: "ledger-bar-group", label: "Selected cells", look: ToolbarLook::Inline, keep_focus: true, contain: true,
                                 span { class: "ledger-bar-scope", "{scope_label(rect)}" }
                                 span { class: "cell-count", "{rect.count()} cells" }
-                                EditorButton { id: format!("clear-cells-{index}"), class: "ledger-chip", label: "Clear selected cells", glyph: "Clear",
-                                    onactivate: move |_| { writing.clear_or_fill(index, rect, "", r, c); } }
-                                EditorButton { id: format!("delete-row-{index}"), class: "ledger-chip remove", label: row_label, glyph: "Del rows",
-                                    disabled: rect.rows().start == 0, onactivate: move |_| writing.remove_axis(index, rect, false) }
-                                EditorButton { id: format!("delete-column-{index}"), class: "ledger-chip remove", label: col_label, glyph: "Del cols",
-                                    disabled: rect.cols().len() >= grid.width(), onactivate: move |_| writing.remove_axis(index, rect, true) }
+                                ToolbarSep {}
+                                Button { id: format!("clear-cells-{index}"), variant: Variant::Ghost, class: "ledger-chip", label: "Clear selected cells", text: "Clear",
+                                    onclick: move |_| { writing.clear_or_fill(index, rect, "", r, c); } }
+                                Button { id: format!("delete-row-{index}"), variant: Variant::Ghost, class: "ledger-chip", danger: true, label: row_label, text: "Del rows",
+                                    disabled: rect.rows().start == 0, onclick: move |_| writing.remove_axis(index, rect, false) }
+                                Button { id: format!("delete-column-{index}"), variant: Variant::Ghost, class: "ledger-chip", danger: true, label: col_label, text: "Del cols",
+                                    disabled: rect.cols().len() >= grid.width(), onclick: move |_| writing.remove_axis(index, rect, true) }
                             }
                         }
                     }

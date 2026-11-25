@@ -150,12 +150,20 @@ impl Note {
     }
 
     /// Capture a Loro CRDT cursor pair for a UTF-8 byte range so comment anchors
-    /// survive edits elsewhere in the document.
+    /// survive edits elsewhere in the document. `md` is the current Markdown.
     pub fn anchor_range(
         &self,
         range: Range<usize>,
     ) -> Option<(loro::cursor::Cursor, loro::cursor::Cursor)> {
-        let md = self.markdown();
+        self.anchor_range_in(&self.markdown(), range)
+    }
+
+    /// `anchor_range` against Markdown the caller already holds (no rebuild).
+    pub fn anchor_range_in(
+        &self,
+        md: &str,
+        range: Range<usize>,
+    ) -> Option<(loro::cursor::Cursor, loro::cursor::Cursor)> {
         let start = md.floor_char_boundary(range.start.min(md.len()));
         let end = md.floor_char_boundary(range.end.min(md.len()));
         if start >= end {
@@ -169,12 +177,21 @@ impl Note {
         Some((a, b))
     }
 
-    /// Resolve a Loro CRDT cursor pair back to current UTF-8 byte offsets.
+    /// Resolve a Loro CRDT cursor pair back to current UTF-8 byte offsets in
+    /// `md`, the current Markdown.
     pub fn resolve_anchor(
         &self,
+        anchor: &(loro::cursor::Cursor, loro::cursor::Cursor),
+    ) -> Option<Range<usize>> {
+        self.resolve_anchor_in(&self.markdown(), anchor)
+    }
+
+    /// `resolve_anchor` against Markdown the caller already holds (no rebuild).
+    pub fn resolve_anchor_in(
+        &self,
+        md: &str,
         (a, b): &(loro::cursor::Cursor, loro::cursor::Cursor),
     ) -> Option<Range<usize>> {
-        let md = self.markdown();
         let text = self.doc.get_text("markdown");
         let ra = self.doc.get_cursor_pos(a).ok()?.current.pos;
         let rb = self.doc.get_cursor_pos(b).ok()?.current.pos;
