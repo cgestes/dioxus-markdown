@@ -7,4 +7,6 @@ pub mod format;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod note;
 pub mod preview;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod sync;
 pub mod table;

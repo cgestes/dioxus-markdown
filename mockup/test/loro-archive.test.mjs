@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { test } from "node:test";
-import { Cursor, LoroDoc, decodeImportBlobMeta } from "loro-crdt/base64";
+import { LoroDoc, decodeImportBlobMeta } from "loro-crdt/base64";
 import { checkedStyle, locate, markdownText, remember } from "../src/loro-editor.js";
+import { SyncSession, configureDoc, missingSpansFromMeta } from "../src/sync-archive.js";
 
 // ---------------------------------------------------------------------------
 // 1. Opaque Relay (zero-knowledge) & Client-Side Encrypted Archive
@@ -165,123 +166,23 @@ class EncryptedArchive {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Transport-Independent On-Demand History Adapter (Impl A: Ships Today)
+// 2. Archive Pump Driver over Production SyncSession (`../src/sync-archive.js`)
 // ---------------------------------------------------------------------------
 
 function makeDoc(peerId) {
-  const doc = new LoroDoc();
-  doc.configTextStyle({ [checkedStyle]: { expand: "none" }, bold: { expand: "after" } });
+  const doc = configureDoc(new LoroDoc());
   if (peerId !== undefined) doc.setPeerId(String(peerId));
   return doc;
 }
 
-function missingSpansFromMeta(meta, vvMap) {
-  const needEnd = new Map();
-  for (const dep of meta.startFrontiers) {
-    const peer = String(dep.peer);
-    if (dep.counter + 1 > (vvMap.get(peer) ?? 0)) {
-      needEnd.set(peer, Math.max(needEnd.get(peer) ?? 0, dep.counter + 1));
-    }
-  }
-  return [...needEnd].map(([peer, end]) => ({ peer, start: vvMap.get(peer) ?? 0, end }));
-}
-
-class HistorySession {
+class HistorySession extends SyncSession {
   constructor(doc) {
-    this.doc = doc;
-    this.preRootJournal = [];
-    this.seen = new Set();
-    this.needEnd = new Map(); // peer -> required end counter
-    this.needsCheckpoint = false;
+    super(doc);
     this.outcome = { status: "ready" };
   }
 
-  _recordDeps(bytes) {
-    const vv = this.doc.oplogVersion().toJSON();
-    for (const { peer, end } of missingSpansFromMeta(decodeImportBlobMeta(bytes, true), vv)) {
-      this.needEnd.set(peer, Math.max(this.needEnd.get(peer) ?? 0, end));
-    }
-  }
-
   ingestUpdate(bytes) {
-    const h = sha256Hex(bytes);
-    if (this.seen.has(h)) return this.nextDemand();
-    try {
-      const status = this.doc.import(bytes);
-      this.seen.add(h);
-      if (status.pending?.size) this._recordDeps(bytes);
-      const pending = this.doc.exportPendingUpdates();
-      if (pending) this._recordDeps(pending);
-      return this.nextDemand();
-    } catch (err) {
-      if (this.doc.isShallow() && /shallow history|outdated/i.test(String(err))) {
-        this.seen.add(h);
-        this.preRootJournal.push(new Uint8Array(bytes));
-        this.needsCheckpoint = true;
-        return this.nextDemand();
-      }
-      throw err;
-    }
-  }
-
-  resolveCursor(bytes) {
-    const cursor = Cursor.decode(bytes);
-    try {
-      const res = this.doc.getCursorPos(cursor);
-      if (res !== undefined) {
-        res.update?.free();
-        return { status: "resolved", offset: res.offset, side: res.side };
-      }
-      const id = cursor.pos();
-      if (this.doc.isShallow() && id && (this.doc.shallowSinceVV().toJSON().get(String(id.peer)) ?? 0) > id.counter) {
-        this.needsCheckpoint = true;
-        return { status: "needs-history", demand: this.nextDemand() };
-      }
-      return { status: "not-found" };
-    } finally {
-      cursor.free();
-    }
-  }
-
-  nextDemand() {
-    const vv = this.doc.oplogVersion().toJSON();
-    for (const [peer, end] of this.needEnd) {
-      if ((vv.get(peer) ?? 0) >= end) this.needEnd.delete(peer);
-    }
-    if (this.needsCheckpoint && this.doc.isShallow()) return { kind: "needs-checkpoint" };
-    if (this.needEnd.size) {
-      return {
-        kind: "missing-spans",
-        spans: [...this.needEnd].map(([peer, end]) => ({ peer, start: vv.get(peer) ?? 0, end })),
-      };
-    }
-    return { kind: "none" };
-  }
-
-  supplyHistory(res) {
-    if (res.status !== "ok") {
-      this.outcome = res;
-      return this.outcome;
-    }
-    if (res.kind === "updates") {
-      for (const b of res.blobs) this.ingestUpdate(b);
-      this.outcome = { status: "ok" };
-      return this.outcome;
-    }
-    // Impl A: fresh-replica rebuild from retained full checkpoint + suffix + pending + pre-root journal
-    const fresh = makeDoc(this.doc.peerId);
-    fresh.import(res.bytes);
-    fresh.import(this.doc.export({ mode: "update", from: fresh.oplogVersion() }));
-    const pending = this.doc.exportPendingUpdates();
-    if (pending) fresh.import(pending);
-    this.preRootJournal = this.preRootJournal.filter((u) => fresh.import(u).pending?.size);
-    this.doc = fresh;
-    this.needsCheckpoint = false;
-    this.needEnd.clear();
-    const stillPending = this.doc.exportPendingUpdates();
-    if (stillPending) this._recordDeps(stillPending);
-    this.outcome = { status: "rebuilt-full" };
-    return this.outcome;
+    return this.ingest(bytes).demand;
   }
 
   pump(archive, maxRounds = 16) {
@@ -290,39 +191,26 @@ class HistorySession {
       if (demand.kind === "none") return this.outcome;
       if (demand.kind === "needs-checkpoint") {
         const res = archive.fetchCheckpoint();
-        if (res.status !== "ok") return this.supplyHistory(res);
-        this.supplyHistory({ status: "ok", kind: "checkpoint", bytes: res.bytes });
+        if (res.status !== "ok") return (this.outcome = res);
+        this.rebuildFromCheckpoint(res.bytes);
+        this.outcome = { status: "rebuilt-full" };
       } else {
-        const blobs = [];
         for (const s of demand.spans) {
           const res = archive.fetchSpan(s.peer, s.start, s.end);
-          if (res.status !== "ok") return this.supplyHistory(res);
-          blobs.push(...res.blobs);
+          if (res.status !== "ok") return (this.outcome = res);
+          for (const b of res.blobs) this.ingest(b);
         }
-        this.supplyHistory({ status: "ok", kind: "updates", blobs });
+        this.outcome = { status: "ok" };
       }
     }
     throw new Error("exceeded max fetch rounds");
   }
 
-  persist() {
-    return {
-      peerId: this.doc.peerId,
-      snapshot: this.doc.export({ mode: "snapshot" }),
-      pending: this.doc.exportPendingUpdates() ?? null,
-      preRootJournal: this.preRootJournal.map((b) => new Uint8Array(b)),
-      needsCheckpoint: this.needsCheckpoint,
-    };
-  }
-
   static restore(saved) {
-    const doc = makeDoc(saved.peerId);
-    doc.import(saved.snapshot);
-    const s = new HistorySession(doc);
-    if (saved.pending) s.ingestUpdate(saved.pending);
-    for (const u of saved.preRootJournal) s.ingestUpdate(u);
-    s.needsCheckpoint ||= saved.needsCheckpoint && doc.isShallow();
-    return s;
+    const base = SyncSession.restore(saved);
+    const wrapped = Object.setPrototypeOf(base, HistorySession.prototype);
+    wrapped.outcome = { status: "ready" };
+    return wrapped;
   }
 }
 

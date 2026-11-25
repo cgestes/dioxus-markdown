@@ -354,13 +354,34 @@ fn notebook(initial: &'static str) -> Element {
     notebook_view(initial, View::Live, false, false)
 }
 
+fn sync_file_arg() -> Option<std::path::PathBuf> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--sync-file" {
+            return args.next().map(std::path::PathBuf::from);
+        }
+        if let Some(path) = arg.strip_prefix("--sync-file=") {
+            return Some(std::path::PathBuf::from(path));
+        }
+    }
+    None
+}
+
 fn notebook_view(
     initial: &str,
     initial_view: View,
     inspect_at_start: bool,
     seed_comments: bool,
 ) -> Element {
-    let note = use_signal(|| Note::new(initial));
+    let sync_path = use_hook(sync_file_arg);
+    let initial_sync = sync_path.clone();
+    let note = use_signal(move || {
+        initial_sync
+            .as_deref()
+            .and_then(|p| margin_editor_core::sync::NoteSync::load_from_file(p).ok())
+            .map(margin_editor_core::sync::NoteSync::into_note)
+            .unwrap_or_else(|| Note::new(initial))
+    });
     let comments = use_signal(move || {
         if seed_comments {
             comments::seed_sample_comments(&note.peek())
@@ -395,6 +416,16 @@ fn notebook_view(
         contents.read();
         rev_counter += 1;
         rev_counter
+    });
+    use_effect(move || {
+        let _ = doc_rev();
+        if let Some(path) = sync_path.as_deref() {
+            let sync = margin_editor_core::sync::NoteSync::new(
+                Note::from_doc(note.peek().document().fork()),
+                1,
+            );
+            let _ = sync.save_to_file(path);
+        }
     });
     let index = use_memo(move || markdown_markers(&contents.read()));
     let draft_table = use_signal(|| None);

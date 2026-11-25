@@ -1,6 +1,7 @@
 import { EphemeralStore, LoroDoc } from "loro-crdt/base64";
 import { examples } from "./notes.mjs";
 import { checkedStyle } from "./loro-editor.js";
+import { SyncSession } from "./sync-archive.js";
 
 const directory = "@files";
 const request = req => new Promise((resolve, reject) => {
@@ -87,9 +88,11 @@ async function storage(name, report) {
         all.onsuccess = () => {
           const merged = seeded(id);
           const status = merged.importBatch(all.result.map(r => r.bytes));
-          if (!status.pending?.size) {
-            for (const key of keys.result) store.delete(key);
-            store.add({ id, bytes: merged.export({ mode: "snapshot" }) });
+          const pendingBytes = merged.exportPendingUpdates();
+          for (const key of keys.result) store.delete(key);
+          store.add({ id, bytes: merged.export({ mode: "snapshot" }) });
+          if (pendingBytes || status.pending?.size) {
+            if (pendingBytes) store.add({ id, bytes: pendingBytes });
           }
           merged.free();
         };
@@ -111,18 +114,22 @@ export async function openNotebook(report) {
   catch { report("Session only · use Export .md"); }
   let channel;
   try { channel = new BroadcastChannel("margin-loro.1/" + name); } catch { /* File preview */ }
-  const docs = new Map();
-  function getDoc(id) {
-    if (docs.has(id)) return docs.get(id);
-    const doc = seeded(id);
-    docs.set(id, doc);
+  const sessions = new Map();
+  function attachLocalUpdates(id, doc) {
     doc.subscribeLocalUpdates(bytes => {
       disk?.save(id, bytes);
       channel?.postMessage({ kind: "update", id, update: bytes });
     });
-    return doc;
   }
-  for (const { id, bytes } of disk?.rows ?? []) getDoc(id).import(bytes);
+  function getSession(id) {
+    if (sessions.has(id)) return sessions.get(id);
+    const session = new SyncSession(seeded(id));
+    sessions.set(id, session);
+    attachLocalUpdates(id, session.doc);
+    return session;
+  }
+  const getDoc = id => getSession(id).doc;
+  for (const { id, bytes } of disk?.rows ?? []) getSession(id).ingest(bytes);
   const meta = getDoc(directory), map = meta.getMap("files"), files = new Map(map.entries());
   const clientID = meta.peerIdStr;
   const listeners = new Set();
@@ -146,7 +153,16 @@ export async function openNotebook(report) {
   };
   if (channel) {
     function sendSnapshots(to) {
-      for (const [id, doc] of docs) channel.postMessage({ kind: "snapshot", id, update: doc.export({ mode: "snapshot" }), to });
+      for (const [id, session] of sessions) {
+        channel.postMessage({ kind: "snapshot", id, update: session.doc.export({ mode: "snapshot" }), to });
+      }
+    }
+    function requestDemand(id, demand) {
+      if (demand.kind === "missing-spans") {
+        channel.postMessage({ kind: "need-spans", id, spans: demand.spans, from: clientID });
+      } else if (demand.kind === "needs-checkpoint") {
+        channel.postMessage({ kind: "need-checkpoint", id, from: clientID });
+      }
     }
     channel.onmessage = ({ data }) => {
       if (data.to && data.to !== clientID) return;
@@ -156,11 +172,31 @@ export async function openNotebook(report) {
         publish();
       } else if (data.kind === "reply") sendSnapshots(data.from);
       else if (data.kind === "presence") presence.apply(data.bytes);
-      else if (data.kind === "update" || data.kind === "snapshot") {
-        const doc = getDoc(data.id);
-        const initial = doc.opCount();
-        const imported = doc.import(data.update);
-        if (initial !== doc.opCount() || imported.pending?.size) disk?.save(data.id, data.update);
+      else if (data.kind === "need-spans") {
+        const session = sessions.get(data.id);
+        const bytes = session?.exportSpans(data.spans);
+        if (bytes) channel.postMessage({ kind: "update", id: data.id, update: bytes, to: data.from });
+      } else if (data.kind === "need-checkpoint") {
+        const session = sessions.get(data.id);
+        if (session && !session.doc.isShallow()) {
+          channel.postMessage({
+            kind: "checkpoint",
+            id: data.id,
+            update: session.doc.export({ mode: "snapshot" }),
+            to: data.from,
+          });
+        }
+      } else if (data.kind === "checkpoint") {
+        const session = getSession(data.id);
+        const demand = session.rebuildFromCheckpoint(data.update);
+        attachLocalUpdates(data.id, session.doc);
+        disk?.save(data.id, session.doc.export({ mode: "snapshot" }));
+        requestDemand(data.id, demand);
+      } else if (data.kind === "update" || data.kind === "snapshot") {
+        const session = getSession(data.id);
+        const { changed, demand } = session.ingest(data.update);
+        if (changed) disk?.save(data.id, data.update);
+        requestDemand(data.id, demand);
       }
     };
     const hello = () => channel.postMessage({ kind: "hello", from: clientID });
@@ -170,7 +206,7 @@ export async function openNotebook(report) {
     window.addEventListener("pageshow", event => { if (event.persisted) { hello(); publish(); heartbeat = setInterval(publish, 10000); } });
   } else publish();
   return {
-    clientID, files, awareness, canShare: Boolean(channel), getDoc,
+    clientID, files, awareness, canShare: Boolean(channel), getDoc, getSession,
     onFiles(fn) { listeners.add(fn); },
     create(id, name) {
       const doc = getDoc(id); doc.getText("markdown").insert(0, "# " + name + "\n\n"); doc.commit();
