@@ -60,6 +60,9 @@
 .ledger:hover .ledger-data, .ledger:focus-within .ledger-data, .ledger.engaged .ledger-data { --cell-guide: var(--line); }
 .ledger .ledger-data.is-editing { --cell-paper: var(--wash); }
 .ledger .ledger-head.is-editing { --cell-paper: var(--pale); }
+.ledger .ledger-data.col-menu-target,
+.ledger .row-menu-target .ledger-data { --cell-paper: var(--wash); }
+.ledger .ledger-head.col-menu-target { --cell-paper: var(--pale); }
 .ledger .ledger-cell.is-editing { outline: 2px solid var(--cell-ring); outline-offset: -2px; }
 .ledger .ledger-cell.range-cell {
   --cell-paper: var(--ledger-selection);
@@ -112,14 +115,50 @@
   position: relative;
   flex: 1 1 0;
   min-width: 88px;
+  padding: 0 var(--ledger-pad);
+  border-right: 1px solid transparent;
   height: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  pointer-events: none;
+}
+.ledger .ledger-col-slot:last-child { border-right: 0; }
+.ledger .ledger-col-handle-wrap {
+  margin-top: -8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+.ledger .ledger-col-handle.ui-btn.icon {
+  width: 28px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgba(22, 21, 44, .12);
+  user-select: none;
+  pointer-events: auto;
+}
+.ledger .ledger-col-handle .tool-icon,
+.ledger .ledger-col-handle .tool-icon svg { width: 13px; height: 13px; }
+.ledger .ledger-col-handle.ui-btn.icon:hover,
+.ledger .ledger-col-handle.ui-btn.icon:focus-visible,
+.ledger .ledger-col-handle.ui-btn.icon.open {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 2px 6px rgba(22, 21, 44, .2);
 }
 .ledger .ledger-row-strip {
   position: absolute;
-  left: -26px;
+  left: -8px;
   top: var(--ledger-head);
-  width: 26px;
-  z-index: 7;
+  width: 16px;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   pointer-events: none;
@@ -131,37 +170,36 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-right: 4px;
+  pointer-events: none;
 }
-.ledger .ledger-axis-group {
+.ledger .ledger-row-handle-wrap {
   display: flex;
   align-items: center;
-  gap: 1px;
-  user-select: none;
+  justify-content: center;
+  pointer-events: auto;
 }
-.ledger .ledger-row-btn.ui-btn.icon,
-.ledger .ledger-head-menu-btn.ui-btn.icon {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-s);
+.ledger .ledger-row-handle.ui-btn.icon {
+  width: 15px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
   color: var(--muted);
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgba(22, 21, 44, .12);
+  user-select: none;
+  pointer-events: auto;
 }
-.ledger .ledger-row-btn .tool-icon,
-.ledger .ledger-row-btn .tool-icon svg { width: 13px; height: 13px; }
-.ledger .ledger-row-btn.ui-btn.icon:hover, .ledger .ledger-row-btn.open,
-.ledger .ledger-head-menu-btn.ui-btn.icon:hover, .ledger .ledger-head-menu-btn.open { color: var(--accent-deep); background: var(--pale); }
-.ledger .ledger-head-menu-wrap {
-  display: flex;
-  align-items: center;
-  margin-left: 4px;
-  flex: 0 0 auto;
+.ledger .ledger-row-handle .tool-icon,
+.ledger .ledger-row-handle .tool-icon svg { width: 13px; height: 13px; }
+.ledger .ledger-row-handle.ui-btn.icon:hover,
+.ledger .ledger-row-handle.ui-btn.icon:focus-visible,
+.ledger .ledger-row-handle.ui-btn.icon.open {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 2px 6px rgba(22, 21, 44, .2);
 }
-.ledger .ledger-head-menu-wrap.align-left {
-  margin-left: 0;
-  margin-right: 4px;
-}
-.ledger .ledger-head-menu-btn .tool-icon,
-.ledger .ledger-head-menu-btn .tool-icon svg { width: 13px; height: 13px; }
 .ledger .ledger-axis-menu {
   position: absolute;
   top: 22px;
@@ -170,19 +208,19 @@
   width: 150px;
 }
 .ledger .ledger-axis-menu.col-menu {
-  top: 40px;
+  top: 12px;
 }
 .ledger .ledger-axis-menu.align-start {
-  left: 8px;
+  left: 4px;
   right: auto;
 }
 .ledger .ledger-axis-menu.align-end {
   left: auto;
-  right: 8px;
+  right: 4px;
 }
 .ledger .ledger-axis-menu.row-menu {
-  top: 12px;
-  left: 24px;
+  top: 6px;
+  left: 20px;
 }
 .ledger .cell-count { color: var(--accent-deep); font: var(--font-mono-ui); }
 .ledger .ledger-bar-group .ui-btn.danger:hover { background: var(--alert-wash); color: var(--alert); }

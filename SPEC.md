@@ -103,6 +103,7 @@ preserves concurrent edits and a recovery window.
 
 - **Always-Visible Caret (`.caret-ink`):**
   - Styled runs painted as `.md-ink` overlays sit above `<textarea>` with opaque backgrounds. A dedicated `.caret-ink` overlay (`z-index: 3`, exact Parley `cursor_geometry(1.5)`) paints **above** `.md-ink` so the cursor is always sharp and visible inside bold, italic, strikethrough, completed tasks, inline code, links, quotes, headings, and table cells (including light caret on dark table headers).
+  - Long single-line table cells maintain horizontal scroll margin (`keep_caret_in_view`) and scroll-aware caret tracking (`TrackedKey` includes `scroll_offset`) so typing, arrowing, or wheel-scrolling inside a long cell never loses or clips the caret on 1× or 2× Retina displays.
 - **Consistent Selection Color:**
   - Single-field selection uses Blitz's native highlight (`rgb(180, 213, 255)`).
   - Cross-block/multiline `.selection-ink` uses `rgba(81, 161, 255, 0.42)` (and `.marker-face.selected` uses `#7ab3fa`) so single-field and cross-block selections match seamlessly with no color shift.
@@ -141,10 +142,10 @@ preserves concurrent edits and a recovery window.
 - **Visual Design:**
   - Light header (`--wash` background, small `--muted` 600 labels, a 1px `--line-strong` rule under it) with `6px` rounded corners, rows divided by `--line` hairlines; the accent appears only for focus and selection (cell ring, range cells, current cell), no stray bottom line on the last row (with matching `6px` rounded bottom corners), steady column widths while typing (no jitter), aligned cell hit areas (`left`, `center`, `right`).
   - No floating column/row toolbars, no edge `+` column/row buttons, and no `"Cell xx"` single-cell footer clutter.
-- **Minimal Menu-Only Controls (Hovered/Active Column & Row Only):**
-  - Controls appear **only for the currently hovered (or focused/menu-open) column and row** — keeping all other columns and rows completely clean.
-  - **Column header menu (`⌄` inside header cell):** The hovered/active column header displays a subtle downward chevron icon (`ui::Icon::ChevronDown`) directly inside the light header (right side for left/center columns, left side for right-aligned columns). Clicking it opens the column menu anchored directly under the chevron with **alignment icons (`AlignLeft` / `AlignCenter` / `AlignRight`)**, Move Left/Right, Insert Left/Right, and Delete Column.
-  - **Row menu (`⌄` beside data row):** The hovered/active data row displays a single downward chevron icon (`ui::Icon::ChevronDown`) to its left. Clicking it opens the row menu with Move Up/Down, Insert Above/Below, and Delete Row.
+- **Craft-Inspired Edge Pill Controls (Hovered/Active Column & Row Only):**
+  - Controls appear **only for the currently hovered (or focused/menu-open) column and row** — keeping all other columns and rows completely clean, and never stealing width from header or cell text.
+  - **Column pill handle (`•••` on top border):** A compact horizontal triple-dot pill (`ui::Icon::DotsHorizontal`) sits centered on and straddling the top border edge of the hovered/active column. Clicking it highlights the column and opens the column menu directly underneath with **alignment icons (`AlignLeft` / `AlignCenter` / `AlignRight`)**, Move Left/Right, Insert Left/Right, and Delete Column.
+  - **Row pill handle (`⋮` on left border):** A compact vertical triple-dot pill (`ui::Icon::DotsVertical`) sits centered on and straddling the left border edge of the hovered/active data row (clear of both the outer `⋮⋮` block drag handle and column 0 text). Clicking it highlights the row and opens the row menu beside it with Move Up/Down, Insert Above/Below, and Delete Row.
   - **Bottom range strip (`#table-bar-{t}`):** Hidden for single-cell editing; appears only when a multi-cell rectangular range is selected (`B2 – C3 · N cells  Clear  Del rows  Del cols`).
 - **Keyboard & Pointer:**
   - `Tab` / `Shift+Tab` move horizontally (growing a new row at the last cell); `Enter` / `Shift+Enter` move vertically.

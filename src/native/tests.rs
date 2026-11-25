@@ -2531,6 +2531,171 @@ fn comment_files_round_trip_and_reattach_after_outside_edits() {
     });
 }
 
+#[test]
+fn long_table_cell_keeps_caret_visible_while_scrolling_and_craft_handles_sit_on_edges() {
+    use blitz_traits::events::{BlitzWheelDelta, BlitzWheelEvent};
+
+    for scale in [1.0_f32, 2.0_f32] {
+        let config = dioxus_native::DocumentConfig {
+            font_ctx: Some(typefaces::notebook_fonts()),
+            viewport: Some(Viewport {
+                window_size: ((820.0 * scale) as u32, (560.0 * scale) as u32),
+                hidpi_scale: scale,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let long_left = "Water rushing steadily through the north lock gate and all the way down the stone canal basin";
+        let long_right = "1234567890-9876543210-1234567890-long-right-aligned-duration-value";
+        let md = format!(
+            "# Field notes\n\n| Stop | Listen for | Take |\n| :--- | :--- | ---: |\n| North lock | {long_left} | {long_right} |\n| Footbridge | Short | 30 s |\n\nTail"
+        );
+        let mut doc = DioxusDocument::new(VirtualDom::new(|| notebook(SAMPLE)), config);
+        doc.initial_build();
+        render(&mut doc);
+        open_markdown(&mut doc, &md, md.find(long_left).unwrap());
+
+        // 1. Craft-inspired triple-dot handles sit straddling the top edge of col 1 and left edge of row 1.
+        let grid_rect = bounds(&doc, "grid-scroll-0");
+        let col1_slot = bounds(&doc, "slot-0-0-1");
+        let row1_slot = bounds(&doc, "slot-0-1-0");
+        let col_btn = bounds(&doc, "col-menu-btn-0-1");
+        let row_btn = bounds(&doc, "row-menu-btn-0-1");
+        // Column pill straddles the top border of the table and is centered on column 1.
+        assert!(
+            col_btn[1] < grid_rect[1] && col_btn[1] + col_btn[3] > grid_rect[1],
+            "col pill must straddle top edge: col_btn={col_btn:?}, grid={grid_rect:?}"
+        );
+        let col_btn_cx = col_btn[0] + col_btn[2] * 0.5;
+        let col1_cx = col1_slot[0] + col1_slot[2] * 0.5;
+        assert!(
+            (col_btn_cx - col1_cx).abs() < 2.0,
+            "col pill must be centered over col 1: btn_cx={col_btn_cx}, col_cx={col1_cx}"
+        );
+        // Row pill straddles the left border of row 1, centered vertically, clear of column 0 text (15px pad).
+        assert!(
+            row_btn[0] < grid_rect[0] && row_btn[0] + row_btn[2] > grid_rect[0],
+            "row pill must straddle left edge: row_btn={row_btn:?}, grid={grid_rect:?}"
+        );
+        assert!(
+            row_btn[0] + row_btn[2] < grid_rect[0] + 12.0,
+            "row pill must stay clear of column 0 text: row_btn={row_btn:?}, grid={grid_rect:?}"
+        );
+        let row_btn_cy = row_btn[1] + row_btn[3] * 0.5;
+        let row1_cy = row1_slot[1] + row1_slot[3] * 0.5;
+        assert!(
+            (row_btn_cy - row1_cy).abs() < 2.0,
+            "row pill must be vertically centered on row 1: btn_cy={row_btn_cy}, row_cy={row1_cy}"
+        );
+
+        // 2. Typing and moving to the end of a long left-aligned cell scrolls horizontally and keeps #caret-ink inside the cell box!
+        let cell_rect = bounds(&doc, "cell-0-1-1");
+        let assert_caret_inside = |d: &DioxusDocument, cell_id: &str, label: &str| {
+            let crect = bounds(d, cell_id);
+            let krect = bounds(d, "caret-ink");
+            assert!(
+                krect[0] >= crect[0] - 0.5 && krect[0] + krect[2] <= crect[0] + crect[2] + 0.5,
+                "scale={scale} {label}: caret-ink {krect:?} escaped cell {cell_id} {crect:?}"
+            );
+        };
+        assert_caret_inside(&doc, "cell-0-1-1", "start of long left cell");
+        // Move to end of the long cell.
+        let end_pos = md.find(long_left).unwrap() + long_left.len();
+        open_markdown(&mut doc, &md, end_pos);
+        {
+            let dom = doc.inner.borrow();
+            let input = dom
+                .get_node(id(&doc, "cell-0-1-1"))
+                .unwrap()
+                .element_data()
+                .unwrap()
+                .text_input_data()
+                .unwrap();
+            assert!(
+                input.scroll_offset > 20.0,
+                "long left cell must scroll horizontally at end (offset={})",
+                input.scroll_offset
+            );
+        }
+        assert_caret_inside(&doc, "cell-0-1-1", "end of long left cell");
+
+        // Type extra characters at the end — caret must stay visible and never get lost off the right edge!
+        for ch in " XYZ!".chars() {
+            press(&mut doc, Key::Character(ch.to_string()), false);
+            send_key(&mut doc, Key::Character(ch.to_string()), KeyState::Released, false);
+            assert_caret_inside(&doc, "cell-0-1-1", "typing at end of long left cell");
+        }
+        // Arrow left several steps and verify caret stays visible inside cell.
+        for _ in 0..8 {
+            press(&mut doc, Key::Named(NamedKey::ArrowLeft), false);
+            send_key(&mut doc, Key::Named(NamedKey::ArrowLeft), KeyState::Released, false);
+            assert_caret_inside(&doc, "cell-0-1-1", "arrowing left in long left cell");
+        }
+
+        // 3. Wheel-scrolling the long cell far to the left hides the off-screen caret cleanly,
+        // and the next arrow key brings both scroll_offset and #caret-ink right back into view.
+        let cx = (cell_rect[0] + cell_rect[2] * 0.5) as f32;
+        let cy = (cell_rect[1] + cell_rect[3] * 0.5) as f32;
+        let mut hover_ptr = doc
+            .inner
+            .borrow()
+            .get_node(id(&doc, "cell-0-1-1"))
+            .unwrap()
+            .synthetic_click_event_data(Modifiers::empty());
+        hover_ptr.coords.client_x = cx;
+        hover_ptr.coords.client_y = cy;
+        hover_ptr.coords.page_x = cx;
+        hover_ptr.coords.page_y = cy;
+        hover_ptr.buttons = MouseEventButtons::None;
+        doc.handle_ui_event(UiEvent::PointerMove(hover_ptr));
+        render(&mut doc);
+        let wheel = BlitzWheelEvent {
+            delta: BlitzWheelDelta::Pixels(500.0, 0.0),
+            coords: blitz_traits::events::PointerCoords {
+                page_x: cx,
+                page_y: cy,
+                screen_x: cx,
+                screen_y: cy,
+                client_x: cx,
+                client_y: cy,
+            },
+            buttons: MouseEventButtons::None,
+            mods: Modifiers::empty(),
+            element: Default::default(),
+        };
+        doc.handle_ui_event(UiEvent::Wheel(wheel));
+        render(&mut doc);
+        doc.vdom
+            .in_scope(ScopeId::APP, || consume_context::<Writing>().refresh_boxes());
+        render(&mut doc);
+        assert!(
+            doc.inner.borrow().get_element_by_id("caret-ink").is_none(),
+            "caret scrolled completely off-screen by wheel must not dangle outside cell"
+        );
+        // Pressing ArrowRight snaps scroll_offset back so caret is immediately visible again.
+        press(&mut doc, Key::Named(NamedKey::ArrowRight), false);
+        send_key(&mut doc, Key::Named(NamedKey::ArrowRight), KeyState::Released, false);
+        assert_caret_inside(&doc, "cell-0-1-1", "after recovering from wheel scroll");
+
+        // 4. Right-aligned long cell must stay constrained inside its slot and keep its caret visible!
+        let right_end = markdown(&doc).find(long_right).unwrap() + long_right.len();
+        let current_md = markdown(&doc);
+        open_markdown(&mut doc, &current_md, right_end);
+        let slot_r = bounds(&doc, "slot-0-1-2");
+        let cell_r = bounds(&doc, "cell-0-1-2");
+        assert!(
+            cell_r[2] <= slot_r[2],
+            "long right-aligned cell ({cell_r:?}) must not overflow slot ({slot_r:?})"
+        );
+        assert_caret_inside(&doc, "cell-0-1-2", "end of long right-aligned cell");
+        for ch in "99".chars() {
+            press(&mut doc, Key::Character(ch.to_string()), false);
+            send_key(&mut doc, Key::Character(ch.to_string()), KeyState::Released, false);
+            assert_caret_inside(&doc, "cell-0-1-2", "typing at end of long right-aligned cell");
+        }
+    }
+}
+
 #[path = "tests/live_workflows.rs"]
 mod live_workflows;
 

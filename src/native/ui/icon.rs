@@ -18,6 +18,8 @@ pub enum Icon {
     Image,
     Grip,
     ChevronDown,
+    DotsHorizontal,
+    DotsVertical,
     AlignLeft,
     AlignCenter,
     AlignRight,
@@ -63,7 +65,7 @@ pub enum Icon {
 
 impl Icon {
     /// Every icon, for the gallery.
-    pub const ALL: [Icon; 50] = [
+    pub const ALL: [Icon; 52] = [
         Icon::Bold,
         Icon::Italic,
         Icon::Strike,
@@ -76,6 +78,8 @@ impl Icon {
         Icon::Image,
         Icon::Grip,
         Icon::ChevronDown,
+        Icon::DotsHorizontal,
+        Icon::DotsVertical,
         Icon::AlignLeft,
         Icon::AlignCenter,
         Icon::AlignRight,
@@ -145,7 +149,7 @@ impl Icon {
             Self::Image => {
                 "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3.5 5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM21 15l-5-5L5 21"
             }
-            Self::Grip => "",
+            Self::Grip | Self::DotsHorizontal | Self::DotsVertical => "",
             Self::ChevronDown => "m6 9 6 6 6-6",
             Self::AlignLeft => "M4 6h16M4 12h10M4 18h14",
             Self::AlignCenter => "M4 6h16M7 12h10M5 18h14",
@@ -207,6 +211,20 @@ impl Icon {
                     circle { cx: "15", cy: "12", r: "1.6" }
                     circle { cx: "9", cy: "18", r: "1.6" }
                     circle { cx: "15", cy: "18", r: "1.6" }
+                }
+            },
+            Self::DotsHorizontal => rsx! {
+                svg { class, width: "16", height: "16", view_box: "0 0 24 24", fill: "currentColor",
+                    circle { cx: "6", cy: "12", r: "1.8" }
+                    circle { cx: "12", cy: "12", r: "1.8" }
+                    circle { cx: "18", cy: "12", r: "1.8" }
+                }
+            },
+            Self::DotsVertical => rsx! {
+                svg { class, width: "16", height: "16", view_box: "0 0 24 24", fill: "currentColor",
+                    circle { cx: "12", cy: "6", r: "1.8" }
+                    circle { cx: "12", cy: "12", r: "1.8" }
+                    circle { cx: "12", cy: "18", r: "1.8" }
                 }
             },
             Self::Sparkle => rsx! {

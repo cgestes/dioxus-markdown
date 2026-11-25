@@ -468,9 +468,16 @@ impl Writing {
         let x = left_inset + cursor.x0 as f32 / scale;
         let y = top_inset + (cursor.y0 as f32 - top) / scale;
         let height = ((cursor.y1 - cursor.y0) as f32 / scale).max(12.0);
-        if y + height < 0.0 || y > l.content_box_height() + l.padding.top + l.padding.bottom {
+        let max_x = l.content_box_width() + l.padding.left + l.padding.right;
+        let max_y = l.content_box_height() + l.padding.top + l.padding.bottom;
+        if y + height < 0.0 || y > max_y || x + 1.5 < 0.0 || x > max_x {
             return None;
         }
+        let x = if !input.is_multiline {
+            x.clamp(0.0, (max_x - 1.5).max(0.0))
+        } else {
+            x
+        };
         Some(CaretInk {
             field,
             x,

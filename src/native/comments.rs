@@ -759,6 +759,7 @@ pub fn CommentInk(writing: Writing, field: Field) -> Element {
     }
     writing.ink.read();
     writing.boxes.read();
+    writing.caret.read();
     let active_id = *writing.active_comment.read();
     let md = writing.contents.read();
     let bounds = writing.range(field, &md);
