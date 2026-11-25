@@ -41,7 +41,7 @@ fn check_icon() -> Element {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EditProposal {
     pub id: usize,
     pub label: String,
@@ -50,7 +50,7 @@ pub struct EditProposal {
     pub applied: bool,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CommentMessage {
     pub id: usize,
     pub author: String,
@@ -59,7 +59,7 @@ pub struct CommentMessage {
     pub proposal: Option<EditProposal>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CommentThread {
     pub id: usize,
     pub anchor: Option<(Cursor, Cursor)>,
@@ -81,7 +81,7 @@ enum CommentFilter {
     All,
 }
 
-/// Seed two realistic in-memory demo threads anchored to phrases in `SAMPLE`.
+/// Anchor the two Field notes discussions to the starter document's own Loro text.
 pub fn seed_sample_comments(note: &Note) -> Vec<CommentThread> {
     let md = note.markdown();
     let mut threads = Vec::new();

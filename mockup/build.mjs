@@ -51,6 +51,7 @@ for (const input of Object.keys(bundle.metafile.inputs)) {
   if (match) packages.add(match[1]);
 }
 const licenses = await Promise.all([...packages].map(async pkg => {
+  if (pkg === "loro-protocol") return pkg + "\n" + await readFile("../assets/loro-protocol-LICENSE.txt","utf8");
   const directory = `node_modules/${pkg}/`;
   for (const name of ["LICENSE", "LICENSE.txt", "LICENSE.md", "OFL.txt", "COPYING"]) {
     try { return pkg + "\n" + await readFile(directory + name, "utf8"); }

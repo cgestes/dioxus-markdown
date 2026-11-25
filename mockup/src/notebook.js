@@ -1,20 +1,21 @@
+import { storage, encryptedChannel } from "./private-storage.js";
 import { EphemeralStore, LoroDoc } from "loro-crdt/base64";
 import { examples } from "./notes.mjs";
-import { checkedStyle } from "./loro-editor.js";
+import { checkedStyle, markdownText } from "./loro-editor.js";
 import { SyncSession } from "./sync-archive.js";
+import { stageFile, exportFile } from "./vault-files.js";
+import { browserReplica, sharedRoom } from "./vault-sync.js";
 
 const directory = "@files";
-const request = req => new Promise((resolve, reject) => {
-  req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
-});
-function seeded(id) {
+function seeded(id, privateMode = false) {
   const base = new LoroDoc();
   base.setPeerId("141889");
   if (id === directory) {
     const map = base.getMap("files");
-    for (const n of examples) map.set(n.id, n.name);
+    if (privateMode) map.set("inbox", "Private note");
+    else for (const n of examples) map.set(n.id, n.name);
   } else {
-    const sample = examples.find(n => n.id === id);
+    const sample = !privateMode && examples.find(n => n.id === id);
     if (sample) base.getText("markdown").insert(0, sample.markdown);
   }
   base.commit({ timestamp: 0 });
@@ -24,16 +25,7 @@ function seeded(id) {
   return doc;
 }
 
-async function previousNotebook(name) {
-  // The previous study stored Yjs updates. Migrate a saved notebook once,
-  // reading its old database without altering it.
-  const open = indexedDB.open("margin-md.1/" + name);
-  open.onupgradeneeded = () => open.transaction.abort();
-  let db;
-  try { db = await request(open); } catch { return []; }
-  let updates;
-  try { updates = await request(db.transaction("updates").objectStore("updates").getAll()); }
-  finally { db.close(); }
+async function previousNotebook(updates) {
   if (!updates.length) return [];
   const Y = await import("yjs");
   const old = new Y.Doc();
@@ -52,91 +44,74 @@ async function previousNotebook(name) {
   return rows;
 }
 
-async function storage(name, report) {
-  const open = indexedDB.open("margin-loro.1/" + name, 1);
-  open.onupgradeneeded = () => {
-    open.result.createObjectStore("updates", { autoIncrement: true }).createIndex("note", "id");
-    open.result.createObjectStore("settings");
-  };
-  const db = await request(open);
-  if (!await request(db.transaction("settings").objectStore("settings").get("initialized"))) {
-    const legacy = await previousNotebook(name);
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(["updates", "settings"], "readwrite");
-      const settings = tx.objectStore("settings"), check = settings.get("initialized");
-      check.onsuccess = () => {
-        if (check.result) return;
-        for (const row of legacy) tx.objectStore("updates").add(row);
-        settings.put(true, "initialized");
-      };
-      tx.oncomplete = resolve; tx.onabort = () => reject(tx.error);
-    });
-  }
-  const rows = await request(db.transaction("updates").objectStore("updates").getAll());
-  let pending = 0, failed = false;
-  const counts = new Map();
-  const count = id => counts.set(id, (counts.get(id) || 0) + 1).get(id);
-  for (const { id } of rows) count(id);
-  function save(id, bytes) {
-    if (failed) return;
-    try {
-      const tx = db.transaction("updates", "readwrite"), store = tx.objectStore("updates");
-      store.add({ id, bytes });
-      if (count(id) > 150) {
-        counts.set(id, 0);
-        const index = store.index("note"), keys = index.getAllKeys(id), all = index.getAll(id);
-        all.onsuccess = () => {
-          const merged = seeded(id);
-          const status = merged.importBatch(all.result.map(r => r.bytes));
-          const pendingBytes = merged.exportPendingUpdates();
-          for (const key of keys.result) store.delete(key);
-          store.add({ id, bytes: merged.export({ mode: "snapshot" }) });
-          if (pendingBytes || status.pending?.size) {
-            if (pendingBytes) store.add({ id, bytes: pendingBytes });
-          }
-          merged.free();
-        };
-      }
-      pending++; report("Saving…");
-      tx.oncomplete = () => { if (!--pending && !failed) report("Saved in this browser"); };
-      tx.onabort = () => { failed = true; report("Session only · use Export .md"); };
-    } catch { failed = true; report("Session only · use Export .md"); }
-  }
-  report("Saved in this browser");
-  return { rows, save };
-}
-
 export async function openNotebook(report) {
   const params = new URLSearchParams(location.search);
   const name = location.pathname + "/" + (params.get("room") || "fieldwork");
+  const privateMode = params.has("private");
+  const seed = id => seeded(id, privateMode);
   let disk;
-  try { disk = await storage(name, report); }
-  catch { report("Session only · use Export .md"); }
+  try { disk = await storage(name, report, privateMode, previousNotebook, seed); }
+  catch (error) {
+    if (privateMode) throw error;
+    report("Session only · storage unavailable");
+  }
   let channel;
-  try { channel = new BroadcastChannel("margin-loro.1/" + name); } catch { /* File preview */ }
+  if (disk && typeof BroadcastChannel !== "undefined") {
+    const scope = privateMode ? "margin-private/" : "margin-sample/";
+    try { channel = encryptedChannel(scope + name, disk.cipher, () => report("Could not authenticate tab update")); }
+    catch { /* Storage can still be used in this tab. */ }
+  }
   const sessions = new Map();
+  let replica;
+  const uploads = new Map();
   function attachLocalUpdates(id, doc) {
     doc.subscribeLocalUpdates(bytes => {
-      disk?.save(id, bytes);
+      const outbound = privateMode && sharedRoom(id);
+      const job = uploads.get(id);
+      uploads.delete(id);
+      const saved = disk?.save(id, bytes, outbound ? raw => replica.delta(id, raw) : null, job);
+      if (outbound) saved.then(replica.wake);
       channel?.postMessage({ kind: "update", id, update: bytes });
     });
   }
   function getSession(id) {
     if (sessions.has(id)) return sessions.get(id);
-    const session = new SyncSession(seeded(id));
+    const session = new SyncSession(seed(id));
     sessions.set(id, session);
     attachLocalUpdates(id, session.doc);
     return session;
   }
   const getDoc = id => getSession(id).doc;
   for (const { id, bytes } of disk?.rows ?? []) getSession(id).ingest(bytes);
-  const meta = getDoc(directory), map = meta.getMap("files"), files = new Map(map.entries());
-  const clientID = meta.peerIdStr;
+  const clientID = getDoc(directory).peerIdStr, files = new Map();
+  const fileMap = () => getDoc(directory).getMap("files");
+  function requestDemand(id, demand) {
+    if (demand.kind === "missing-spans") {
+      channel?.postMessage({ kind: "need-spans", id, spans: demand.spans, from: clientID });
+    } else if (demand.kind === "needs-checkpoint") {
+      channel?.postMessage({ kind: "need-checkpoint", id, from: clientID });
+    }
+  }
   const listeners = new Set();
-  map.subscribe(() => queueMicrotask(() => {
-    files.clear(); for (const [id, value] of map.entries()) files.set(id, value);
+  function fileList() {
+    files.clear();
+    for (const [id, value] of fileMap().entries()) files.set(id, value);
+    if (privateMode) for (const [id, {doc}] of sessions) {
+      if (!sharedRoom(id)) continue;
+      const title = markdownText(doc.getText("markdown")).split("\n", 1)[0].replace(/^#+\s*/, "").trim();
+      files.set(id, title || "Untitled");
+    }
     for (const listener of listeners) listener();
-  }));
+  }
+  fileMap().subscribe(() => queueMicrotask(fileList));
+  fileList();
+  if (privateMode) {
+    replica = await browserReplica(disk, (id, raw) => {
+      requestDemand(id, getSession(id).ingest(raw).demand);
+      fileList();
+      channel?.postMessage({ kind: "remote", id, update: raw });
+    }, message => { document.getElementById("relay-status").textContent = message; });
+  }
   const presence = new EphemeralStore(30000);
   const observers = new Set();
   presence.subscribe(() => { for (const fn of observers) fn(); });
@@ -153,16 +128,7 @@ export async function openNotebook(report) {
   };
   if (channel) {
     function sendSnapshots(to) {
-      for (const [id, session] of sessions) {
-        channel.postMessage({ kind: "snapshot", id, update: session.doc.export({ mode: "snapshot" }), to });
-      }
-    }
-    function requestDemand(id, demand) {
-      if (demand.kind === "missing-spans") {
-        channel.postMessage({ kind: "need-spans", id, spans: demand.spans, from: clientID });
-      } else if (demand.kind === "needs-checkpoint") {
-        channel.postMessage({ kind: "need-checkpoint", id, from: clientID });
-      }
+      for (const [id, {doc}] of sessions) channel.postMessage({ kind: "snapshot", id, update: doc.export({ mode: "snapshot" }), to });
     }
     channel.onmessage = ({ data }) => {
       if (data.to && data.to !== clientID) return;
@@ -173,44 +139,74 @@ export async function openNotebook(report) {
       } else if (data.kind === "reply") sendSnapshots(data.from);
       else if (data.kind === "presence") presence.apply(data.bytes);
       else if (data.kind === "need-spans") {
-        const session = sessions.get(data.id);
-        const bytes = session?.exportSpans(data.spans);
+        const bytes = sessions.get(data.id)?.exportSpans(data.spans);
         if (bytes) channel.postMessage({ kind: "update", id: data.id, update: bytes, to: data.from });
       } else if (data.kind === "need-checkpoint") {
         const session = sessions.get(data.id);
-        if (session && !session.doc.isShallow()) {
-          channel.postMessage({
-            kind: "checkpoint",
-            id: data.id,
-            update: session.doc.export({ mode: "snapshot" }),
-            to: data.from,
-          });
-        }
+        if (session && !session.doc.isShallow()) channel.postMessage({
+          kind: "checkpoint", id: data.id, update: session.doc.export({ mode: "snapshot" }), to: data.from
+        });
       } else if (data.kind === "checkpoint") {
-        const session = getSession(data.id);
+        const session = sessions.get(data.id);
+        if (session?.nextDemand().kind !== "needs-checkpoint") return;
         const demand = session.rebuildFromCheckpoint(data.update);
         attachLocalUpdates(data.id, session.doc);
+        if (data.id === directory) fileMap().subscribe(() => queueMicrotask(fileList));
         disk?.save(data.id, session.doc.export({ mode: "snapshot" }));
+        fileList();
         requestDemand(data.id, demand);
+      }
+      else if (data.kind === "remote" && privateMode && sharedRoom(data.id)) {
+        requestDemand(data.id, getSession(data.id).ingest(data.update).demand);
+        fileList();
       } else if (data.kind === "update" || data.kind === "snapshot") {
-        const session = getSession(data.id);
-        const { changed, demand } = session.ingest(data.update);
-        if (changed) disk?.save(data.id, data.update);
+        const { changed, demand } = getSession(data.id).ingest(data.update);
+        if (changed) {
+          disk?.save(data.id, data.update);
+          if (privateMode && sharedRoom(data.id)) fileList();
+        }
         requestDemand(data.id, demand);
       }
     };
-    const hello = () => channel.postMessage({ kind: "hello", from: clientID });
+    const hello = () => {
+      channel.postMessage({ kind: "hello", from: clientID });
+      for (const [id, session] of sessions) requestDemand(id, session.nextDemand());
+    };
     hello(); publish();
     let heartbeat = setInterval(publish, 10000);
     window.addEventListener("pagehide", () => { clearInterval(heartbeat); presence.delete(clientID); });
     window.addEventListener("pageshow", event => { if (event.persisted) { hello(); publish(); heartbeat = setInterval(publish, 10000); } });
   } else publish();
   return {
-    clientID, files, awareness, canShare: Boolean(channel), getDoc, getSession,
+    privateMode, replica, clientID, files, awareness, flush: () => disk?.flush(),
+    async attach(room, file) {
+      const { id, manifest } = await stageFile(disk.db, file);
+      const doc = getDoc(room);
+      doc.commit();
+      if (sharedRoom(room)) uploads.set(room, { upload: id, next: 0, last: manifest.parts });
+      doc.getMap("attachments").set(id, JSON.stringify(manifest));
+      doc.commit();
+      await disk.flush();
+    },
+    attachments(room) {
+      return [...getDoc(room).getMap("attachments").entries()].map(([id, raw]) => [id, JSON.parse(raw)]);
+    },
+    extract: (id, manifest, handle) => exportFile(disk.db, id, manifest, handle),
+    async publish(markdown) {
+      if (!replica?.paired()) throw new Error("Pair this notebook with a vault first.");
+      const id = crypto.randomUUID().replaceAll("-", ""), doc = getDoc(id);
+      doc.getMap("margin").set("format", 1);
+      doc.getText("markdown").insert(0, markdown);
+      doc.commit();
+      await disk.flush();
+      fileList();
+      return id;
+    },
+    canShare: Boolean(channel), getDoc, getSession,
     onFiles(fn) { listeners.add(fn); },
     create(id, name) {
       const doc = getDoc(id); doc.getText("markdown").insert(0, "# " + name + "\n\n"); doc.commit();
-      map.set(id, name); meta.commit(); files.set(id, name);
+      fileMap().set(id, name); getDoc(directory).commit(); files.set(id, name);
     }
   };
 }

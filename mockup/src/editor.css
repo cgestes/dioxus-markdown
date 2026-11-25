@@ -359,3 +359,12 @@ th.reading-cell {font-weight:600;background:#edf0e5;}
 .format-bar button .icon { width:16px; height:16px; }
 .format-bar button:hover,.format-bar button:focus-visible,.format-bar button[aria-pressed=true] { background:var(--toolbar-hover); color:white; }
 @media (prefers-reduced-motion:no-preference) { .format-bar:not([hidden]) { animation:format-appear 110ms ease-out; } @keyframes format-appear { from {opacity:0;transform:translateY(2px);} to {opacity:1;transform:translateY(0);} } }
+
+#private-notebook { background: transparent; border: 0; padding: 0; color: var(--ink); font: inherit; cursor: pointer; }
+#vault-unlock { max-width: min(360px, 90vw); border: 1px solid var(--line); border-radius: 10px; padding: 24px; color: var(--ink); background: var(--paper); }
+#vault-unlock label { display: grid; gap: 4px; margin: 12px 0; }
+#vault-unlock label[hidden] { display: none; }
+#vault-unlock input { padding: 8px; font: inherit; }
+
+/* The browser table exposes clickable gutters beside and below the cells. */
+.md-grid-wrap.ledger { --ledger-rail: 24px; --ledger-foot: 36px; }

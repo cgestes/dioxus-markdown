@@ -1,0 +1,17 @@
+# Gemini Neon brief · On-demand history in upstream Loro
+
+Work in `loro-dev/loro`. We want a device to open a small checkpoint, edit offline, then fetch old operations only when a merge, checkout or comment cursor needs them. Preserve operation IDs and anchors. The application owns network access, keys and archive retention.
+
+## Start from the working reproducer
+
+Copy the [two Rust tests](../tests/loro_history.rs) into `crates/loro/tests/loro_history.rs` in the upstream checkout and run `cargo test -p loro --test loro_history`. They use Loro’s public API and require no Margin code.
+
+- **Missing delivery.** Loro 1.18.0 exposes external operation IDs through `decodeImportBlobMeta(update, true).startFrontiers`. Combined with the receiver’s version vector, they identify ranges a client can request. Importing those ranges releases pending edits. Re-read pending metadata after each import. A disjoint export from one writer exposed a second gap after the first was filled. [Runnable JS tests](../mockup/test/loro-history-recovery.test.mjs)
+- **Edit before the latest shallow root.** An old full snapshot imported into the same shallow replica leaves the cutoff in place. A **fresh replica from an earlier shallow checkpoint** merged the original offline edit, the later local branch, and the intervening encrypted ranges. It recovered a comment inside deleted text at exactly the reference position. The Rust reproducer passes on 1.18.0 and upstream commit `934563c`. [Standalone Rust test](../tests/loro_history.rs) · [Upstream shallow-root contract](https://github.com/loro-dev/loro/blob/934563cfb4117373f237bc8b282533eacb17207d/docs/shallow-snapshot-concurrency.md)
+- **Cost.** With 512 KiB of prior deleted text, the pre-root case downloaded 1,303 encrypted bytes in six requests. The full checkpoint took 525,516 bytes in one. On the simulated 10 Mbit/s link with 40 ms round trips, recovery took 320 ms and 517 ms respectively. An offline fork older than both archived shallow roots fell back to the full checkpoint. [Measurements and commands](loro-history-results.md)
+
+## Investigation to deliver
+
+1. Trace import, checkout and deleted-cursor resolution separately. Can the library return typed missing operation IDs or spans, the shallow cutoff, and a reason when more local history cannot help? Identify what the pending-change index already knows. Keep asynchronous reads outside document locks. Preserve failed input and allow the caller to retry.
+2. Compare the demonstrated fresh-replica rebuild with lazy access to a **logically full** history. Trace the internal block index, synchronous KV storage, and the tombstone lookup for a cursor. Prototype an authenticated manifest mapping logical spans to immutable objects. Loro’s `%ELO` already has encrypted delta ranges. A monolithic encrypted snapshot requires a full read to authenticate it. [ChangeStore](https://github.com/loro-dev/loro/blob/934563cfb4117373f237bc8b282533eacb17207d/crates/loro-internal/src/oplog/change_store.rs) · [Encrypted span index](https://github.com/loro-dev/protocol/blob/main/protocol-e2ee.md#server-behavior-indexing-and-dedup)
+3. Run both paths against an always-full reference. Include divergent roots from multiple writers, deleted anchors, rich-text marks, moved list items, historical checkout, edits during fetch, and permanently expired history. Report downloaded bytes, requests, peak RAM, time to first edit and time to resolve the operation. Deliver a minimal Rust API sketch, a runnable JS binding example, and the smallest justified upstream patch.

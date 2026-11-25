@@ -1,17 +1,58 @@
 # Margin · a Rust Markdown notebook
 
-Margin is a live Markdown notebook built with Dioxus Native and Loro. The desktop sample opens on a field note with an editable title, prose, checkboxes, and a pipe table. The browser mockup also supports two-writer sessions and inline agent proposals.
+Margin is a live Markdown notebook built with Dioxus Native and Loro. Run `cargo run --locked` to open the desktop editor. A fresh notebook opens *Field notes* with its editable checklist, listening table, and two anchored discussions. Edits are encrypted on your device. Margin reopens your selected note on the next launch. The browser mockup also supports two-writer sessions and inline agent proposals.
 
 Both editors use the same table stylesheet. A pine header and fine horizontal rules separate the rows. The first left-aligned column uses the heading serif, descriptions use DM Sans, and right-aligned values use IBM Plex Mono. Columns keep their widths while you type. The browser wraps long descriptions at the same positions in reading and editing. [Table styles](assets/table.css) · [Desktop](mockup/native-table.png) · [Browser](mockup/preview.png) · [Phone](mockup/table-mobile.png)
 
-- Run `cargo run --locked --features native --bin margin`. Click the first letter of *Field notes* or any later ATX heading. At that position, **#** adds a heading level up to six, **Space** accepts the Markdown separator, and **Backspace** removes one level. Removing the last hash makes the line a paragraph. The left gutter shows the prefix while that heading is focused. Up and Down move one visual line at a time through headings, wrapped prose, blank lines and table rows. **Source** exposes the same Loro text and undo history. The desktop sample keeps its session in memory. [Native table preview](mockup/native-table.png)
+- Run `cargo run --locked -- --demo` for a fresh, in-memory copy of *Field notes*. Click the first letter of that title or any later ATX heading. At that position, **#** adds a heading level up to six, **Space** accepts the Markdown separator, and **Backspace** removes one level. Removing the last hash makes the line a paragraph. The left gutter shows the prefix while that heading is focused. Up and Down move one visual line at a time through headings, wrapped prose, blank lines and table rows. **Source** exposes the same Loro text and undo history. [Native table preview](mockup/native-table.png)
 - Open the self-contained HTML in an ordinary browser. Choose *Before the walk* for inline and checklist boxes, or *Listening walk* for lists and tables. [Browser mockup](mockup/index.html) · [Checkbox preview](mockup/checkbox-edit.png) · [Editing a cell](mockup/markdown-edit.png) · [Inline proposal](mockup/inline-edit.png)
+
+## Personal vault
+
+**Notes** lists your notes, creates a device-only note, attaches a file, and exports an attachment. The first time an older vault resumes, Margin opens its most recently created note or its existing inbox if you wrote there. If vault access fails, **Try again** retries the unlock. **Open Field notes demo** opens an in-memory copy for that session.
+
+**Sync a copy of current text** starts a fresh Loro document with the current Markdown. Earlier drafts, existing files and private conversations stay on the original device. Files attached to the new copy sync with its edits. F9 saves private inspector reports as encrypted files in the device inbox. Reopen a specific note with `--note ID`. Give the GUI `--vault PATH` and the CLI `--dir PATH` to select the same nondefault device directory.
+
+`cargo run --locked -- --sync-file PATH` opens a standalone Loro history file. This explicit file mode reads and writes unencrypted local JSON. Ordinary desktop launches store personal notes in the encrypted vault.
+
+In the browser, choose **Private notebook** in the sidebar and set a passphrase. **Lock notebook** requires it again. **Collaborate → Pair device** accepts a separate invitation issued for this browser. Paired notes then appear in the sidebar. **Attachments** imports and explicitly exports files. Use the same browser profile and origin to reopen the notebook. The fieldwork demo uses an origin-stored key for automatic access. Private mode derives its key from the passphrase each time. [Browser notebook](mockup/index.html)
+
+### Start a relay and pair devices
+
+Build the standalone CLI with `cargo build --locked --no-default-features --bin margin-vault`. The examples below assume its directory is on your PATH. For a new owner vault, run the following in a private directory.
+
+```sh
+margin-vault init --recovery owner.recovery
+margin-vault info
+margin-vault serve --database relay.sqlite3 --owner PUBLIC_VAULT_ID
+```
+
+When upgrading an existing relay, restart it with the same database and owner ID. Paired devices reuse their keys and cursors.
+
+The ID printed by `init` is public. If you already opened the desktop app, use `margin-vault backup owner.recovery` and the vault ID from `info`. The relay pins that ID and serves one vault. Leave it running, then use another terminal on the owner device.
+
+```sh
+margin-vault connect ws://127.0.0.1:8787
+margin-vault invite second-device.invite
+```
+
+Transfer the invitation privately. Each invitation contains a shared vault key and a distinct device credential. On the receiving native device, run `margin-vault join second-device.invite`, then open Margin or run `margin-vault sync --watch`. The browser accepts the same file. `invite --qr` also prints a scannable code. For separate machines, configure a `wss://` endpoint with TLS termination in front of the loopback relay **before** issuing invitations. Restart an already-open desktop app after changing its relay or credentials.
+
+### Keys, history and recovery
+
+The desktop app keeps a wrapping key in the OS keychain. Headless use supports `--passphrase-file PATH` when creating and opening the device. It derives the wrapping key with Argon2id. Browser private storage uses PBKDF2-SHA256 with 600,000 iterations. Both use authenticated encryption. Keep the **owner recovery kit offline**. On a replacement device, run `recover owner.recovery`, connect to the original relay, and run `sync` to restore the shared history it retains. Device-only data needs a backup of that device’s encrypted storage and its unlock credentials. Clearing a browser profile removes its local-only notes.
+
+After pairing, each device subscribes to the vault over a WebSocket. The relay replays records after the device’s saved cursor and pushes new edits as they arrive. Documents use Loro’s binary `%ELO` updates and acknowledgements. Records above the single-frame limit use Loro fragments. Margin carries the device signatures, vault cursor and encrypted attachment chunks alongside those frames. An interrupted upload stays in the local outbox until the relay confirms its durable write. A receiver advances its cursor after it verifies and saves a complete record. [Loro encrypted sync format](https://github.com/loro-dev/protocol/blob/main/protocol-e2ee.md)
+
+A fresh random file key, name, and size live inside the encrypted document. The relay can see opaque room, file, writer and device IDs, causal counters, record sizes, traffic timing and client addresses. It receives a separate bearer credential. Devices reopen each full checkpoint and check its version before publishing it. The relay requests checkpoints after 64 active deltas by default, retains concurrent edits, and keeps superseded records for seven days. Creating a new checkpoint requires an online, unlocked device. A compacted full Loro snapshot still contains integrated editing history. Deleting superseded ciphertext records shrinks the relay journal. Document records have a 16 MiB limit. Files move in 128 KiB chunks.
+
+Use `margin-vault compact NOTE_ID` to request compaction immediately. `revoke --database … --owner … DEVICE_ID` blocks that credential at the relay. If a device is lost, the owner can run `rotate --recovery NEW_FILE`, then issue fresh invitations and use `refresh` on each remaining native device or **Pair device** again in the browser. Previously downloaded content and keys remain on those devices. [Upstream encrypted record format](https://github.com/loro-dev/protocol/blob/main/protocol-e2ee.md) · [Upstream history investigation](docs/loro-history-brief.md) · [Measured encrypted range recovery](docs/loro-history-results.md)
 
 ## Test native Live editing
 
 Run `./scripts/test-editor --inspect` to open a fresh native note, or double-click the [macOS inspector launcher](scripts/inspect-editor.command). In an existing Live note, click in the text and press **F8** to toggle the inspector. On keyboards with media keys, use **Fn+F8** and **Fn+F9**. [Inspector preview](mockup/native-inspector.png)
 
-The inspector colors headings, blank lines and prose, outlines table controls and paints the active caret magenta. The header shows the focused field, Markdown line and column, directed UTF-8 byte selection and latest input. The native window title keeps the position visible when the header scrolls away. **Save report** or **F9** writes a local JSON file with the starting and current Markdown, focus, text selection, selected table corners, field and caret rectangles, window scale and the last 48 groups of inputs. A frame can contain several inputs between draws. The launcher writes reports under `target/editor-tests/reports`. F8 in an ordinary app uses the system temporary directory under `margin-reports`. Set `MARGIN_REPORT_DIR` to choose another location.
+The inspector colors headings, blank lines and prose, outlines table controls and paints the active caret magenta. The header shows the focused field, Markdown line and column, directed UTF-8 byte selection and latest input. The native window title keeps the position visible when the header scrolls away. **Save report** or **F9** captures a JSON report with the starting and current Markdown, focus, text selection, selected table corners, field and caret rectangles, window scale and the last 48 groups of inputs. A frame can contain several inputs between draws. The launcher writes reports under `target/editor-tests/reports`. In a personal vault the report is an encrypted inbox attachment. In demo mode the default is the system temporary directory under `margin-reports`. Set `MARGIN_REPORT_DIR` for demo or test reports. Existing plaintext exports and inspector files from earlier versions remain in their original locations.
 
 | Command | What it exercises |
 | --- | --- |
@@ -43,7 +84,7 @@ The same Rust parser supplies the reading layout and the source range for each d
 - Select a sentence and choose **Ask inline** or press ⌘J / Ctrl+J. Try **Make a checklist**, ask a question, or type `Replace with:` followed by your own Markdown. Review the original and proposed text, then **Apply edit** or **Discard**. The local demo uses deterministic replies. Accepted edits can be undone in one step.
 - Use **Notebook +** to start a note. The browser stores changes locally. **Export .md** downloads the Markdown of the open note.
 
-The browser stores Loro updates in IndexedDB and sends updates and cursor presence between tabs. Its one-time importer reads saved notes from the earlier browser study. The HTML includes the Rust checkbox module, Loro, fonts, scripts, icons, and distribution notices.
+The browser encrypts Loro updates in IndexedDB and encrypts updates and cursor presence between tabs. A one-time migration verifies the encrypted copies before clearing the old Loro rows. Opening an older fieldwork notebook also archives each original Yjs update under an origin-local key, preserving the exact update bytes and retiring its plaintext in the same transaction. The HTML includes the Rust checkbox module, Loro, fonts, scripts, icons, and distribution notices.
 
 For a consistent origin across tabs, run `python3 -m http.server 4327 --bind 127.0.0.1 --directory mockup` and open the loopback preview. To rebuild, install the Rust target with `rustup target add wasm32-unknown-unknown`, then run `npm ci` and `npm run build` inside `mockup`. Run `npm test` there for browser editing regressions and `cargo test --locked --features native` at the repository root for the Rust model and Dioxus Native keyboard tests. [Open Before the walk](http://127.0.0.1:4327/index.html#departure)
 
@@ -72,7 +113,7 @@ Dioxus Native and Loro can support this editor. The weak point in the first prot
 
 Live uses multiple native text inputs. Split provides a baseline with one native input for the same document. Compare both on dragging beyond the viewport, marked-text composition with a real IME, and selection announcements through VoiceOver before choosing a default. The automated suite covers native IME events, a long 2× viewport, Unicode, CRLF, escaped pipes and backward selections. Native two-window editing and typing latency on large tables remain unverified.
 
-Run `cargo test --locked --features native` for the Rust input and storage tests. Run `npm --prefix mockup test` for browser model tests. With Chrome installed, `npm --prefix mockup run build` followed by `npm --prefix mockup run test:browser` drives real pointer gestures, selection, typing and undo. It also checks that a second writer can change a heading while the first edits a cell.
+Run `cargo test --locked --features native` for the Rust input and storage tests. Run `npm --prefix mockup test` for browser model tests. With Chrome installed, `npm --prefix mockup run build` followed by `npm --prefix mockup run test:browser` drives real pointer gestures, selection, typing and undo. It also checks that a second writer can change a heading while the first edits a cell. After building the CLI and browser, run `npm --prefix mockup run test:vault` for browser/native encrypted sync and file interoperability.
 
 ## Native architecture
 
@@ -81,7 +122,7 @@ Run `cargo test --locked --features native` for the Rust input and storage tests
 | Interface | Dioxus Native with Blitz owns the title, prose fields, grid cells, and Source view. Live selections map to UTF-8 offsets in Loro. The browser mockup uses CodeMirror 6. |
 | Shared note | Rust and JavaScript use Loro 1.18, the same text container name, and the same checkbox attribute. A snapshot containing an inline checked box and emoji was opened and edited in Rust, then read back in JavaScript with both checkbox values intact. The Rust tests also exercise disconnected peers and duplicate updates. |
 | Editing surface | Each standalone ATX heading receives prefix edits at its first letter. Parley’s glyph positions locate checkboxes and Markdown styling without changing line wraps. Top-level GFM tables have stable cell inputs and byte ranges for their values, padding, and delimiters. Nested or incomplete table syntax stays editable in prose. A structural command commits its source edits together. [Native text styling](src/native/markdown.rs) · [Table source model](src/table.rs) |
-| Files and sync | Persist Loro snapshots and an update journal beside the workspace. Materialize ordinary Markdown with atomic writes. Exchange missing operations on join and reconnect using Loro version vectors. |
+| Files and sync | Native vaults store encrypted Loro records and file chunks in SQLite. A durable outbox and cursor resume interrupted transfers. Devices provide full checkpoints and the relay prunes the covered history. |
 | Inline agent | Keep the prompt and proposed diff private until acceptance. Resolve relative positions and compare the original passage before committing one undoable edit. |
 
 The native study pins Dioxus main at `0a7242a` with Blitz `0.3.0-beta.4`. This revision applies DOM mutations after Dioxus finishes rendering, so a component can access the native editor from an effect to restore its selection. When updating the pin, run `cargo test --locked --features native` to exercise pointer, keyboard, and text input across the two views. [Pinned Dioxus renderer](https://github.com/DioxusLabs/dioxus/tree/0a7242a2a72b08975584bf8ecb05076a5ee0b9c7/packages/native) · [Upstream mutation handling change](https://github.com/DioxusLabs/dioxus/pull/5943)

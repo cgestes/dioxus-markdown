@@ -10,3 +10,5 @@ pub mod preview;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod sync;
 pub mod table;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod vault;

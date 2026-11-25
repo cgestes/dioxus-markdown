@@ -33,6 +33,7 @@ pub(super) type TrackedKey = (
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct Writing {
+    pub personal: Signal<Option<super::personal::Session>>,
     pub note: Signal<Note>,
     pub root: Signal<Option<NodeHandle>>,
     pub focus: FocusRequest,

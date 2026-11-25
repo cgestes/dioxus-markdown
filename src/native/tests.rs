@@ -2459,3 +2459,102 @@ fn anchored_comments_create_reply_apply_undo_and_resolve() {
 
 #[path = "tests/live_workflows.rs"]
 mod live_workflows;
+
+#[test]
+fn personal_editor_persists_input_and_keeps_diagnostics_on_device() -> anyhow::Result<()> {
+    use margin_editor_core::vault::{
+        Vault,
+        keys::{Identity, Recovery},
+    };
+    let tmp = tempfile::tempdir()?;
+    let pass = tmp.path().join("password");
+    std::fs::write(&pass, b"private editor test password")?;
+    let path = tmp.path().join("vault");
+    let vault = Vault::create(
+        &path,
+        Identity::from_recovery(&Recovery::new()),
+        Some(&pass),
+    )?;
+    let starter = personal::open_note(&vault, None)?;
+    assert!(!vault.shared(&starter)?);
+    let field_notes = Note::from_doc(vault.load(&starter)?.0);
+    assert_eq!(field_notes.markdown(), super::SAMPLE);
+    let threads: Vec<comments::CommentThread> =
+        serde_json::from_slice(&vault.private_value(&starter)?.unwrap())?;
+    assert_eq!(threads.len(), 2);
+    for thread in threads {
+        let range = field_notes.resolve_anchor(thread.anchor.as_ref().unwrap()).unwrap();
+        assert_eq!(&super::SAMPLE[range], thread.quote);
+    }
+    let room = vault.new_note("# Diary\n\nHello", true)?;
+    let (note, seq) = vault.load(&room)?;
+    let session = personal::Session {
+        vault: vault.clone(),
+        room: room.clone(),
+        doc: note,
+        seq,
+        threads: vec![],
+    };
+    let dom = VirtualDom::new(|| notebook("")).with_root_context(session);
+    let config = dioxus_native::DocumentConfig {
+        font_ctx: Some(typefaces::notebook_fonts()),
+        viewport: Some(Viewport {
+            window_size: (820, 520),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut doc = DioxusDocument::new(dom, config);
+    doc.initial_build();
+    render(&mut doc);
+    click(&mut doc, "note-body");
+    select(&doc, "note-body", [5, 5]);
+    press(&mut doc, Key::Character("!".into()), false);
+    assert_eq!(markdown(&doc), "# Diary\n\nHello!");
+    let reopened = Vault::open(&path, Some(&pass))?;
+    assert_eq!(
+        reopened.load(&room)?.0.get_text("markdown").to_string(),
+        "# Diary\n\nHello!"
+    );
+    press(&mut doc, Key::Named(NamedKey::F8), false);
+    click(&mut doc, "save-inspection");
+    assert!(reopened.attachments(&room)?.is_empty());
+    let files = reopened.attachments(&reopened.inbox())?;
+    assert_eq!(files.len(), 1);
+    let report = tmp.path().join("export.json");
+    reopened.extract(&reopened.inbox(), &files[0].0, &report)?;
+    let json: serde_json::Value = serde_json::from_slice(&std::fs::read(report)?)?;
+    assert_eq!(json["current_markdown"], "# Diary\n\nHello!");
+    drop(doc);
+
+    // Launch the real app again, then switch notes through its menu.
+    let other = reopened.new_note("# Elsewhere\n\nDifferent text", false)?;
+    let launch = personal::open_note(&reopened, None)?;
+    assert_eq!(launch, starter);
+    personal::DEVICE
+        .set((reopened.clone(), launch))
+        .map_err(|_| anyhow::anyhow!("personal app already open"))?;
+    let config = dioxus_native::DocumentConfig {
+        font_ctx: Some(typefaces::notebook_fonts()),
+        viewport: Some(Viewport {
+            window_size: (820, 520),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut app = DioxusDocument::new(VirtualDom::new(super::app), config);
+    app.initial_build();
+    render(&mut app);
+    assert_eq!(value(&app, "note-title"), "Field notes");
+    assert_eq!(value(&app, "cell-0-1-0"), "North lock");
+    assert!(app.inner.borrow().get_element_by_id("comment-thread-1").is_some());
+    click(&mut app, "vault-notes");
+    click(&mut app, &format!("vault-room-{other}"));
+    assert_eq!(field(&app, id(&app, "note-body")), "Different text");
+    assert_eq!(personal::open_note(&reopened, None)?, other);
+    click(&mut app, "vault-notes");
+    click(&mut app, &format!("vault-room-{room}"));
+    assert_eq!(field(&app, id(&app, "note-body")), "Hello!");
+    assert_eq!(personal::open_note(&reopened, None)?, room);
+    Ok(())
+}

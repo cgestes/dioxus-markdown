@@ -23,6 +23,8 @@ mod markdown;
 mod marker_view;
 #[path = "native/navigation.rs"]
 mod navigation;
+#[path = "native/personal.rs"]
+mod personal;
 #[path = "native/pointer.rs"]
 mod pointer;
 #[path = "native/projection.rs"]
@@ -340,13 +342,23 @@ fn app() -> Element {
             false,
         );
     }
-    let mode = if std::env::args().any(|arg| arg == "--split") {
-        View::Split
-    } else {
-        View::Live
-    };
+    let split = std::env::args().any(|arg| arg == "--split");
     let inspect = std::env::args().any(|arg| arg == "--test-editor");
-    notebook_view(SAMPLE, mode, inspect, !inspect)
+    if let Some(path) = sync_file_arg() {
+        if std::env::args_os().any(|arg| arg == "--vault" || arg == "--note" || arg == "--passphrase-file") {
+            return rsx! { p { role: "alert", "Open the sync file and the personal vault in separate windows." } };
+        }
+        return rsx! { SyncFileEditor { path, split, inspect } };
+    }
+    if inspect || std::env::args().any(|arg| arg == "--demo") {
+        return rsx! { SampleEditor { split, inspect } };
+    }
+    rsx! { personal::Desktop { split } }
+}
+
+#[component]
+fn SampleEditor(split: bool, inspect: bool) -> Element {
+    notebook_view(SAMPLE, if split { View::Split } else { View::Live }, inspect, !inspect)
 }
 
 #[cfg(test)]
@@ -367,23 +379,54 @@ fn sync_file_arg() -> Option<std::path::PathBuf> {
     None
 }
 
+#[derive(Clone)]
+struct SyncFile {
+    path: std::path::PathBuf,
+    state: std::rc::Rc<margin_editor_core::sync::NoteSync>,
+}
+
+#[component]
+fn SyncFileEditor(path: std::path::PathBuf, split: bool, inspect: bool) -> Element {
+    use margin_editor_core::sync::NoteSync;
+    let loaded = use_hook(|| {
+        let sync = match NoteSync::load_from_file(&path) {
+            Ok(sync) => sync,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => NoteSync::new(Note::new(SAMPLE), 1),
+            Err(e) => return Err(e.to_string()),
+        };
+        Ok(SyncFile { path, state: std::rc::Rc::new(sync) })
+    });
+    let file = match loaded {
+        Ok(file) => file,
+        Err(error) => return rsx! { p { role: "alert", "Couldn’t open the sync file. {error}" } },
+    };
+    use_context_provider(|| file);
+    notebook_view(SAMPLE, if split { View::Split } else { View::Live }, inspect, !inspect)
+}
+
 fn notebook_view(
     initial: &str,
     initial_view: View,
     inspect_at_start: bool,
     seed_comments: bool,
 ) -> Element {
-    let sync_path = use_hook(sync_file_arg);
-    let initial_sync = sync_path.clone();
-    let note = use_signal(move || {
-        initial_sync
-            .as_deref()
-            .and_then(|p| margin_editor_core::sync::NoteSync::load_from_file(p).ok())
-            .map(margin_editor_core::sync::NoteSync::into_note)
-            .unwrap_or_else(|| Note::new(initial))
+    let personal = use_signal(try_consume_context::<personal::Session>);
+    let menu = use_hook(try_consume_context::<personal::Menu>);
+    let sync_file = use_hook(try_consume_context::<SyncFile>);
+    let note = use_signal(|| {
+        if let Some(s) = personal.peek().as_ref() {
+            Note::from_doc(s.doc.clone())
+        } else if let Some(file) = &sync_file {
+            Note::from_doc(file.state.note().document().clone())
+        } else {
+            Note::new(initial)
+        }
     });
+    let vault_status = personal::use_persistence(personal.peek().clone(), note);
     let comments = use_signal(move || {
-        if seed_comments {
+        if let Some(s) = personal.peek().as_ref() {
+            s.threads.clone()
+        } else if seed_comments {
             comments::seed_sample_comments(&note.peek())
         } else {
             Vec::new()
@@ -392,7 +435,7 @@ fn notebook_view(
     let mut comments_open = use_signal(move || seed_comments && initial_view == View::Live);
     let active_comment = use_signal(move || {
         if seed_comments {
-            comments.peek().first().map(|t| t.id)
+            comments.peek().iter().find(|t| !t.resolved).map(|t| t.id)
         } else {
             None
         }
@@ -401,6 +444,29 @@ fn notebook_view(
     let mut view = use_signal(|| initial_view);
     let source = move || view() != View::Live;
     let message = use_signal(String::new);
+    let prior_discussion = use_hook(|| {
+        std::rc::Rc::new(std::cell::RefCell::new(
+            serde_json::to_vec(&*comments.peek()).unwrap_or_default(),
+        ))
+    });
+    use_effect(move || {
+        if let Some(s) = personal.peek().as_ref() {
+            let mut prior = prior_discussion.borrow_mut();
+            let result = serde_json::to_vec(&*comments.read())
+                .map_err(anyhow::Error::from)
+                .and_then(|bytes| {
+                    if *prior != bytes {
+                        personal::save_discussion(&s.vault, &s.room, &prior, &bytes)?;
+                        *prior = bytes;
+                    }
+                    Ok(())
+                });
+            if let Err(e) = result {
+                let mut m = message;
+                m.set(e.to_string());
+            }
+        }
+    });
     let newer_build = restart::use_newer_build();
     let mut root = use_signal(|| None::<NodeHandle>);
     let mut bookmark = use_signal(|| [0, 0]);
@@ -418,13 +484,12 @@ fn notebook_view(
         rev_counter
     });
     use_effect(move || {
-        let _ = doc_rev();
-        if let Some(path) = sync_path.as_deref() {
-            let sync = margin_editor_core::sync::NoteSync::new(
-                Note::from_doc(note.peek().document().fork()),
-                1,
-            );
-            let _ = sync.save_to_file(path);
+        if let Some(file) = &sync_file {
+            let _ = doc_rev();
+            if let Err(error) = file.state.save_to_file(&file.path) {
+                let mut status = message;
+                status.set(format!("Couldn’t save the sync file. {error}"));
+            }
         }
     });
     let index = use_memo(move || markdown_markers(&contents.read()));
@@ -437,6 +502,7 @@ fn notebook_view(
         list
     });
     let writing = Writing {
+        personal,
         note,
         root,
         focus,
@@ -494,6 +560,9 @@ fn notebook_view(
     let window =
         use_hook(try_consume_context::<std::sync::Arc<dyn dioxus_native::winit::window::Window>>);
     let window_title = use_memo(move || {
+        if personal.peek().is_some() {
+            return "Margin · Personal vault".to_owned();
+        }
         let md = contents.read();
         let title = Sections::read(&md).title(&md).trim();
         let title = if title.is_empty() { "Untitled" } else { title };
@@ -506,7 +575,7 @@ fn notebook_view(
     use_effect(move || {
         let title = window_title.read();
         if let Some(window) = &window {
-            if inspecting() && view() == View::Live {
+            if personal.peek().is_none() && inspecting() && view() == View::Live {
                 window.set_title(&format!("{title}  |  {}", trace.read().title_status()));
             } else {
                 window.set_title(&title);
@@ -693,6 +762,9 @@ fn notebook_view(
             },
             div { id: "mode-bar", class: "mode-dock",
                 nav { class: "mode-pill-bar", aria_label: "Editor tools",
+                    if let Some(personal::Menu(mut open)) = menu {
+                        EditorButton { label: "Notes", id: "vault-notes", expanded: open(), onactivate: move |_| { let visible = open(); open.set(!visible); } }
+                    }
                     div { class: "mode", role: "group", aria_label: "Markdown view",
                         EditorButton { label: "Rich", id: "rich-mode", tip: "Rich editing (delimiters stay hidden)", selected: is_rich, onactivate: move |_| set_edit_mode(projection::EditMode::Rich) }
                         EditorButton { label: "Live", id: "live-mode", tip: "Keyboard-first Markdown live editing", selected: is_md_live, onactivate: move |_| set_edit_mode(projection::EditMode::Markdown) }
@@ -835,6 +907,7 @@ fn notebook_view(
             }
             if view() != View::Split {
                 footer { class: "statusbar",
+                    if personal.peek().is_some() { span { class: "vault-status", "{vault_status}" } }
                     span { class: "status-words", {
                         let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();
                         format!("{words} {}", if words == 1 { "word" } else { "words" })

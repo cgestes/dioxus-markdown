@@ -3,7 +3,7 @@ import { EditorView, drawSelection, keymap } from "@codemirror/view";
 import { defaultKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxTree } from "@codemirror/language";
-import { collaboration, historyKeys, locate, markdownText, remember, undoHistory, writeChecked } from "./loro-editor.js";
+import { collaboration, historyKeys, locate, markdownText, remember, sharedNote, undoHistory, writeChecked } from "./loro-editor.js";
 import { openNotebook } from "./notebook.js";
 import { agentState, openAgent, undoGroup, focusAgentCell } from "./inline-agent.js";
 import { liveMarkdown, mode, setMode, tableKeys } from "./live-markdown.js";
@@ -23,9 +23,38 @@ for (const key of document.querySelectorAll("[data-key]")) key.textContent = (is
 async function start() {
   const notebook = await openNotebook(status => { $("storage").textContent = status; });
   const { files, awareness, canShare, clientID } = notebook;
+  const vaultLink = $("private-notebook"), link = new URL(location.href);
+  if (notebook.privateMode) {
+    $("vaultSync").hidden = false;
+    $("vault-publish").hidden = !notebook.replica.paired();
+    $("vault-pair-file").onchange = async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        await notebook.flush();
+        await notebook.replica.pair(await file.text());
+      } catch (error) { $("relay-status").textContent = error.message; }
+    };
+    $("vault-publish").onclick = async () => {
+      try { openNote(await notebook.publish(view.state.doc.toString())); }
+      catch (error) { $("relay-status").textContent = error.message; }
+    };
+    vaultLink.textContent = "Lock notebook";
+    vaultLink.onclick = async () => {
+      try { await notebook.flush(); location.reload(); }
+      catch (error) { $("storage").textContent = error.message; }
+    };
+    window.addEventListener("pageshow", event => { if (event.persisted) location.reload(); });
+    $("folder").lastChild.textContent = "Private notebook";
+    document.querySelector(".crumb-folder").textContent = "Private notebook";
+  } else {
+    link.searchParams.set("private", "1");
+    link.hash = "";
+    vaultLink.onclick = () => location.assign(link);
+  }
   const wasm = Uint8Array.from(atob(MARGIN_CHECKBOX_WASM), c => c.charCodeAt(0));
   const kernel = checkboxKernel(wasm);
-  const undo = new Map(), bookmarks = new Map();
+  const undo = new WeakMap(), bookmarks = new Map();
   let active, view, dialogKind;
   let preferredMode = new URLSearchParams(location.search).get("view") === "split" ? "split" : "live";
   const reading = splitPreview($("reading-page"), kernel.preview);
@@ -45,7 +74,42 @@ async function start() {
     $("notes").hidden = !$("notes").hidden;
     $("folder").setAttribute("aria-expanded", String(!$("notes").hidden));
   };
+  function renderAttachments() {
+    if (!notebook.privateMode || !active) return;
+    $("vault-files").hidden = false;
+    const list = $("vault-file-list");
+    list.replaceChildren();
+    for (const [id, manifest] of notebook.attachments(active)) {
+      list.append(button(manifest.name, "file", async () => {
+        try {
+          const handle = await window.showSaveFilePicker?.({ suggestedName: manifest.name });
+          const blob = await notebook.extract(id, manifest, handle);
+          if (blob) {
+            const url = URL.createObjectURL(blob), link = document.createElement("a");
+            link.href = url;
+            link.download = manifest.name;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+          }
+        } catch (error) {
+          if (error.name !== "AbortError") $("vault-file-status").textContent = error.message;
+        }
+      }));
+    }
+  }
+  $("vault-attach").onclick = () => $("vault-file-input").click();
+  $("vault-file-input").onchange = async event => {
+    const file = event.target.files[0], room = active;
+    if (!file) return;
+    try {
+      await notebook.attach(room, file);
+      $("vault-file-status").textContent = "";
+      renderAttachments();
+    } catch (error) { $("vault-file-status").textContent = error.message; }
+    event.target.value = "";
+  };
   function renderFiles() {
+    renderAttachments();
     $("notes").replaceChildren();
     for (const [id, name] of files) {
       const item = button("", "file", () => { openNote(id); view.focus(); });
@@ -116,11 +180,12 @@ async function start() {
   }
 
   function openNote(id) {
-    if (!files.has(id)) id = "walk";
+    if (!files.has(id)) id = notebook.privateMode ? "inbox" : "walk";
     closeSidebar();
-    if (active === id) return;
+    const doc = notebook.getDoc(id);
+    if (active === id && view?.state.facet(sharedNote).doc === doc) return;
     if (view) {
-      const text = notebook.getDoc(active).getText("markdown"), selection = view.state.selection.main;
+      const text = view.state.facet(sharedNote).text, selection = view.state.selection.main;
       bookmarks.set(active, {
         anchor: remember(text, selection.anchor),
         head: remember(text, selection.head),
@@ -131,11 +196,11 @@ async function start() {
     active = id;
     history.replaceState(null, "", "#" + id);
     const name = files.get(id);
-    document.title = name + " — Margin";
+    document.title = notebook.privateMode ? "Margin · Private notebook" : name + " — Margin";
     $("file-name").textContent = name + ".md";
-    const doc = notebook.getDoc(id), text = doc.getText("markdown");
-    if (!undo.has(id)) undo.set(id, undoHistory(doc));
-    const manager = undo.get(id);
+    const text = doc.getText("markdown");
+    if (!undo.has(doc)) undo.set(doc, undoHistory(doc));
+    const manager = undo.get(doc);
     const source = markdownText(text);
     const paragraph = source.match(/^(?![#*|\s>`-]).+/m);
     const saved = bookmarks.get(id);
@@ -259,6 +324,7 @@ async function start() {
     $("note-dialog").close(); openNote(id); view.focus();
   };
   notebook.onFiles(() => {
+    if (view && view.state.facet(sharedNote).doc !== notebook.getDoc(active)) openNote(active);
     renderFiles();
     if ($("note-dialog").open && dialogKind === "find") search();
   });

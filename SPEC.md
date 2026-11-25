@@ -7,8 +7,24 @@
 
 ## 1. Core Principles
 
+### Personal vaults
+
+The desktop opens *Field notes* in a fresh vault, with its checklist, listening table
+and two anchored discussions saved on the device. Desktop note selection is local
+and survives a restart. An existing vault with notes resumes its own content.
+
+Devices edit Loro in memory and persist authenticated ciphertext. New personal notes,
+captured history, prompts, and diagnostics are device-only by default. Publishing a
+note creates a new document from its current Markdown. Files use immutable encrypted
+streams. Paired devices subscribe once from their last durable relay cursor.
+The relay replays missed records and pushes live edits on the same WebSocket.
+Document deltas and checkpoints use binary Loro `%ELO` update frames, including
+standard fragments for large records. The relay acknowledges durable writes and accepts
+verified full checkpoints from enrolled devices. Pruning follows causal coverage and
+preserves concurrent edits and a recovery window.
+
 1. **Literal Markdown as Single Source of Truth**
-   - All content lives in one Loro `LoroText` (`markdown`) managed by `Note` (`src/note.rs`).
+   - The note’s Markdown lives in one Loro `LoroText` (`markdown`) managed by `Note` (`src/note.rs`). Encrypted attachment manifests live in the document’s `attachments` map.
    - Editing must preserve untouched bytes exactly (line endings `LF`/`CRLF`, trailing newlines, spacing, escapes). Never re-serialize the whole document from an AST.
    - Undo/redo captures directed UTF-8 byte selections via Loro cursors; structural commands (table moves, pastes, formatting) commit as a single undoable step.
    - Shared core (`src/lib.rs`) remains portable across Native and Web/WASM (`mockup/`).
@@ -159,7 +175,7 @@
 
 - **CRDT-Anchored Storage (Zero Markdown Pollution):**
   - Comment threads live in memory (`Writing::comments`) anchored via Loro `Cursor` pairs (`Note::anchor_range` / `Note::resolve_anchor`), so editing prose above or around an anchor keeps highlights and replacement ranges accurate without modifying literal Markdown.
-  - Desktop launches seed 2 realistic in-memory demo threads on `SAMPLE`; tests start with comments closed and empty unless opened/created.
+  - The desktop starter and the in-memory `--demo` each open with two discussions anchored to the same phrases in *Field notes*. In a vault, editing or removing a discussion persists across launches.
 - **Inline Highlights (`CommentInk`):**
   - Anchored spans in headings, prose blocks, and table cells render warm amber underlines/washes (stronger when active, hidden once resolved unless selected).
 - **Triggers & Right-Hand Drawer (`CommentsPane`):**

@@ -154,15 +154,29 @@ impl Trace {
         }
     }
 
-    pub(super) fn report(&self, writing: Writing, dir: &Path) -> io::Result<PathBuf> {
-        use std::time::{SystemTime, UNIX_EPOCH};
+    fn report_bytes(&self, writing: Writing) -> io::Result<Vec<u8>> {
         let report = serde_json::json!({
             "format": 1, "editor": "Margin / Dioxus Native Live",
             "initial_markdown": self.initial, "current_markdown": writing.note.peek().markdown(),
             "current_state": snapshot(writing), "earlier_frames_omitted": self.dropped,
             "recent_frames": self.frames, "frames_observed": self.dropped + self.frames.len(),
         });
-        let bytes = serde_json::to_vec_pretty(&report)?;
+        Ok(serde_json::to_vec_pretty(&report)?)
+    }
+    pub(super) fn report(&self, writing: Writing, dir: &Path) -> io::Result<PathBuf> {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let bytes = self.report_bytes(writing)?;
+        if let Some(session) = writing.personal.peek().as_ref() {
+            let blob = session
+                .vault
+                .attach(
+                    &session.vault.inbox(),
+                    "Editor report.json",
+                    bytes.as_slice(),
+                )
+                .map_err(io::Error::other)?;
+            return Ok(PathBuf::from(format!("encrypted inbox attachment {blob}")));
+        }
         std::fs::create_dir_all(dir)?;
         let time = SystemTime::now()
             .duration_since(UNIX_EPOCH)

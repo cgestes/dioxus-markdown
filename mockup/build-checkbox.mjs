@@ -7,7 +7,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 
 export function buildCheckbox() {
   const log = execFileSync("cargo", [
-    "build", "--lib", "--locked", "--release", "--target", "wasm32-unknown-unknown", "--message-format=json"
+    "build", "--lib", "--locked", "--no-default-features", "--release", "--target", "wasm32-unknown-unknown", "--message-format=json"
   ], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
   for (const line of log.trim().split("\n")) {
     const artifact = JSON.parse(line);
@@ -18,7 +18,7 @@ export function buildCheckbox() {
 }
 
 export function checkboxNotices() {
-  const graph = JSON.parse(execFileSync("cargo", ["metadata", "--locked", "--format-version", "1",
+  const graph = JSON.parse(execFileSync("cargo", ["metadata", "--locked", "--no-default-features", "--format-version", "1",
     "--filter-platform", "wasm32-unknown-unknown"], { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }));
   const seen = new Set(), notices = [];
   const nodes = new Map(graph.resolve.nodes.map(n => [n.id, n]));
