@@ -40,13 +40,23 @@ pub fn TextField(
         value.set(e.value());
     };
     rsx! {
-        span { class: "ui-field", class: if multiline { "multiline" },
+        span { class: "ui-field relative flex flex-auto min-w-0",
             if multiline {
-                textarea { id, rows: "2", value: "{value}", oninput: input, onkeydown: keys }
+                textarea {
+                    id, rows: "2", value: "{value}",
+                    class: "flex-auto min-w-0 m-0 p-0 border-0 outline-none bg-transparent text-ink [font:inherit] select-text resize-none",
+                    oninput: input, onkeydown: keys
+                }
             } else {
-                input { id, value: "{value}", oninput: input, onkeydown: keys }
+                input {
+                    id, value: "{value}",
+                    class: "flex-auto min-w-0 m-0 p-0 border-0 outline-none bg-transparent text-ink [font:inherit] select-text",
+                    oninput: input, onkeydown: keys
+                }
             }
-            if value.read().is_empty() { span { class: "ui-field-ph", "{placeholder}" } }
+            if value.read().is_empty() {
+                span { class: "ui-field-ph absolute left-0 top-0 text-faint [font:inherit] pointer-events-none", "{placeholder}" }
+            }
         }
     }
 }
@@ -70,15 +80,24 @@ pub fn Composer(
         draft.set(String::new());
         onsend.call(text);
     });
-    let (variant, icon) = match send_label {
-        Some(_) => (Variant::Primary, None),
-        None => (Variant::Icon, Some(Icon::Send)),
+    let (variant, icon, send_cls) = match send_label {
+        Some(_) => (Variant::Primary, None, "!h-7"),
+        None => (
+            Variant::Icon,
+            Some(Icon::Send),
+            "!w-7 !h-7 !bg-accent !text-on-accent hover:!bg-accent-deep hover:!text-on-accent",
+        ),
+    };
+    let layout_cls = if multiline {
+        "items-end py-1.5 pr-1.5 pl-[11px] [&_.ui-field_textarea]:h-11 [&_.ui-field_textarea]:py-[3px] [&_.ui-field-ph]:top-[3px] [&_.ui-field-ph]:leading-[1.4]"
+    } else {
+        "items-center py-1 pr-1 pl-2.5 [&_.ui-field_input]:h-[26px] [&_.ui-field_input]:leading-[26px] [&_.ui-field-ph]:leading-[26px]"
     };
     rsx! {
-        div { class: "ui-composer", class: if multiline { "multiline" },
+        div { class: "flex gap-1.5 border border-solid border-line-strong rounded-lg bg-surface font-sans text-[13px] leading-[1.4] font-normal focus-within:border-accent {layout_cls}",
             TextField { value: draft, placeholder, multiline, id: field_id, onenter: send, onescape }
             Button { id: send_id, label: send_label.clone().unwrap_or_else(|| "Send".into()), text: send_label,
-                icon, variant, class: "ui-send", stop: true, onclick: send }
+                icon, variant, class: send_cls, stop: true, onclick: send }
         }
     }
 }
@@ -87,7 +106,7 @@ pub fn Composer(
 #[component]
 pub fn Checkbox(checked: bool) -> Element {
     rsx! {
-        span { class: "ui-check", aria_hidden: "true",
+        span { class: "ui-check relative flex items-center justify-center flex-[0_0_15px] w-[15px] h-[15px]", aria_hidden: "true",
             span { class: "marker-face", class: if checked { "checked" } }
             if checked { span { class: "marker-tick" } }
         }
@@ -102,13 +121,22 @@ pub fn CheckItem(
     #[props(default)] tag: Option<String>,
     onclick: EventHandler<()>,
 ) -> Element {
+    let text_cls = if checked {
+        "flex-auto text-faint line-through"
+    } else {
+        "flex-auto"
+    };
     rsx! {
-        button { class: "ui-check-item", class: if checked { "done" }, role: "checkbox",
+        button {
+            class: "flex items-start justify-start gap-2.5 w-full h-auto m-0 py-1 px-0 border-0 rounded-none bg-transparent text-ink font-sans text-[13px] leading-[1.45] font-normal text-left cursor-pointer [&_.ui-check]:mt-0.5 [&:hover_.marker-face]:border-accent",
+            role: "checkbox",
             aria_checked: if checked { "true" } else { "false" },
             onclick: move |_| onclick.call(()),
             Checkbox { checked }
-            span { class: "ui-check-text", "{text}" }
-            if let Some(tag) = tag { span { class: "ui-check-tag", "{tag}" } }
+            span { class: "{text_cls}", "{text}" }
+            if let Some(tag) = tag {
+                span { class: "ml-auto text-faint font-mono text-[10.5px] font-normal whitespace-nowrap", "{tag}" }
+            }
         }
     }
 }

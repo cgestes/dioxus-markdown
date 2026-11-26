@@ -13,8 +13,8 @@
 .comment-ink.resolved { background: var(--accent-a08); border-bottom-color: var(--accent-a28); }
 
 /* The format bar's Comment action keeps the comment colour (--warn). */
-.ui-toolbar.floating .ui-btn.format-comment-btn { height: 30px; padding: 0 8px; color: #fde6b4; background: rgba(236, 179, 76, 0.16); font: var(--font-hint); font-weight: 500; }
-.ui-toolbar.floating .ui-btn.format-comment-btn:hover { background: var(--warn); color: var(--on-accent); }
+.ui-toolbar.toolbar-floating .ui-btn.format-comment-btn { height: 30px; padding: 0 8px; color: #fde6b4; background: rgba(236, 179, 76, 0.16); font: var(--font-hint); font-weight: 500; }
+.ui-toolbar.toolbar-floating .ui-btn.format-comment-btn:hover { background: var(--warn); color: var(--on-accent); }
 
 /* The dock's comments button carries a dot while threads are open. */
 .dock-comments { position: relative; display: flex; }

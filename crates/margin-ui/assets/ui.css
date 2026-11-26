@@ -20,161 +20,9 @@ body { color: var(--ink); background: var(--page); font: var(--font-ui); }
 .tool-icon { display: flex; align-items: center; justify-content: center; width: 14px; height: 14px; }
 .tool-icon svg { width: 14px; height: 14px; }
 
-/* ── Buttons ───────────────────────────────────────────────────────────── */
-.ui-btn {
-    display: flex; align-items: center; justify-content: center; gap: 6px; flex: 0 0 auto;
-    height: 30px; margin: 0; padding: 0 11px;
-    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
-    color: var(--ink); font: var(--font-control); white-space: nowrap; text-align: center;
-    cursor: pointer; user-select: none;
-}
-.ui-btn:hover { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
-.ui-btn:focus-visible, .ui-chip:focus-visible, .ui-segment:focus-visible, .ui-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.ui-btn.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
-.ui-btn.primary:hover { border-color: var(--accent-deep); background: var(--accent-deep); color: var(--on-accent); }
-.ui-btn.ghost { border-color: transparent; background: transparent; color: var(--muted); font: var(--font-ui); }
-.ui-btn.ghost:hover, .ui-btn.ghost.selected { background: var(--pale); color: var(--accent-deep); }
-.ui-btn.icon {
-    width: 28px; height: 28px; padding: 0; border-color: transparent; border-radius: var(--radius);
-    background: transparent; color: var(--muted);
-}
-.ui-btn.icon:hover, .ui-btn.icon.selected { border-color: transparent; background: var(--pale); color: var(--accent-deep); }
-.ui-btn.link {
-    height: auto; padding: 0; border: 0; background: transparent; color: var(--accent);
-    font: 600 var(--text-small) var(--sans); letter-spacing: 0; text-transform: none;
-}
-.ui-btn.link:hover { background: transparent; color: var(--accent-deep); }
-.ui-btn.danger:hover, .ui-btn.danger:focus-visible { border-color: transparent; background: var(--alert-wash); color: var(--alert); }
-.ui-badge-glyph { display: flex; align-items: center; justify-content: center; flex: 0 0 16px; min-width: 16px; color: var(--muted); font: var(--font-label); pointer-events: none; }
-.ui-btn-hint { margin-left: auto; padding-left: var(--space-3); color: var(--faint); font: var(--font-mono-ui); pointer-events: none; }
-.ui-btn:disabled, .ui-btn:disabled:hover { opacity: .45; cursor: default; }
-
-.ui-chip {
-    display: flex; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto;
-    height: 26px; margin: 0; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-pill);
-    background: var(--surface); color: var(--muted); font: var(--font-ui); white-space: nowrap; cursor: pointer;
-}
-.ui-chip:hover { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
-.ui-chip.selected, .ui-chip.selected:hover { border-color: var(--ink); background: var(--ink); color: var(--page); }
-.ui-chip .tool-icon, .ui-chip .tool-icon svg { width: 13px; height: 13px; }
-
-.ui-segmented {
-    display: flex; align-items: center; gap: 1px; padding: 2px;
-    border: 1px solid var(--line); border-radius: var(--radius); background: var(--rail);
-}
-.ui-segment {
-    display: flex; align-items: center; justify-content: center; height: 22px; min-width: 40px; margin: 0; padding: 0 7px;
-    border: 1px solid transparent; border-radius: 5px; background: transparent;
-    color: var(--muted); font: var(--font-hint); cursor: pointer; user-select: none;
-}
-.ui-segment:hover { background: var(--pale); color: var(--accent-deep); }
-.ui-segment.selected, .ui-segment.selected:hover {
-    border-color: var(--line); background: var(--surface); color: var(--accent-deep); font-weight: 600;
-}
-
-.ui-tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); }
-.ui-tab {
-    display: flex; align-items: center; justify-content: center; gap: 6px; height: auto; margin: 0 0 -1px; padding: 8px 10px 9px;
-    border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent;
-    color: var(--muted); font: var(--font-ui); white-space: nowrap; cursor: pointer;
-}
-.ui-tab:hover { background: transparent; color: var(--ink); }
-.ui-tab.on, .ui-tab.on:hover { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }
-.ui-tab-count { color: var(--faint); font: var(--font-mono-ui); }
-
-/* ── Popovers, menus, toolbars ─────────────────────────────────────────── */
-.ui-popover {
-    display: flex; flex-direction: column; padding: var(--space-1);
-    border: 1px solid var(--line); border-radius: var(--radius-l); background: var(--surface);
-    box-shadow: var(--shadow-pop); pointer-events: auto;
-}
-.ui-menu { gap: 1px; min-width: 150px; }
-.ui-menu-item {
-    display: flex; align-items: center; justify-content: flex-start; gap: var(--space-2); flex: 0 0 auto;
-    width: 100%; height: 28px; margin: 0; padding: 0 var(--space-2);
-    border: 0; border-radius: 5px; background: transparent;
-    color: var(--ink); font: var(--font-ui); text-align: left; white-space: nowrap; cursor: pointer; user-select: none;
-}
-.ui-menu-item .tool-caption { flex: 1 1 auto; text-align: left; }
-.ui-menu-item .tool-icon { flex: 0 0 16px; width: 16px; color: var(--muted); }
-.ui-menu-item:hover, .ui-menu-item.active, .ui-menu-item:focus-visible { background: var(--pale); color: var(--accent-deep); outline: 0; }
-.ui-menu-item:hover .tool-icon, .ui-menu-item.active .tool-icon,
-.ui-menu-item:hover .ui-badge-glyph, .ui-menu-item.active .ui-badge-glyph { color: var(--accent-deep); }
-.ui-menu-item.danger:hover, .ui-menu-item.danger:focus-visible { background: var(--alert-wash); color: var(--alert); }
-.ui-menu-item.danger:hover .ui-badge-glyph { color: var(--alert); }
-.ui-menu-item:disabled, .ui-menu-item:disabled:hover { opacity: .38; background: transparent; color: var(--ink); cursor: default; }
-.ui-menu-section { padding: 6px var(--space-2) 2px; color: var(--faint); font: var(--font-label); letter-spacing: var(--track-label); text-transform: uppercase; }
-.ui-menu-sep { flex: 0 0 auto; height: 1px; margin: 3px 2px; background: var(--line); }
-.ui-menu-row { display: flex; gap: 2px; padding: 1px; }
-.ui-menu-row .ui-btn.icon { flex: 1 1 0; width: auto; height: 26px; }
-.ui-menu-row .ui-btn.icon .tool-icon, .ui-menu-row .ui-btn.icon .tool-icon svg { width: 13px; height: 13px; }
-
-/* Searchable combobox (trigger + filter input + scrollable listbox). */
-.ui-combobox { position: relative; display: inline-flex; align-items: center; }
-.ui-combobox-trigger {
-    display: inline-flex; align-items: center; gap: 3px;
-    height: 22px; margin: 0; padding: 0 6px;
-    border: 1px solid transparent; border-radius: var(--radius-s);
-    background: transparent; color: var(--faint); font: var(--font-mono-ui);
-    cursor: pointer; user-select: none; white-space: nowrap;
-}
-.ui-combobox-trigger:hover, .ui-combobox-trigger.open {
-    background: var(--pale); color: var(--accent-deep);
-}
-.ui-combobox-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.ui-combobox-trigger .i { width: 11px; height: 11px; opacity: .75; }
-.ui-combobox-menu {
-    position: fixed; z-index: 30;
-    width: 214px; padding: var(--space-1); gap: var(--space-1);
-}
-.ui-combobox-menu.fallback { position: absolute; right: 0; top: 26px; }
-.ui-combobox-search {
-    display: flex; align-items: center; gap: 6px;
-    height: 28px; padding: 0 8px;
-    border: 1px solid var(--line); border-radius: var(--radius-s);
-    background: var(--page); font: var(--font-hint);
-}
-.ui-combobox-search:focus-within { border-color: var(--accent); }
-.ui-combobox-search .i { width: 13px; height: 13px; color: var(--faint); flex: 0 0 auto; }
-.ui-combobox-search .ui-field { align-items: center; height: 26px; }
-.ui-combobox-search .ui-field input { width: 100%; height: 26px; line-height: 26px; }
-.ui-combobox-search .ui-field-ph {
-    left: 0; top: 0; bottom: 0;
-    display: flex; align-items: center;
-    line-height: 26px; white-space: nowrap;
-}
-.ui-combobox-list {
-    display: flex; flex-direction: column; gap: 1px;
-    max-height: 210px; overflow-x: hidden; overflow-y: auto;
-}
-.ui-combobox-list .ui-menu-item { height: 26px; min-width: 0; overflow: hidden; font: var(--font-hint); }
-.ui-combobox-list .ui-menu-item:hover:not(.active) { background: transparent; color: var(--ink); }
-.ui-combobox-list .ui-menu-item:hover:not(.active) .tool-icon,
-.ui-combobox-list .ui-menu-item:hover:not(.active) .ui-badge-glyph { color: var(--muted); }
-.ui-combobox-list .ui-menu-item .tool-caption { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ui-combobox-list .ui-btn-hint { flex: 0 0 auto; }
-.ui-combobox-empty { padding: 8px; color: var(--faint); font: var(--font-hint); text-align: center; }
-
-.ui-toolbar { display: flex; align-items: center; gap: 2px; user-select: none; }
-.ui-toolbar-sep { flex: 0 0 auto; width: 1px; height: 14px; margin: 0 3px; background: var(--line); }
-/* Dark and floating over the text (the format bar). */
-.ui-toolbar.toolbar-floating {
-    height: 39px; padding: 3px 5px; border: 1px solid var(--toolbar-edge); border-radius: var(--radius-l);
-    background: var(--toolbar); box-shadow: var(--shadow-bar);
-}
-.ui-toolbar.toolbar-floating .ui-btn { border-color: transparent; background: transparent; color: var(--toolbar-ink); }
-.ui-toolbar.toolbar-floating .ui-btn.icon { width: 34px; height: 30px; }
-.ui-toolbar.toolbar-floating .ui-btn:hover, .ui-toolbar.toolbar-floating .ui-btn:focus-visible, .ui-toolbar.toolbar-floating .ui-btn.selected {
-    background: var(--toolbar-hover); color: var(--on-accent);
-}
-.ui-toolbar.toolbar-floating .ui-toolbar-sep { height: 18px; background: rgba(255, 255, 255, 0.2); }
-/* Quiet, next to the caret (the empty-line tools, a table's selection). */
-.ui-toolbar.toolbar-inline { min-height: 24px; padding: 0 3px; border-radius: var(--radius); background: var(--page); }
-.ui-toolbar.toolbar-inline .ui-btn.icon { width: 24px; height: 22px; border-radius: var(--radius-s); color: var(--faint); opacity: .65; }
-.ui-toolbar.toolbar-inline .ui-btn.icon .tool-icon, .ui-toolbar.toolbar-inline .ui-btn.icon .tool-icon svg { width: 13px; height: 13px; }
-.ui-toolbar.toolbar-inline .ui-btn.icon .tool-caption { font: var(--font-label); }
-.ui-toolbar.toolbar-inline .ui-btn.icon:hover, .ui-toolbar.toolbar-inline .ui-btn.icon:focus-visible { opacity: 1; background: var(--pale); color: var(--accent-deep); }
-.ui-toolbar.toolbar-inline .ui-btn.ghost { height: 22px; padding: 0 7px; border-radius: var(--radius-s); font: var(--font-hint); }
+/* Buttons, chips, segmented, tabs, popovers, menus, comboboxes, toolbars,
+   text fields, composers, check items, cards, rows, marks, and messages are
+   styled directly with Tailwind v4 utilities in crates/margin-ui/src/. */
 
 /* Link preview & action popover card */
 .ui-link-card { padding: 0; width: 336px; overflow: hidden; }
@@ -238,50 +86,13 @@ body { color: var(--ink); background: var(--page); font: var(--font-ui); }
 .ui-link-card-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 2px; }
 .ui-link-card-form-actions .ui-btn { height: 28px; padding: 0 11px; }
 
-/* ── Text entry ────────────────────────────────────────────────────────── */
-/* Blitz draws no placeholder: TextField overlays one while the field is empty. */
-.ui-field { position: relative; display: flex; flex: 1 1 auto; min-width: 0; }
-.ui-field input, .ui-field textarea {
-    flex: 1 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; outline: 0;
-    background: transparent; color: var(--ink); font: inherit; user-select: text;
-}
-.ui-field textarea { resize: none; }
-.ui-field-ph { position: absolute; left: 0; top: 0; color: var(--faint); font: inherit; pointer-events: none; }
-
-.ui-composer {
-    display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px;
-    border: 1px solid var(--line-strong); border-radius: var(--radius-l); background: var(--surface);
-    font: 400 var(--text-body)/1.4 var(--sans);
-}
-.ui-composer:focus-within { border-color: var(--accent); }
-.ui-composer .ui-field input { height: 26px; line-height: 26px; }
-.ui-composer .ui-field-ph { line-height: 26px; }
-.ui-composer.multiline { align-items: flex-end; padding: 6px 6px 6px 11px; }
-.ui-composer.multiline .ui-field textarea { height: 44px; padding: 3px 0; }
-.ui-composer.multiline .ui-field-ph { top: 3px; line-height: 1.4; }
-.ui-composer .ui-send { height: 28px; }
-.ui-composer .ui-send.icon { width: 28px; background: var(--accent); color: var(--on-accent); }
-.ui-composer .ui-send.icon:hover { background: var(--accent-deep); color: var(--on-accent); }
-
-/* ── Checkboxes (the notebook's own) ───────────────────────────────────── */
+/* ── Checkboxes (shared with the notebook's marker slots) ─────────────── */
 .marker-face { flex: 0 0 15px; width: 15px; height: 15px; border: 1.25px solid var(--faint); border-radius: var(--radius-s); background: var(--page); }
 .marker-face.hovered, .marker-slot:hover .marker-face { border-color: var(--accent); background: var(--wash); }
 .marker-face.checked { background: var(--accent); border-color: var(--accent); }
 .marker-face.checked.hovered, .marker-slot:hover .marker-face.checked { background: var(--accent-deep); border-color: var(--accent-deep); }
 .marker-tick { position: absolute; width: 5px; height: 9px; border: solid white; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); margin-top: -1px; }
 .marker-face.selected { outline: 2px solid #7ab3fa; }
-.ui-check { position: relative; display: flex; align-items: center; justify-content: center; flex: 0 0 15px; width: 15px; height: 15px; }
-
-.ui-check-item {
-    display: flex; align-items: flex-start; justify-content: flex-start; gap: 10px; width: 100%; height: auto; margin: 0;
-    padding: 4px 0; border: 0; border-radius: 0; background: transparent;
-    color: var(--ink); font: 400 var(--text-body)/1.45 var(--sans); text-align: left; cursor: pointer;
-}
-.ui-check-item .ui-check { margin-top: 2px; }
-.ui-check-item:hover .marker-face { border-color: var(--accent); }
-.ui-check-text { flex: 1 1 auto; }
-.ui-check-item.done .ui-check-text { color: var(--faint); text-decoration: line-through; }
-.ui-check-tag { margin-left: auto; color: var(--faint); font: 400 var(--text-label) var(--mono); white-space: nowrap; }
 
 /* Cards, rows, marks, and messages are styled directly with Tailwind v4
    utilities in content.rs and message.rs. Keep only the first-child rule for

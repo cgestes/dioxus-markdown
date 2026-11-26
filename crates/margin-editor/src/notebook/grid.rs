@@ -916,10 +916,11 @@ fn ColStrip(
     let weight_c = weights.get(c).copied().unwrap_or(12);
     let align_start = c == 0 && width_count > 1 && weight_c < 18;
     let align_end = c + 1 == width_count && width_count > 1 && weight_c < 18;
+    const COL_HANDLE_BASE: &str = "ledger-col-handle flex items-center justify-center flex-none w-7 h-[15px] m-0 p-0 border border-solid border-[rgba(202,198,190,0.65)] rounded-full text-faint bg-[rgba(252,251,248,0.76)] shadow-[0_1px_2px_rgba(22,21,44,0.06)] cursor-pointer select-none pointer-events-auto [&_.tool-icon]:w-[13px] [&_.tool-icon]:h-[13px] [&_.tool-icon_svg]:w-[13px] [&_.tool-icon_svg]:h-[13px] hover:text-on-accent hover:bg-accent hover:border-accent hover:shadow-[0_2px_6px_rgba(22,21,44,0.18)] focus-visible:text-on-accent focus-visible:bg-accent focus-visible:border-accent focus-visible:shadow-[0_2px_6px_rgba(22,21,44,0.18)] focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 [&.open]:text-on-accent [&.open]:bg-accent [&.open]:border-accent [&.open]:shadow-[0_2px_6px_rgba(22,21,44,0.18)]";
     let handle_cls = if col_open {
-        "ledger-col-handle open"
+        format!("{COL_HANDLE_BASE} open")
     } else {
-        "ledger-col-handle"
+        COL_HANDLE_BASE.to_owned()
     };
     let shift = *scroll_x.read();
     let track_style = if shift > 0.0 {
@@ -948,8 +949,8 @@ fn ColStrip(
                             onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
                             Button {
                                 id: format!("col-menu-btn-{index}-{c}"),
-                                variant: Variant::Icon,
-                                class: handle_cls,
+                                variant: Variant::Bare,
+                                class: handle_cls.clone(),
                                 label: "Column menu",
                                 tip: "Column options & alignment",
                                 icon: crate::Icon::DotsHorizontal,
@@ -1027,10 +1028,11 @@ fn RowStrip(
                     let row_open = open_row == Some(r);
                     let is_target_row = target_row == Some(r);
                     let row_rect = table::CellRect { anchor: [r, active_col], head: [r, active_col] };
+                    const ROW_HANDLE_BASE: &str = "ledger-row-handle flex items-center justify-center flex-none w-[15px] h-7 m-0 p-0 border border-solid border-[rgba(202,198,190,0.65)] rounded-full text-faint bg-[rgba(252,251,248,0.76)] shadow-[0_1px_2px_rgba(22,21,44,0.06)] cursor-pointer select-none pointer-events-auto [&_.tool-icon]:w-[13px] [&_.tool-icon]:h-[13px] [&_.tool-icon_svg]:w-[13px] [&_.tool-icon_svg]:h-[13px] hover:text-on-accent hover:bg-accent hover:border-accent hover:shadow-[0_2px_6px_rgba(22,21,44,0.18)] focus-visible:text-on-accent focus-visible:bg-accent focus-visible:border-accent focus-visible:shadow-[0_2px_6px_rgba(22,21,44,0.18)] focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 [&.open]:text-on-accent [&.open]:bg-accent [&.open]:border-accent [&.open]:shadow-[0_2px_6px_rgba(22,21,44,0.18)]";
                     let row_handle_cls = if row_open {
-                        "ledger-row-handle open"
+                        format!("{ROW_HANDLE_BASE} open")
                     } else {
-                        "ledger-row-handle"
+                        ROW_HANDLE_BASE.to_owned()
                     };
                     rsx! {
                         div {
@@ -1048,7 +1050,7 @@ fn RowStrip(
                                     onpointerdown: move |e| { e.prevent_default(); e.stop_propagation(); },
                                     Button {
                                         id: format!("row-menu-btn-{index}-{r}"),
-                                        variant: Variant::Icon,
+                                        variant: Variant::Bare,
                                         class: row_handle_cls,
                                         label: "Row menu",
                                         tip: "Row options",

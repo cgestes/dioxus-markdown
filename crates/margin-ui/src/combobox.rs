@@ -313,9 +313,9 @@ pub fn Combobox(
         .map_or_else(|| "ui-combobox-list".to_owned(), |m| format!("{m}-list"));
     let selected_trimmed = selected.trim().to_owned();
     let menu_class_full = if placement.is_some() {
-        format!("ui-combobox-menu {menu_class}")
+        format!("fixed z-30 w-[214px] p-1 gap-1 {menu_class}")
     } else {
-        format!("ui-combobox-menu fallback {menu_class}")
+        format!("absolute right-0 top-[26px] z-30 w-[214px] p-1 gap-1 {menu_class}")
     };
     let menu_style = placement.as_ref().map(|p| p.menu_style.clone());
     let list_style = placement.as_ref().map(|p| p.list_style.clone());
@@ -326,12 +326,17 @@ pub fn Combobox(
         reset_list_scroll(list_handle);
     };
 
+    let trigger_state = if open {
+        "bg-pale text-accent-deep"
+    } else {
+        "bg-transparent text-faint hover:bg-pale hover:text-accent-deep"
+    };
+
     rsx! {
-        div { class: "ui-combobox {class}",
+        div { class: "relative inline-flex items-center {class}",
             button {
                 id: trigger_id,
-                class: "ui-combobox-trigger",
-                class: if open { "open" },
+                class: "inline-flex items-center gap-[3px] h-[22px] m-0 px-1.5 border border-solid border-transparent rounded-sm type-mono-ui cursor-pointer select-none whitespace-nowrap focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 [&_.i]:w-[11px] [&_.i]:h-[11px] [&_.i]:opacity-75 {trigger_state}",
                 aria_label: format!("{label}: {value_label}"),
                 aria_haspopup: "listbox",
                 aria_expanded: if open { "true" } else { "false" },
@@ -362,11 +367,12 @@ pub fn Combobox(
                         e.prevent_default();
                         e.stop_propagation();
                     },
-                    div { class: "ui-combobox-search",
+                    div { class: "flex items-center gap-1.5 h-7 px-2 border border-solid border-line rounded-sm bg-page type-hint focus-within:border-accent [&_.i]:w-[13px] [&_.i]:h-[13px] [&_.i]:text-faint [&_.i]:flex-none",
                         {icon(Icon::Search)}
-                        span { class: "ui-field",
+                        span { class: "ui-field relative flex flex-auto min-w-0 items-center h-[26px]",
                             input {
                                 id: input_id,
+                                class: "flex-auto min-w-0 w-full h-[26px] leading-[26px] m-0 p-0 border-0 outline-none bg-transparent text-ink [font:inherit] select-text",
                                 role: "combobox",
                                 aria_label: format!("Filter {label}"),
                                 aria_autocomplete: "list",
@@ -422,13 +428,13 @@ pub fn Combobox(
                                 },
                             }
                             if q.is_empty() {
-                                span { id: placeholder_id, class: "ui-field-ph", "{placeholder}" }
+                                span { id: placeholder_id, class: "ui-field-ph absolute left-0 top-0 bottom-0 flex items-center leading-[26px] whitespace-nowrap text-faint [font:inherit] pointer-events-none", "{placeholder}" }
                             }
                         }
                     }
                     div {
                         id: list_id,
-                        class: "ui-combobox-list",
+                        class: "flex flex-col gap-[1px] max-h-[210px] overflow-x-hidden overflow-y-auto [&_.ui-menu-item]:h-[26px] [&_.ui-menu-item]:min-w-0 [&_.ui-menu-item]:overflow-hidden [&_.ui-menu-item]:type-hint [&_.ui-menu-item:hover:not(.active)]:bg-transparent [&_.ui-menu-item:hover:not(.active)]:text-ink [&_.ui-menu-item:hover:not(.active)_.tool-icon]:text-muted [&_.ui-menu-item:hover:not(.active)_.ui-badge-glyph]:text-muted [&_.ui-menu-item_.tool-caption]:min-w-0 [&_.ui-menu-item_.tool-caption]:overflow-hidden [&_.ui-menu-item_.tool-caption]:text-ellipsis [&_.ui-btn-hint]:flex-none",
                         style: list_style,
                         role: "listbox",
                         aria_label: label.clone(),
@@ -469,7 +475,7 @@ pub fn Combobox(
                             }
                         }
                         if total_options == 0 {
-                            div { class: "ui-combobox-empty", "{empty_label}" }
+                            div { class: "p-2 text-faint type-hint text-center", "{empty_label}" }
                         }
                     }
                 }
