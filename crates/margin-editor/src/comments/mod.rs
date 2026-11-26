@@ -1,9 +1,9 @@
 //! Anchored comments. A thread is the comment file's own `file::Thread` plus
 //! what only this session knows (Loro cursors, the reply being written). An
-//! agent answers through `hub::AgentChat`: ZeroClaw's read-only agent on a
+//! agent answers through `agent::AgentChat`: ZeroClaw's read-only agent on a
 //! page of the space, a local stand-in elsewhere; both stream the same way.
 //! On a page, threads save to `_margin/comments/<page>.json` (see `page`).
-use crate::support::page::PageSource;
+use crate::support::page::{PageSource, WriteError};
 use crate::platform::text;
 use crate::ui::{Badge, Banner, Button, Card, Chip, Composer, Icon, Message, MessageStyle, Segment, Segmented, Tone, Variant};
 use crate::support::worker::{batch, turn, work};
@@ -11,7 +11,7 @@ use crate::{Field, Writing, report};
 use crate::prelude::*;
 use loro::cursor::Cursor;
 use margin_editor_core::comments::{self as file, ProposalState};
-use margin_hub::{self as hub, AgentChat, Canned, ChatEvent};
+use margin_editor_core::agent::{self, AgentChat, Canned, ChatEvent};
 use margin_note::note::Note;
 use margin_editor_core::{dates, table};
 use std::collections::HashMap;
@@ -50,7 +50,7 @@ impl CommentAgent {
 struct Unavailable(String);
 
 impl AgentChat for Unavailable {
-    fn chat(&self, _: &hub::Ask, on: &mut dyn FnMut(ChatEvent) -> bool, _: &mut dyn FnMut() -> bool) {
+    fn chat(&self, _: &agent::Ask, on: &mut dyn FnMut(ChatEvent) -> bool, _: &mut dyn FnMut() -> bool) {
         on(ChatEvent::Error(self.0.clone()));
     }
 
@@ -207,7 +207,7 @@ pub fn seed_sample_comments(note: &Note) -> Vec<CommentThread> {
 
 /// The stand-in's answer, written the way an agent writes one: the reply,
 /// then a `margin-edit` block.
-fn mock_reply(ask: &hub::Ask) -> String {
+fn mock_reply(ask: &agent::Ask) -> String {
     let (quote, request) = file::parse_request(&ask.content);
     let (body, label, new) = mock_edit(&quote.unwrap_or_default(), &request, ask.content.contains("table cell:"));
     format!("{body}\n\n{}\n{label}\n---\n{new}\n```", file::FENCE)
@@ -429,7 +429,7 @@ impl Writing {
             t.pending = Some(reply.id.clone());
             let id = reply.id.clone();
             t.file.messages.push(reply);
-            let ask = hub::Ask {
+            let ask = agent::Ask {
                 agent: agent.alias.clone(),
                 session: next.session,
                 name: next.name,
@@ -664,14 +664,14 @@ impl Writing {
         let ours = self.comment_file_now(&page.path);
         let etag = state.peek().etag.clone();
         spawn(async move {
-            let (space, path) = (page.space.clone(), file::sidecar_path(&page.path));
-            let result = work(move || match space.write(&path, &ours.to_json(), etag.as_deref()) {
-                Err(e) if e == hub::CONFLICT => {
-                    let theirs = space.read(&path)?;
+            let (files, path) = (page.files.clone(), file::sidecar_path(&page.path));
+            let result = work(move || match files.write(&path, &ours.to_json(), etag.as_deref()) {
+                Err(WriteError::Conflict) => {
+                    let theirs = files.read(&path)?.ok_or("the comment file was deleted while saving")?;
                     let merged = file::merge(&ours, &file::Sidecar::parse(&theirs.text)?);
-                    space.write(&path, &merged.to_json(), theirs.etag.as_deref())
+                    files.write(&path, &merged.to_json(), theirs.etag.as_deref()).map_err(|e| e.to_string())
                 }
-                other => other,
+                other => other.map_err(|e| e.to_string()),
             })
             .await;
             let again = {
@@ -732,8 +732,8 @@ pub fn use_comment_file(writing: Writing) {
         };
         let mut state = writing.comment_file;
         spawn(async move {
-            let PageSource { space, path, .. } = page;
-            match work(move || space.read_optional(&file::sidecar_path(&path))).await {
+            let PageSource { files, path, .. } = page;
+            match work(move || files.read(&file::sidecar_path(&path))).await {
                 Ok(Some(found)) => match file::Sidecar::parse(&found.text) {
                     Ok(saved) => {
                         writing.load_comment_file(saved);

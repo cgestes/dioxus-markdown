@@ -1,19 +1,21 @@
-//! A notebook that edits a page of the space: where it saves, whether it has
-//! unsaved changes, and the Save control in the editor's bar. The page and
-//! its comment file save together: anchors and applied edits in the comment
-//! file always describe text the server has.
+//! A notebook that edits a page kept on a server: where it saves, whether
+//! it has unsaved changes, and the Save control in the editor's bar. The page
+//! and its comment file save together: anchors and applied edits in the
+//! comment file always describe text the server has. The app supplies the
+//! server through `PageFiles` (Osom: the agent's space).
 use crate::Writing;
 use crate::ui::{Button, Variant};
 use crate::support::worker::work;
 use crate::prelude::*;
-use margin_hub::Space;
+pub use margin_editor_core::files::{PageFiles, Versioned, WriteError};
+use std::sync::Arc;
 
 /// The page a notebook edits.
 #[derive(Clone)]
 pub struct PageSource {
-    /// Space path: `car/maintenance.md`.
+    /// The page's path on the server: `car/maintenance.md`.
     pub path: String,
-    pub space: Space,
+    pub files: Arc<dyn PageFiles>,
     /// The version the text was read at.
     pub etag: Option<String>,
 }
@@ -60,8 +62,8 @@ impl Writing {
             s.note = "Saving…".into();
         }
         spawn(async move {
-            let (space, path) = (page.space.clone(), page.path.clone());
-            let result = work(move || space.write(&path, &text, etag.as_deref())).await;
+            let (files, path) = (page.files.clone(), page.path.clone());
+            let result = work(move || files.write(&path, &text, etag.as_deref())).await;
             let saved = result.is_ok();
             {
                 let mut s = state.write();
@@ -72,7 +74,7 @@ impl Writing {
                         s.saved_rev = rev;
                         s.note = "Saved".into();
                     }
-                    Err(e) => s.note = e,
+                    Err(e) => s.note = e.to_string(),
                 }
             }
             // Anchors describe the saved text: refresh them only if nothing

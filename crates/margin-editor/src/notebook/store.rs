@@ -1,7 +1,9 @@
 //! Where a notebook's note lives. The editor edits a `Note`; the app that
 //! embeds it decides where the note comes from and how it is kept (an
-//! encrypted vault, a sync file, nowhere), and says so in the status bar.
+//! encrypted vault, a sync file, a page on a server, nowhere), and says so
+//! in the status bar.
 use crate::comments::CommentThread;
+use crate::support::page::PageSource;
 use crate::prelude::*;
 use margin_note::note::Note;
 use std::rc::Rc;
@@ -43,6 +45,12 @@ pub trait NoteStore {
     /// The open state of the app's notes menu, when it has one; the editor's
     /// dock then shows a Notes button that toggles it.
     fn menu(&self) -> Option<Signal<bool>> {
+        None
+    }
+
+    /// A page kept on a server that saves when asked: the notebook then
+    /// loads and saves the page's comment file, and its bar has Save.
+    fn page(&self) -> Option<PageSource> {
         None
     }
 }

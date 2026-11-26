@@ -157,14 +157,14 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | Crate | Holds | Heavy dependencies |
 | --- | --- | --- |
 | `crates/workspace-hack` | No code: it pins the dependency features that builds would otherwise resolve differently, so `cargo run`, a vault build and `cargo test` share one compile of Dioxus, Blitz and the workspace crates | none |
-| `margin-editor-core` (root) | Markdown editing commands, the preview model, the comment format, page titles and dates. No I/O. It builds for native and for wasm. | none |
+| `margin-editor-core` (root) | Markdown editing commands, the preview model, the comment format, page titles and dates, and the interfaces to an agent (`agent::AgentChat`) and to versioned files on a server (`files::PageFiles`). No I/O. It builds for native and for wasm. | none |
 | `crates/margin-note` | `Note` (a Loro document) and the standalone sync file | Loro |
 | `crates/margin-projection` | The editor's Markdown model, no UI: what a field shows and how its edits map back to the source, title and body, blocks, list continuation, span styles, link cards. Its tests build no renderer. | none |
 | `crates/margin-vault` | The encrypted vault: keys, SQLite storage, relay and sync. `margin` uses it only with `--features vault`. | crypto, SQLite, tokio |
 | `crates/osom-topics` | Osom's model: the topics of the agent's space, its chats and reminders. It parses; the hub does the I/O. | none |
-| `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token | HTTP, WebSocket |
+| `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token. It implements the core's agent and page-file interfaces. | HTTP, WebSocket |
 | `crates/margin-ui` | The design system: tokens, components, fonts, the gallery | Dioxus |
-| `crates/margin-editor` | The Markdown editor: Rich, Live and Source views, tables, comments, undo, on Blitz (native) or Dioxus Web (browser). The app that opens it decides where the note lives (`NoteStore`). | Dioxus Native, Blitz |
+| `crates/margin-editor` | The Markdown editor: Rich, Live and Source views, tables, comments, undo, on Blitz (native) or Dioxus Web (browser). The app that opens it decides where the note lives (`NoteStore`: a vault, a sync file, a page on a server) and who answers comments (`AgentChat`). | Dioxus Native, Blitz |
 | `crates/margin` | `margin`, the notebook app: your personal vault (`--features vault`), a sync file or the Field notes sample, and the gallery (`margin ui`) | clap |
 | `crates/margin-web` | `margin-web`, the notebook in a browser page, installable as a web app (`dx serve --web --package margin-web`) | Dioxus Web |
 | `crates/osom` | The Topics window (`osom`) | |
@@ -172,7 +172,7 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 
 Loro is the document model in every build: it merges your edits with an agent's and gives undo that restores the selection. [Why Loro stays](docs/decisions/0001-loro-is-the-document-model.md)
 
-`margin-ui` depends only on the pure core, so vault, sync, topic or agent changes never rebuild it. `margin --help`, `osom --help` and `margin-vault --help` list each binary's options.
+`margin-ui` depends only on the pure core, so vault, sync, topic or agent changes never rebuild it. The editor reaches the agent and the space only through the core's interfaces, so a hub change rebuilds only the hub and Osom. `margin --help`, `osom --help` and `margin-vault --help` list each binary's options.
 
 ## Build order
 

@@ -5,6 +5,8 @@
 //! A browser build keeps the types and the stand-in agent; the transports are
 //! native only.
 #![cfg_attr(target_arch = "wasm32", allow(unused_imports, dead_code))]
+pub use margin_editor_core::agent::{AgentChat, Ask, Canned, ChatEvent};
+use margin_editor_core::files::{PageFiles, Versioned, WriteError};
 use osom_topics::{Message, Session, SpaceFile};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::de::DeserializeOwned;
@@ -286,75 +288,18 @@ impl Space {
     }
 }
 
-/// Something the agent did during a chat turn.
-#[derive(Clone, Debug, PartialEq)]
-pub enum ChatEvent {
-    Chunk(String),
-    Tool(String),
-    /// The agent asks before running a tool; the chat's `decide` answers.
-    Approval { tool: String, summary: String },
-    /// The whole reply; the last event of a turn that worked.
-    Done(String),
-    /// Why the turn failed; the last event of a turn that did not.
-    Error(String),
-    /// Nothing happened for a while; lets the listener stop a quiet turn.
-    Tick,
-}
-
-/// One message to the agent.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Ask {
-    pub agent: String,
-    pub session: String,
-    /// Shown for the session in ZeroClaw's dashboard.
-    pub name: String,
-    pub content: String,
-    /// Sent ahead of `content` when the session is new.
-    pub preamble: Option<String>,
-}
-
-/// Something that answers a chat turn: ZeroClaw, or a stand-in.
-///
-/// `chat` reports the reply through `on` and always ends with exactly one
-/// `Done` (carrying the whole reply) or `Error`, unless `on` returned `false`
-/// to stop the turn early (the listener is gone). `decide` answers tool
-/// approval prompts; it may block until someone chooses.
-pub trait AgentChat: Send + Sync {
-    fn chat(&self, ask: &Ask, on: &mut dyn FnMut(ChatEvent) -> bool, decide: &mut dyn FnMut() -> bool);
-
-    /// Answers at once, without a network round trip: callers may run it
-    /// on their own thread.
-    fn inline(&self) -> bool {
-        false
-    }
-}
-
-/// A stand-in agent that answers every turn with the text `reply` builds,
-/// word by word. `pause` spaces the words out (the demo); without it the
-/// answer is immediate (tests, the sample note).
-pub struct Canned {
-    pub reply: Box<dyn Fn(&Ask) -> String + Send + Sync>,
-    pub pause: Option<Duration>,
-}
-
-impl AgentChat for Canned {
-    fn chat(&self, ask: &Ask, on: &mut dyn FnMut(ChatEvent) -> bool, _decide: &mut dyn FnMut() -> bool) {
-        let reply = (self.reply)(ask);
-        for word in reply.split_inclusive(' ') {
-            // A browser tab has one thread: the stand-in answers without the pauses.
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(pause) = self.pause {
-                std::thread::sleep(pause);
-            }
-            if !on(ChatEvent::Chunk(word.into())) {
-                return;
-            }
-        }
-        on(ChatEvent::Done(reply));
+/// The editor saves a page of the space, and its comment file, through this.
+impl PageFiles for Space {
+    fn read(&self, path: &str) -> Result<Option<Versioned>> {
+        Ok(Space::read_optional(self, path)?.map(|page| Versioned { text: page.text, etag: page.etag }))
     }
 
-    fn inline(&self) -> bool {
-        self.pause.is_none()
+    fn write(&self, path: &str, text: &str, etag: Option<&str>) -> std::result::Result<Option<String>, WriteError> {
+        Space::write(self, path, text, etag).map_err(|e| if e == CONFLICT { WriteError::Conflict } else { WriteError::Failed(e) })
+    }
+
+    fn web_url(&self, path: &str) -> String {
+        self.page_url(path)
     }
 }
 

@@ -23,6 +23,7 @@ use notebook::*;
 // What an app builds a notebook from.
 pub use comments::{CommentAgent, CommentThread, seed_sample_comments};
 pub use notebook::{Comments, HostAction, HostBar, InMemory, NoteStore, NotebookOptions, Store, View, notebook_view};
+pub use support::page::{PageFiles, PageSource};
 use ui::Icon;
 
 /// *Field notes*, the sample note: the demo, a new vault's first note, the tests.

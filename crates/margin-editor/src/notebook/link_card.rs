@@ -285,7 +285,7 @@ impl Writing {
             }
             OpenTarget::SpacePage(path) => {
                 if let Some(page) = self.page.peek().as_ref() {
-                    crate::platform::open_url(&page.space.page_url(&path));
+                    crate::platform::open_url(&page.files.web_url(&path));
                 }
             }
             OpenTarget::None => {}
@@ -385,9 +385,9 @@ fn maybe_fetch_space_page(
     };
     fetching.set(Some(key.clone()));
     spawn(async move {
-        let space = page_src.space.clone();
+        let files = page_src.files.clone();
         let lookup = path.clone();
-        let fetched = work(move || space.read_optional(&lookup)).await;
+        let fetched = work(move || files.read(&lookup)).await;
         match fetched {
             Ok(Some(page)) => {
                 let (title, excerpt) = extract_markdown_summary(&page.text);
@@ -610,7 +610,7 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
     let editing = (writing.link_editing)();
     let md = writing.contents.read();
     let parsed = writing.parsed.read();
-    let space_root = writing.page.read().as_ref().map(|p| p.space.page_url(""));
+    let space_root = writing.page.read().as_ref().map(|p| p.files.web_url(""));
 
     if let Some(root) = space_root.as_deref() {
         maybe_fetch_space_page(writing, root, &card.link.url, space_cache, fetching);

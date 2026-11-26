@@ -177,15 +177,13 @@ pub struct NotebookOptions {
     /// Show the debug inspector from the start.
     pub inspect: bool,
     pub comments: Comments,
-    /// The page of the space this notebook edits: it then loads and saves
-    /// the page's comment file, and its bar has Save.
-    pub page: Option<page::PageSource>,
     /// Set when another window hosts the editor (the Topics window): the
     /// editor's bar then starts with the host's way back and ends with its
     /// actions, and the page aligns with the host's column.
     pub host: Option<HostBar>,
-    /// Where the note lives (a vault, a sync file); without one it is edited
-    /// in memory and the status bar says nothing about it.
+    /// Where the note lives (a vault, a sync file, a page on a server);
+    /// without one it is edited in memory and the status bar says nothing
+    /// about it.
     pub store: Option<Store>,
 }
 
@@ -208,7 +206,8 @@ pub struct HostAction {
 
 
 pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
-    let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, page: page_source, host, store } = options;
+    let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, host, store } = options;
+    let page_source = store.as_ref().and_then(|s| s.page());
     let embedded = host.is_some();
     let seed_comments = start_comments == Comments::Sample;
     let agent = match start_comments {

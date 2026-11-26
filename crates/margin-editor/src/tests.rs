@@ -3118,9 +3118,19 @@ fn live_comment_streams_a_reply_and_saves_the_thread() {
     let space = Space::new(&e.space);
     let read = space.read(page).unwrap();
     let text = read.text.clone();
+    struct SpacePage(PageSource);
+    impl crate::NoteStore for SpacePage {
+        fn use_persistence(&self, _note: Signal<margin_note::note::Note>) -> Signal<String> {
+            use_signal(String::new)
+        }
+        fn page(&self) -> Option<PageSource> {
+            Some(self.0.clone())
+        }
+    }
+    let source = PageSource { path: page.into(), files: Arc::new(space.clone()), etag: read.etag };
     let options = NotebookOptions {
         comments: Comments::Agent(CommentAgent { alias: e.comment_agent.clone(), chat: Arc::new(e.zeroclaw()) }),
-        page: Some(PageSource { path: page.into(), space: space.clone(), etag: read.etag }),
+        store: Some(crate::Store::new(SpacePage(source))),
         ..Default::default()
     };
     let mut doc = DioxusDocument::new(

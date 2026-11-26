@@ -4352,6 +4352,7 @@ dependencies = [
 name = "margin-hub"
 version = "0.1.0"
 dependencies = [
+ "margin-editor-core",
  "osom-topics",
  "percent-encoding",
  "security-framework 3.7.0",
@@ -5214,6 +5215,7 @@ dependencies = [
  "margin-editor",
  "margin-editor-core",
  "margin-hub",
+ "margin-note",
  "margin-ui",
  "osom-topics",
  "png 0.18.1",

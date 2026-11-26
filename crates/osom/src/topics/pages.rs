@@ -1,8 +1,8 @@
 //! A document or a stored conversation, opened in its own pane.
 use super::*;
+use margin_editor::{NoteStore, PageSource, Store};
+use margin_note::note::Note;
 
-/// The notebook on a page of the space. A component, so it keeps its state
-/// while the pane around it re-renders.
 /// Where a pane's back button returns to.
 pub(super) fn back_label(ui: &Ui) -> &'static str {
     match ((ui.place)(), (ui.tab)()) {
@@ -16,9 +16,28 @@ pub(super) fn back_label(ui: &Ui) -> &'static str {
     }
 }
 
+/// A page of the space, as the editor's store: it saves when asked (the
+/// editor's Save bar), through the space.
+struct SpacePage(PageSource);
+
+impl NoteStore for SpacePage {
+    /// The Save bar says where the page stands; the status bar says nothing.
+    fn use_persistence(&self, _note: Signal<Note>) -> Signal<String> {
+        use_signal(String::new)
+    }
+
+    fn page(&self) -> Option<PageSource> {
+        Some(self.0.clone())
+    }
+}
+
+/// The notebook on a page of the space (or a demo page, kept nowhere). A
+/// component, so it keeps its state while the pane around it re-renders;
+/// the pane gives it a new key for each version of the page.
 #[component]
-pub(super) fn PageEditor(text: String, options: NotebookOptions) -> Element {
-    margin_editor::notebook_view(&text, options)
+pub(super) fn PageEditor(text: String, source: Option<PageSource>, options: NotebookOptions) -> Element {
+    let store = use_hook(move || source.map(|page| Store::new(SpacePage(page))));
+    margin_editor::notebook_view(&text, NotebookOptions { store, ..options })
 }
 
 /// A page in the editor, below the topic's header. It opens at once from the
@@ -80,10 +99,10 @@ pub(super) fn DocPane(path: String) -> Element {
                 Some(live) => Comments::Agent(CommentAgent::unavailable(&live.endpoints.comment_agent, "Osom is not paired with ZeroClaw: run `osom pair <code>`.")),
                 None => Comments::Empty,
             };
-            let source = ui.live().map(|live| PageSource { path: page.path.clone(), space: live.space.clone(), etag: page.etag.clone() });
+            let source = ui.live().map(|live| PageSource { path: page.path.clone(), files: Arc::new(live.space.clone()), etag: page.etag.clone() });
             let key = format!("{}@{}", page.path, page.etag.clone().unwrap_or_default());
-            let options = NotebookOptions { comments, page: source, host: Some(host), ..Default::default() };
-            rsx! { div { class: "editor-host", PageEditor { key: "{key}", text: page.text.clone(), options } } }
+            let options = NotebookOptions { comments, host: Some(host), ..Default::default() };
+            rsx! { div { class: "editor-host", PageEditor { key: "{key}", text: page.text.clone(), source, options } } }
         }
     }
 }
