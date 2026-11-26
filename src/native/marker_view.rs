@@ -179,15 +179,16 @@ impl Writing {
         if *self.ink.peek() != ink {
             self.ink.set(ink);
         }
-        let callout_boxes = (0..=count)
-            .flat_map(|i| self.measured_callouts(Field::Body(i)))
-            .collect::<Vec<_>>();
+        let mut callout_boxes = Vec::new();
+        let mut code_boxes = Vec::new();
+        for i in 0..=count {
+            let (callouts, codes) = self.measured_prose_boxes(Field::Body(i));
+            callout_boxes.extend(callouts);
+            code_boxes.extend(codes);
+        }
         if *self.callout_boxes.peek() != callout_boxes {
             self.callout_boxes.set(callout_boxes);
         }
-        let code_boxes = (0..=count)
-            .flat_map(|i| self.measured_code_blocks(Field::Body(i)))
-            .collect::<Vec<_>>();
         if *self.code_boxes.peek() != code_boxes {
             self.code_boxes.set(code_boxes);
         }

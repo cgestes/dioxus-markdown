@@ -2,20 +2,15 @@
 //! (`preview::document`): the same lines, spans and tables everywhere.
 use super::{Icon, icon};
 use dioxus_native::prelude::*;
+use margin_editor_core::callout::CalloutKind;
 use margin_editor_core::preview::{self, Block, Passage};
 
 fn callout_badge_icon(style: &str) -> Icon {
-    if style.contains("callout-tip") {
-        Icon::Spark
-    } else if style.contains("callout-important") {
-        Icon::Important
-    } else if style.contains("callout-warning") {
-        Icon::AlertTriangle
-    } else if style.contains("callout-caution") {
-        Icon::AlertOctagon
-    } else {
-        Icon::Info
-    }
+    let kind = CalloutKind::ALL
+        .into_iter()
+        .find(|k| style.contains(k.css_class()))
+        .unwrap_or(CalloutKind::Note);
+    Icon::for_callout(kind)
 }
 
 /// A passage's spans. `ids` adds the checkbox ids the Split preview uses to

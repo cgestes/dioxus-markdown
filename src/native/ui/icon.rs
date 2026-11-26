@@ -145,6 +145,18 @@ impl Icon {
         }
     }
 
+    /// The glyph of a GFM/Obsidian callout.
+    pub const fn for_callout(kind: margin_editor_core::callout::CalloutKind) -> Self {
+        use margin_editor_core::callout::CalloutKind;
+        match kind {
+            CalloutKind::Note => Self::Info,
+            CalloutKind::Tip => Self::Spark,
+            CalloutKind::Important => Self::Important,
+            CalloutKind::Warning => Self::AlertTriangle,
+            CalloutKind::Caution => Self::AlertOctagon,
+        }
+    }
+
     fn path(self) -> &'static str {
         match self {
             Self::Bold => "M6 4h8a4 4 0 0 1 0 8H6zm0 8h9a4 4 0 0 1 0 8H6z",

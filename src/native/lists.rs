@@ -163,6 +163,49 @@ fn in_blockquote(md: &str, line_start: usize) -> bool {
     false
 }
 
+fn edit_quoted_list(
+    md: &str,
+    [a, b]: [usize; 2],
+    first: usize,
+    end: usize,
+    q: &QuotePrefix,
+    marker: &Prefix<'_>,
+    continuation: &str,
+    command: Command,
+) -> Option<Edit> {
+    let (lo, hi) = (a.min(b), a.max(b));
+    let quote_end = first + q.end;
+    let item_content_start = quote_end + marker.end;
+    match command {
+        Command::Backspace => {
+            if a != b || lo != item_content_start {
+                return None;
+            }
+            Some(Edit {
+                changes: vec![Splice::new(quote_end..lo, "")],
+                caret: [quote_end; 2],
+            })
+        }
+        Command::Continue => {
+            if hi > end || lo < item_content_start {
+                return None;
+            }
+            if lo == hi && md[item_content_start..end].trim().is_empty() {
+                return Some(Edit {
+                    changes: vec![Splice::new(quote_end..end, "")],
+                    caret: [quote_end; 2],
+                });
+            }
+            let insert = format!("{}{continuation}{}", eol(md), next_list_suffix(marker)?);
+            Some(Edit {
+                caret: [lo + insert.len(); 2],
+                changes: vec![Splice::new(lo..hi, insert)],
+            })
+        }
+        Command::Indent | Command::Outdent => None,
+    }
+}
+
 fn edit_blockquote(md: &str, [a, b]: [usize; 2], command: Command) -> Option<Edit> {
     let (lo, hi) = (a.min(b), a.max(b));
     let first = line_start(md, lo);
@@ -179,73 +222,43 @@ fn edit_blockquote(md: &str, [a, b]: [usize; 2], command: Command) -> Option<Edi
         format!("{quote_str} ")
     };
 
-    // Handle a list item nested inside a blockquote (e.g. `> - item`).
     if let Some(marker) = prefix(&line[q.end..]) {
-        let item_content_start = first + q.end + marker.end;
-        if matches!(command, Command::Backspace) {
-            if a != b || lo != item_content_start {
-                return None;
-            }
-            return Some(Edit {
-                changes: vec![Splice::new(first + q.end..lo, "")],
-                caret: [first + q.end; 2],
-            });
-        }
-        if matches!(command, Command::Continue) {
-            if hi > end || lo < item_content_start {
-                return None;
-            }
-            if lo == hi && md[item_content_start..end].trim().is_empty() {
-                return Some(Edit {
-                    changes: vec![Splice::new(first + q.end..end, "")],
-                    caret: [first + q.end; 2],
-                });
-            }
-            let insert = format!("{}{continuation}{}", eol(md), next_list_suffix(&marker)?);
-            return Some(Edit {
-                caret: [lo + insert.len(); 2],
-                changes: vec![Splice::new(lo..hi, insert)],
-            });
-        }
-        return None;
+        return edit_quoted_list(md, [a, b], first, end, &q, &marker, &continuation, command);
     }
 
+    let quote_end = first + q.end;
     match command {
         Command::Backspace => {
-            if a != b || lo != first + q.end {
+            if a != b || lo != quote_end {
                 return None;
             }
-            let cut_from = if q.depth > 1 {
-                first + q.prev_end
-            } else {
-                first
-            };
+            let cut_from = if q.depth > 1 { first + q.prev_end } else { first };
             Some(Edit {
                 changes: vec![Splice::new(cut_from..lo, "")],
                 caret: [cut_from; 2],
             })
         }
         Command::Continue => {
-            if hi > end || lo < first + q.end {
+            if hi > end || lo < quote_end {
                 return None;
             }
-            if lo == hi && md[first + q.end..end].trim().is_empty() {
+            if lo == hi && md[quote_end..end].trim().is_empty() {
                 if q.depth > 1 {
                     return Some(Edit {
                         changes: vec![Splice::new(first + q.prev_end..end, "")],
                         caret: [first + q.prev_end; 2],
                     });
                 }
+                let before = &md[..first];
+                let prev_line = before
+                    .trim_end_matches(['\r', '\n'])
+                    .rsplit('\n')
+                    .next()
+                    .unwrap_or("");
                 let prev_non_empty = first > 0
-                    && !md[..first]
-                        .trim_end_matches(['\r', '\n'])
-                        .rsplit('\n')
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .is_empty()
-                    && !md[..first].ends_with("\n\n")
-                    && !md[..first].ends_with("\r\n\r\n");
+                    && !prev_line.trim().is_empty()
+                    && !before.ends_with("\n\n")
+                    && !before.ends_with("\r\n\r\n");
                 let insert = if prev_non_empty { eol(md) } else { "" };
                 return Some(Edit {
                     changes: vec![Splice::new(first..end, insert)],

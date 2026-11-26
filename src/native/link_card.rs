@@ -7,6 +7,7 @@ use super::worker::work;
 use super::{Field, Writing, report};
 use dioxus_native::prelude::*;
 use std::collections::HashMap;
+use std::ops::Range;
 
 const CARD_WIDTH: f64 = 336.0;
 const CARD_EST_HEIGHT: f64 = 176.0;
@@ -81,29 +82,23 @@ fn space_md_path(url: &str) -> Option<String> {
 
 fn display_target(url: &str, is_internal: bool) -> String {
     let trimmed = url.trim();
-    if is_internal {
-        if trimmed.starts_with('#') {
-            return trimmed.to_owned();
-        }
-        let clean = normalize_internal_path(trimmed);
-        if let Some((_, frag)) = trimmed.split_once('#') {
-            if clean.is_empty() {
-                format!("#{frag}")
-            } else {
-                format!("{clean}#{frag}")
-            }
-        } else if clean.is_empty() {
-            trimmed.to_owned()
-        } else {
-            clean
-        }
-    } else {
+    if !is_internal {
         let stripped = trimmed
             .strip_prefix("https://")
             .or_else(|| trimmed.strip_prefix("http://"))
             .or_else(|| trimmed.strip_prefix("mailto:"))
             .unwrap_or(trimmed);
-        stripped.trim_end_matches('/').to_owned()
+        return stripped.trim_end_matches('/').to_owned();
+    }
+    if trimmed.starts_with('#') {
+        return trimmed.to_owned();
+    }
+    let clean = normalize_internal_path(trimmed);
+    match (clean.is_empty(), trimmed.split_once('#')) {
+        (true, Some((_, frag))) => format!("#{frag}"),
+        (false, Some((_, frag))) => format!("{clean}#{frag}"),
+        (true, None) => trimmed.to_owned(),
+        (false, None) => clean,
     }
 }
 
@@ -228,6 +223,7 @@ fn extract_markdown_summary(md: &str) -> (Option<String>, Option<String>) {
     }
     let mut title = None;
     let mut body_parts = Vec::new();
+    let mut body_len = 0usize;
     for raw in lines {
         let trimmed = raw.trim();
         if trimmed.is_empty() {
@@ -259,8 +255,9 @@ fn extract_markdown_summary(md: &str) -> (Option<String>, Option<String>) {
             .trim_start_matches("* ");
         let plain = strip_inline_markdown(clean);
         if !plain.is_empty() {
+            body_len += plain.len();
             body_parts.push(plain);
-            if body_parts.iter().map(|s| s.len()).sum::<usize>() > 200 {
+            if body_len > 200 {
                 break;
             }
         }
@@ -320,88 +317,86 @@ fn format_backlinks(count: usize) -> String {
     }
 }
 
-fn build_preview(
+fn fallback_title(raw_label: &str, stem_source: &str) -> String {
+    if !raw_label.is_empty() {
+        raw_label.to_owned()
+    } else {
+        prettify_stem(stem_source)
+    }
+}
+
+fn anchor_preview(
     md: &str,
     all_links: &[ParsedLink],
-    link: &ParsedLink,
+    url: &str,
+    raw_label: &str,
+    title_attr: Option<String>,
+) -> LinkPreview {
+    let note_title = {
+        let t = Sections::read(md).title(md).trim();
+        (!t.is_empty()).then(|| t.to_owned())
+    };
+    let backlinks = format_backlinks(count_doc_backlinks(all_links, url));
+    let (title, excerpt, meta_left, open_target) =
+        if let Some((offset, heading, excerpt)) = resolve_heading_anchor(md, url) {
+            (
+                heading,
+                excerpt.or(title_attr),
+                "Section in this note",
+                OpenTarget::HeadingOffset(offset),
+            )
+        } else {
+            (
+                fallback_title(raw_label, url.trim_start_matches('#')),
+                title_attr,
+                "Anchor link",
+                OpenTarget::None,
+            )
+        };
+    LinkPreview {
+        is_internal: true,
+        display_target: url.to_owned(),
+        title,
+        folder_or_host: note_title,
+        excerpt,
+        meta_left: Some(meta_left.to_owned()),
+        meta_right: Some(backlinks),
+        open_target,
+    }
+}
+
+fn external_preview(url: &str, raw_label: &str, title_attr: Option<String>) -> LinkPreview {
+    let host = extract_host(url);
+    let disp = display_target(url, false);
+    let title = if !raw_label.is_empty()
+        && !raw_label.eq_ignore_ascii_case(url)
+        && !raw_label.eq_ignore_ascii_case(&disp)
+    {
+        raw_label.to_owned()
+    } else {
+        host.clone().unwrap_or_else(|| disp.clone())
+    };
+    let excerpt = title_attr.or_else(|| (disp != title).then(|| truncate_excerpt(url, 168)).flatten());
+    LinkPreview {
+        is_internal: false,
+        display_target: disp,
+        title,
+        folder_or_host: host,
+        excerpt,
+        meta_left: Some("External link".to_owned()),
+        meta_right: Some("Open in browser".to_owned()),
+        open_target: OpenTarget::ExternalUrl(normalized_external_url(url)),
+    }
+}
+
+fn internal_preview(
+    all_links: &[ParsedLink],
+    url: &str,
+    raw_label: &str,
+    title_attr: Option<String>,
     has_space: bool,
     space_cache: &HashMap<String, CachedPage>,
 ) -> LinkPreview {
-    let raw_label = md
-        .get(link.label_range.clone())
-        .map(str::trim)
-        .unwrap_or("");
-    let url = link.url.trim();
-    let title_attr = truncate_excerpt(&link.title, 168);
-
-    // 1. In-document heading anchor (`#heading-slug`).
-    if url.starts_with('#') {
-        let note_title = {
-            let t = Sections::read(md).title(md).trim();
-            (!t.is_empty()).then(|| t.to_owned())
-        };
-        let backlinks = format_backlinks(count_doc_backlinks(all_links, url));
-        if let Some((offset, heading, excerpt)) = resolve_heading_anchor(md, url) {
-            return LinkPreview {
-                is_internal: true,
-                display_target: url.to_owned(),
-                title: heading,
-                folder_or_host: note_title,
-                excerpt: excerpt.or(title_attr),
-                meta_left: Some("Section in this note".to_owned()),
-                meta_right: Some(backlinks),
-                open_target: OpenTarget::HeadingOffset(offset),
-            };
-        }
-        let fallback_title = if !raw_label.is_empty() {
-            raw_label.to_owned()
-        } else {
-            prettify_stem(url.trim_start_matches('#'))
-        };
-        return LinkPreview {
-            is_internal: true,
-            display_target: url.to_owned(),
-            title: fallback_title,
-            folder_or_host: note_title,
-            excerpt: title_attr,
-            meta_left: Some("Anchor link".to_owned()),
-            meta_right: Some(backlinks),
-            open_target: OpenTarget::None,
-        };
-    }
-
-    // 2. External URL (`https://`, `http://`, `mailto:`, `www.`).
-    if is_external_url(url) {
-        let host = extract_host(url);
-        let disp = display_target(url, false);
-        let title = if !raw_label.is_empty()
-            && !raw_label.eq_ignore_ascii_case(url)
-            && !raw_label.eq_ignore_ascii_case(&disp)
-        {
-            raw_label.to_owned()
-        } else {
-            host.clone().unwrap_or_else(|| disp.clone())
-        };
-        let excerpt = title_attr.or_else(|| {
-            if disp != title {
-                truncate_excerpt(url, 168)
-            } else {
-                None
-            }
-        });
-        return LinkPreview {
-            is_internal: false,
-            display_target: disp,
-            title,
-            folder_or_host: host,
-            excerpt,
-            meta_left: Some("External link".to_owned()),
-            meta_right: Some("Open in browser".to_owned()),
-            open_target: OpenTarget::ExternalUrl(normalized_external_url(url)),
-        };
-    }
-
-    // 3. Internal page / note link (e.g. `brain/log`, `car/maintenance.md`).
     let disp = display_target(url, true);
     let folder = extract_folder(&disp);
     let backlinks = format_backlinks(count_doc_backlinks(all_links, url));
@@ -410,37 +405,17 @@ fn build_preview(
 
     let (title, excerpt, meta_left) = match cached {
         Some(page) if page.found => (
-            page.title.clone().unwrap_or_else(|| {
-                if !raw_label.is_empty() {
-                    raw_label.to_owned()
-                } else {
-                    prettify_stem(&disp)
-                }
-            }),
+            page.title
+                .clone()
+                .unwrap_or_else(|| fallback_title(raw_label, &disp)),
             page.excerpt.clone().or(title_attr),
-            Some("Space page".to_owned()),
+            "Space page",
         ),
-        Some(_) => (
-            if !raw_label.is_empty() {
-                raw_label.to_owned()
-            } else {
-                prettify_stem(&disp)
-            },
-            title_attr,
-            Some("Uncreated page".to_owned()),
-        ),
+        Some(_) => (fallback_title(raw_label, &disp), title_attr, "Uncreated page"),
         None => (
-            if !raw_label.is_empty() {
-                raw_label.to_owned()
-            } else {
-                prettify_stem(&disp)
-            },
+            fallback_title(raw_label, &disp),
             title_attr,
-            Some(if has_space {
-                "Space page".to_owned()
-            } else {
-                "Linked page".to_owned()
-            }),
+            if has_space { "Space page" } else { "Linked page" },
         ),
     };
 
@@ -455,9 +430,32 @@ fn build_preview(
         title,
         folder_or_host: folder,
         excerpt,
-        meta_left,
+        meta_left: Some(meta_left.to_owned()),
         meta_right: Some(backlinks),
         open_target,
+    }
+}
+
+fn build_preview(
+    md: &str,
+    all_links: &[ParsedLink],
+    link: &ParsedLink,
+    has_space: bool,
+    space_cache: &HashMap<String, CachedPage>,
+) -> LinkPreview {
+    let raw_label = md
+        .get(link.label_range.clone())
+        .map(str::trim)
+        .unwrap_or("");
+    let url = link.url.trim();
+    let title_attr = truncate_excerpt(&link.title, 168);
+
+    if url.starts_with('#') {
+        anchor_preview(md, all_links, url, raw_label, title_attr)
+    } else if is_external_url(url) {
+        external_preview(url, raw_label, title_attr)
+    } else {
+        internal_preview(all_links, url, raw_label, title_attr, has_space, space_cache)
     }
 }
 
@@ -477,6 +475,121 @@ fn format_markdown_link(label: &str, url: &str, title: &str, was_autolink: bool)
         let escaped = title.replace('"', "\\\"");
         format!("[{text}]({url} \"{escaped}\")")
     }
+}
+
+struct LinkBounds {
+    first_x: f64,
+    last_x: f64,
+    top: f64,
+    bottom: f64,
+}
+
+fn link_fragment_bounds(
+    layout: &parley::Layout<blitz_dom::node::TextBrush>,
+    start_byte: usize,
+    end_byte: usize,
+    caret_byte: usize,
+) -> LinkBounds {
+    let start_cursor =
+        parley::Cursor::from_byte_index(layout, start_byte, parley::Affinity::Downstream);
+    let end_cursor =
+        parley::Cursor::from_byte_index(layout, end_byte, parley::Affinity::Downstream);
+    let frags = if end_byte > start_byte {
+        parley::Selection::new(start_cursor, end_cursor).geometry(layout)
+    } else {
+        Vec::new()
+    };
+    if frags.is_empty() {
+        let g = start_cursor.geometry(layout, 0.0);
+        let caret =
+            parley::Cursor::from_byte_index(layout, caret_byte, parley::Affinity::Downstream)
+                .geometry(layout, 0.0);
+        return LinkBounds {
+            first_x: g.x0,
+            last_x: caret.x0,
+            top: caret.y0,
+            bottom: caret.y1,
+        };
+    }
+    let mut top = f64::INFINITY;
+    let mut bottom = f64::NEG_INFINITY;
+    let mut first_x = f64::INFINITY;
+    let mut last_x = f64::INFINITY;
+    for (r, _) in &frags {
+        let (y0, y1, x0) = (f64::from(r.y0), f64::from(r.y1), f64::from(r.x0));
+        if y0 < top - 1.0 {
+            top = y0;
+            first_x = x0;
+        } else if (y0 - top).abs() <= 1.0 {
+            first_x = first_x.min(x0);
+        }
+        if y1 > bottom + 1.0 {
+            bottom = y1;
+            last_x = x0;
+        } else if (y1 - bottom).abs() <= 1.0 {
+            last_x = last_x.min(x0);
+        }
+    }
+    LinkBounds {
+        first_x,
+        last_x,
+        top,
+        bottom,
+    }
+}
+
+fn place_card_in_paper(
+    doc: &blitz_dom::BaseDocument,
+    paper_rect: blitz_dom::BoundingRect,
+    origin_x: f64,
+    origin_y: f64,
+    scale: f64,
+    bounds: LinkBounds,
+    link: &ParsedLink,
+) -> Option<(f32, f32)> {
+    let link_top = origin_y + bounds.top / scale;
+    let link_bottom = origin_y + bounds.bottom / scale;
+    let (vw, vh) = doc.viewport().logical_size();
+    if link_bottom < 0.0 || link_top > f64::from(vh) {
+        return None;
+    }
+    let bar_bottom = doc
+        .get_element_by_id("mode-bar")
+        .and_then(|n| doc.get_client_bounding_rect(n))
+        .map_or(36.0, |r| r.y + r.height);
+    let min_top = (bar_bottom + 6.0).max(42.0);
+    let card_h = doc
+        .get_element_by_id("link-card")
+        .and_then(|n| doc.get_client_bounding_rect(n))
+        .map(|r| r.height)
+        .filter(|&h| h > 40.0)
+        .unwrap_or_else(|| {
+            if link.title.trim().is_empty() && !link.url.trim().starts_with('#') {
+                120.0
+            } else {
+                CARD_EST_HEIGHT
+            }
+        });
+    let gap = 4.0;
+    let below_y = link_bottom + gap;
+    let above_y = link_top - card_h - gap;
+    let place_below = below_y + card_h <= f64::from(vh) - 8.0 || above_y < min_top;
+    let anchor_x = if place_below {
+        bounds.last_x
+    } else {
+        bounds.first_x
+    };
+    let client_x = (origin_x + anchor_x / scale)
+        .clamp(8.0, (f64::from(vw) - CARD_WIDTH - 8.0).max(8.0));
+    let client_y = if place_below {
+        below_y.clamp(min_top, (f64::from(vh) - card_h.min(120.0) - 8.0).max(min_top))
+    } else {
+        above_y.max(min_top)
+    };
+    Some((
+        (client_x - paper_rect.x).round() as f32,
+        (client_y - paper_rect.y).round() as f32,
+    ))
 }
 
 impl Writing {
@@ -558,115 +671,28 @@ impl Writing {
         let l = node.final_layout();
         let scale = f64::from(layout.scale());
         let raw_len = input.editor.raw_text().len();
-        let mode = *self.edit_mode.peek();
-        let span_start_src = if mode == super::projection::EditMode::Markdown {
-            link.outer.start
-        } else {
-            link.label_range.start.min(link.outer.end)
-        };
-        let span_end_src = if mode == super::projection::EditMode::Markdown {
-            link.outer.end
-        } else {
-            link.label_range.end.min(link.outer.end)
-        };
-        let start_byte = proj.source_to_display(span_start_src).min(raw_len);
-        let end_byte = proj.source_to_display(span_end_src).min(raw_len);
-        let caret_byte = proj.source_to_display(b).min(raw_len);
-        let start_cursor =
-            parley::Cursor::from_byte_index(layout, start_byte, parley::Affinity::Downstream);
-        let end_cursor =
-            parley::Cursor::from_byte_index(layout, end_byte, parley::Affinity::Downstream);
-        let caret_geom =
-            parley::Cursor::from_byte_index(layout, caret_byte, parley::Affinity::Downstream)
-                .geometry(layout, 0.0);
-        let frags = if end_byte > start_byte {
-            parley::Selection::new(start_cursor, end_cursor).geometry(layout)
-        } else {
-            Vec::new()
-        };
-        let origin_x = rect.x + f64::from(l.border.left + l.padding.left)
-            - if input.is_multiline {
-                0.0
+        let (span_start_src, span_end_src) =
+            if *self.edit_mode.peek() == super::projection::EditMode::Markdown {
+                (link.outer.start, link.outer.end)
             } else {
-                f64::from(input.scroll_offset)
+                (
+                    link.label_range.start.min(link.outer.end),
+                    link.label_range.end.min(link.outer.end),
+                )
             };
+        let bounds = link_fragment_bounds(
+            layout,
+            proj.source_to_display(span_start_src).min(raw_len),
+            proj.source_to_display(span_end_src).min(raw_len),
+            proj.source_to_display(b).min(raw_len),
+        );
+        let origin_x = rect.x + f64::from(l.border.left + l.padding.left)
+            - if input.is_multiline { 0.0 } else { f64::from(input.scroll_offset) };
         let origin_y = rect.y
             + f64::from(l.border.top + l.padding.top)
             + node.text_input_v_centering_offset(scale)
-            - if input.is_multiline {
-                f64::from(input.scroll_offset)
-            } else {
-                0.0
-            };
-        let (first_x, last_x, span_top, span_bottom) = if !frags.is_empty() {
-            let mut min_y = f64::INFINITY;
-            let mut max_y = f64::NEG_INFINITY;
-            let mut top_x = f64::INFINITY;
-            let mut bot_x = f64::INFINITY;
-            for (r, _) in &frags {
-                let y0 = f64::from(r.y0);
-                let y1 = f64::from(r.y1);
-                let x0 = f64::from(r.x0);
-                if y0 < min_y - 1.0 {
-                    min_y = y0;
-                    top_x = x0;
-                } else if (y0 - min_y).abs() <= 1.0 {
-                    top_x = top_x.min(x0);
-                }
-                if y1 > max_y + 1.0 {
-                    max_y = y1;
-                    bot_x = x0;
-                } else if (y1 - max_y).abs() <= 1.0 {
-                    bot_x = bot_x.min(x0);
-                }
-            }
-            (top_x, bot_x, min_y, max_y)
-        } else {
-            let g = start_cursor.geometry(layout, 0.0);
-            (
-                g.x0,
-                caret_geom.x0,
-                caret_geom.y0,
-                caret_geom.y1,
-            )
-        };
-        let link_top = origin_y + span_top / scale;
-        let link_bottom = origin_y + span_bottom / scale;
-        let (vw, vh) = doc.viewport().logical_size();
-        if link_bottom < 0.0 || link_top > f64::from(vh) {
-            return None;
-        }
-        let bar_bottom = doc
-            .get_element_by_id("mode-bar")
-            .and_then(|n| doc.get_client_bounding_rect(n))
-            .map_or(36.0, |r| r.y + r.height);
-        let min_top = (bar_bottom + 6.0).max(42.0);
-        let card_h = doc
-            .get_element_by_id("link-card")
-            .and_then(|n| doc.get_client_bounding_rect(n))
-            .map(|r| r.height)
-            .filter(|&h| h > 40.0)
-            .unwrap_or_else(|| {
-                if link.title.trim().is_empty() && !link.url.trim().starts_with('#') {
-                    120.0
-                } else {
-                    CARD_EST_HEIGHT
-                }
-            });
-        let gap = 4.0;
-        let below_y = link_bottom + gap;
-        let above_y = link_top - card_h - gap;
-        let place_below = below_y + card_h <= f64::from(vh) - 8.0 || above_y < min_top;
-        let anchor_x = if place_below { last_x } else { first_x };
-        let client_x = (origin_x + anchor_x / scale)
-            .clamp(8.0, (f64::from(vw) - CARD_WIDTH - 8.0).max(8.0));
-        let client_y = if place_below {
-            below_y.clamp(min_top, (f64::from(vh) - card_h.min(120.0) - 8.0).max(min_top))
-        } else {
-            above_y.max(min_top)
-        };
-        let x = (client_x - paper_rect.x).round() as f32;
-        let y = (client_y - paper_rect.y).round() as f32;
+            - if input.is_multiline { f64::from(input.scroll_offset) } else { 0.0 };
+        let (x, y) = place_card_in_paper(&doc, paper_rect, origin_x, origin_y, scale, bounds, &link)?;
 
         Some(LinkCardState { field, link, x, y })
     }
@@ -717,7 +743,25 @@ impl Writing {
         }
     }
 
-    pub(super) fn remove_active_link(mut self) {
+    fn commit_link_edit(
+        mut self,
+        range: Range<usize>,
+        replacement: &str,
+        remember_sel: [usize; 2],
+        next_caret: usize,
+    ) {
+        self.note.peek().remember_selection(remember_sel);
+        let result = self.note.write().replace(range, replacement);
+        self.link_editing.set(false);
+        self.link_dismissed.set(None);
+        self.link_card.set(None);
+        if result.is_ok() {
+            self.open(self.field_at(next_caret), [next_caret; 2]);
+        }
+        report(result, self.message);
+    }
+
+    pub(super) fn remove_active_link(self) {
         let Some(card) = self.link_card.peek().clone() else {
             return;
         };
@@ -735,22 +779,11 @@ impl Writing {
         let sel = self
             .absolute_selection()
             .unwrap_or([card.link.label_range.start; 2]);
-        self.note.peek().remember_selection(sel);
-        let result = self
-            .note
-            .write()
-            .replace(card.link.outer.clone(), replacement);
-        self.link_editing.set(false);
-        self.link_dismissed.set(None);
-        self.link_card.set(None);
-        if result.is_ok() {
-            let caret = card.link.outer.start + replacement.len();
-            self.open(self.field_at(caret), [caret; 2]);
-        }
-        report(result, self.message);
+        let caret = card.link.outer.start + replacement.len();
+        self.commit_link_edit(card.link.outer, replacement, sel, caret);
     }
 
-    pub(super) fn save_edited_link(mut self, new_label: &str, new_url: &str) {
+    pub(super) fn save_edited_link(self, new_label: &str, new_url: &str) {
         let Some(card) = self.link_card.peek().clone() else {
             return;
         };
@@ -766,39 +799,235 @@ impl Writing {
             card.link.is_autolink,
         );
         let sel = [card.link.label_range.start.min(md.len()); 2];
-        self.note.peek().remember_selection(sel);
-        let result = self
-            .note
-            .write()
-            .replace(card.link.outer.clone(), &replacement);
-        self.link_editing.set(false);
-        self.link_dismissed.set(None);
-        self.link_card.set(None);
-        if result.is_ok() {
-            let trimmed_url = new_url.trim();
-            let caret = if trimmed_url.is_empty() {
-                card.link.outer.start + replacement.len()
+        let trimmed_url = new_url.trim();
+        let caret = if trimmed_url.is_empty() {
+            card.link.outer.start + replacement.len()
+        } else {
+            let inner_len = if new_label.trim().is_empty() {
+                trimmed_url.len()
             } else {
-                let inner_len = if new_label.trim().is_empty() {
-                    trimmed_url.len()
-                } else {
-                    new_label.trim().len()
-                };
-                card.link.outer.start + 1 + inner_len
+                new_label.trim().len()
             };
-            self.open(self.field_at(caret), [caret; 2]);
+            card.link.outer.start + 1 + inner_len
+        };
+        self.commit_link_edit(card.link.outer, &replacement, sel, caret);
+    }
+}
+
+fn maybe_fetch_space_page(
+    writing: Writing,
+    url: &str,
+    mut space_cache: Signal<HashMap<String, CachedPage>>,
+    mut fetching: Signal<Option<String>>,
+) {
+    if is_external_url(url) || url.trim().starts_with('#') {
+        return;
+    }
+    let Some(path) = space_md_path(url) else {
+        return;
+    };
+    if space_cache.peek().contains_key(&path) || fetching.peek().as_deref() == Some(path.as_str()) {
+        return;
+    }
+    let Some(page_src) = writing.page.peek().clone() else {
+        return;
+    };
+    fetching.set(Some(path.clone()));
+    spawn(async move {
+        let space = page_src.space.clone();
+        let lookup = path.clone();
+        let fetched = work(move || space.read_optional(&lookup)).await;
+        let entry = match fetched {
+            Ok(Some(page)) => {
+                let (title, excerpt) = extract_markdown_summary(&page.text);
+                CachedPage {
+                    title,
+                    excerpt,
+                    found: true,
+                }
+            }
+            _ => CachedPage {
+                title: None,
+                excerpt: None,
+                found: false,
+            },
+        };
+        space_cache.write().insert(path.clone(), entry);
+        if fetching.peek().as_deref() == Some(path.as_str()) {
+            fetching.set(None);
         }
-        report(result, self.message);
+    });
+}
+
+#[component]
+fn LinkEditForm(
+    writing: Writing,
+    edit_label: Signal<String>,
+    edit_url: Signal<String>,
+) -> Element {
+    let save_edit = move |()| {
+        let label = edit_label.peek().clone();
+        let url = edit_url.peek().clone();
+        writing.save_edited_link(&label, &url);
+    };
+    let cancel_edit = move |()| writing.cancel_link_edit();
+
+    rsx! {
+        div { class: "ui-link-card-head",
+            span { class: "ui-link-card-edit-heading", "Edit link" }
+        }
+        div { class: "ui-link-card-form",
+            div { class: "ui-link-card-field",
+                span { class: "ui-link-card-label", "Text" }
+                div { class: "ui-link-card-input",
+                    TextField {
+                        id: "link-edit-label",
+                        value: edit_label,
+                        placeholder: "Link text",
+                        onenter: save_edit,
+                        onescape: cancel_edit,
+                    }
+                }
+            }
+            div { class: "ui-link-card-field",
+                span { class: "ui-link-card-label", "Target" }
+                div { class: "ui-link-card-input",
+                    TextField {
+                        id: "link-edit-url",
+                        value: edit_url,
+                        placeholder: "Path or https://…",
+                        onenter: save_edit,
+                        onescape: cancel_edit,
+                    }
+                }
+            }
+            div { class: "ui-link-card-form-actions",
+                Button {
+                    id: "link-edit-cancel",
+                    variant: Variant::Ghost,
+                    label: "Cancel",
+                    onclick: move |_| cancel_edit(()),
+                }
+                Button {
+                    id: "link-edit-save",
+                    variant: Variant::Primary,
+                    label: "Save",
+                    onclick: move |_| save_edit(()),
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn LinkPreviewBody(
+    writing: Writing,
+    preview: LinkPreview,
+    current_label: String,
+    current_url: String,
+    can_remove: bool,
+    mut edit_label: Signal<String>,
+    mut edit_url: Signal<String>,
+    mut copied_url: Signal<Option<String>>,
+) -> Element {
+    let is_copied = copied_url.read().as_deref() == Some(current_url.as_str());
+    let can_open = preview.open_target != OpenTarget::None;
+    let open_target = preview.open_target.clone();
+    let copy_url = current_url.clone();
+    let start_edit_label = current_label;
+    let start_edit_url = current_url.clone();
+
+    rsx! {
+        div { class: "ui-link-card-head",
+            button {
+                id: "link-card-open",
+                class: "ui-link-card-target",
+                class: if !can_open { "static" },
+                aria_label: if can_open { format!("Open {}", preview.display_target) } else { preview.display_target.clone() },
+                title: current_url,
+                onclick: move |_| writing.open_link_target(open_target.clone()),
+                {icon(if preview.is_internal { Icon::File } else { Icon::Open })}
+                span { class: "ui-link-card-path", "{preview.display_target}" }
+            }
+            div { class: "ui-link-card-actions", role: "group", aria_label: "Link actions",
+                Button {
+                    id: "link-card-edit",
+                    variant: Variant::Icon,
+                    label: "Edit link",
+                    tip: "Edit link",
+                    icon: Icon::Pencil,
+                    onclick: move |_| {
+                        edit_label.set(start_edit_label.clone());
+                        edit_url.set(start_edit_url.clone());
+                        copied_url.set(None);
+                        let mut w = writing;
+                        w.link_editing.set(true);
+                    },
+                }
+                Button {
+                    id: "link-card-copy",
+                    variant: Variant::Icon,
+                    label: "Copy link",
+                    tip: if is_copied { "Copied" } else { "Copy link" },
+                    icon: if is_copied { Icon::Check } else { Icon::Copy },
+                    selected: is_copied.then_some(true),
+                    onclick: move |_| {
+                        if writing.copy_link_target(&copy_url) {
+                            copied_url.set(Some(copy_url.clone()));
+                        }
+                    },
+                }
+                if can_remove {
+                    Button {
+                        id: "link-card-remove",
+                        variant: Variant::Icon,
+                        label: "Remove link",
+                        tip: "Remove link",
+                        icon: Icon::Trash,
+                        danger: true,
+                        onclick: move |_| writing.remove_active_link(),
+                    }
+                }
+            }
+        }
+        div { class: "ui-link-card-body",
+            div { class: "ui-link-card-title", "{preview.title}" }
+            if let Some(sub) = &preview.folder_or_host {
+                div { class: "ui-link-card-sub",
+                    {icon(if preview.is_internal { Icon::Folder } else { Icon::Link })}
+                    span { "{sub}" }
+                }
+            }
+            if let Some(excerpt) = &preview.excerpt {
+                p { class: "ui-link-card-excerpt", "{excerpt}" }
+            }
+            if preview.meta_left.is_some() || preview.meta_right.is_some() {
+                div { class: "ui-link-card-meta",
+                    if let Some(left) = &preview.meta_left {
+                        span { class: "ui-link-card-meta-item",
+                            {icon(if preview.is_internal { Icon::Clock } else { Icon::Link })}
+                            span { "{left}" }
+                        }
+                    }
+                    if let Some(right) = &preview.meta_right {
+                        span { class: "ui-link-card-meta-item",
+                            {icon(if preview.is_internal { Icon::Link } else { Icon::Open })}
+                            span { "{right}" }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 #[component]
 pub(super) fn LinkCard(writing: Writing) -> Element {
-    let mut edit_label = use_signal(String::new);
-    let mut edit_url = use_signal(String::new);
-    let mut copied_url = use_signal(|| None::<String>);
-    let mut space_cache = use_signal(HashMap::<String, CachedPage>::new);
-    let mut fetching = use_signal(|| None::<String>);
+    let edit_label = use_signal(String::new);
+    let edit_url = use_signal(String::new);
+    let copied_url = use_signal(|| None::<String>);
+    let space_cache = use_signal(HashMap::<String, CachedPage>::new);
+    let fetching = use_signal(|| None::<String>);
 
     use_effect(move || {
         if (writing.link_editing)()
@@ -823,39 +1052,8 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
     let parsed = writing.parsed.read();
     let has_space = writing.page.read().is_some();
 
-    // Fetch real Space page title and excerpt asynchronously once per internal target.
-    if has_space && !is_external_url(&card.link.url) && !card.link.url.trim().starts_with('#')
-        && let Some(path) = space_md_path(&card.link.url)
-        && !space_cache.peek().contains_key(&path)
-        && fetching.peek().as_deref() != Some(path.as_str())
-    {
-        fetching.set(Some(path.clone()));
-        if let Some(page_src) = writing.page.peek().clone() {
-            spawn(async move {
-                let space = page_src.space.clone();
-                let lookup = path.clone();
-                let fetched = work(move || space.read_optional(&lookup)).await;
-                let entry = match fetched {
-                    Ok(Some(page)) => {
-                        let (title, excerpt) = extract_markdown_summary(&page.text);
-                        CachedPage {
-                            title,
-                            excerpt,
-                            found: true,
-                        }
-                    }
-                    _ => CachedPage {
-                        title: None,
-                        excerpt: None,
-                        found: false,
-                    },
-                };
-                space_cache.write().insert(path.clone(), entry);
-                if fetching.peek().as_deref() == Some(path.as_str()) {
-                    fetching.set(None);
-                }
-            });
-        }
+    if has_space {
+        maybe_fetch_space_page(writing, &card.link.url, space_cache, fetching);
     }
 
     let preview = build_preview(&md, &parsed.links, &card.link, has_space, &space_cache.read());
@@ -867,22 +1065,7 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
     drop(parsed);
     drop(md);
 
-    let is_copied = copied_url.read().as_deref() == Some(current_url.as_str());
-    let can_open = preview.open_target != OpenTarget::None;
     let can_remove = card.link.outer != card.link.label_range;
-    let open_target = preview.open_target.clone();
-    let copy_url = current_url.clone();
-    let start_edit_label = current_label.clone();
-    let start_edit_url = current_url.clone();
-
-    let save_edit = move |()| {
-        let label = edit_label.peek().clone();
-        let url = edit_url.peek().clone();
-        writing.save_edited_link(&label, &url);
-    };
-    let cancel_edit = move |()| {
-        writing.cancel_link_edit();
-    };
 
     rsx! {
         Popover {
@@ -894,133 +1077,17 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
             contain: true,
             style: format!("left:{:.0}px; top:{:.0}px;", card.x, card.y),
             if editing {
-                div { class: "ui-link-card-head",
-                    span { class: "ui-link-card-edit-heading", "Edit link" }
-                }
-                div { class: "ui-link-card-form",
-                    div { class: "ui-link-card-field",
-                        span { class: "ui-link-card-label", "Text" }
-                        div { class: "ui-link-card-input",
-                            TextField {
-                                id: "link-edit-label",
-                                value: edit_label,
-                                placeholder: "Link text",
-                                onenter: save_edit,
-                                onescape: cancel_edit,
-                            }
-                        }
-                    }
-                    div { class: "ui-link-card-field",
-                        span { class: "ui-link-card-label", "Target" }
-                        div { class: "ui-link-card-input",
-                            TextField {
-                                id: "link-edit-url",
-                                value: edit_url,
-                                placeholder: "Path or https://…",
-                                onenter: save_edit,
-                                onescape: cancel_edit,
-                            }
-                        }
-                    }
-                    div { class: "ui-link-card-form-actions",
-                        Button {
-                            id: "link-edit-cancel",
-                            variant: Variant::Ghost,
-                            label: "Cancel",
-                            onclick: move |_| writing.cancel_link_edit(),
-                        }
-                        Button {
-                            id: "link-edit-save",
-                            variant: Variant::Primary,
-                            label: "Save",
-                            onclick: move |_| {
-                                let label = edit_label.peek().clone();
-                                let url = edit_url.peek().clone();
-                                writing.save_edited_link(&label, &url);
-                            },
-                        }
-                    }
-                }
+                LinkEditForm { writing, edit_label, edit_url }
             } else {
-                div { class: "ui-link-card-head",
-                    button {
-                        id: "link-card-open",
-                        class: "ui-link-card-target",
-                        class: if !can_open { "static" },
-                        aria_label: if can_open { format!("Open {}", preview.display_target) } else { preview.display_target.clone() },
-                        title: current_url.clone(),
-                        onclick: move |_| writing.open_link_target(open_target.clone()),
-                        {icon(if preview.is_internal { Icon::File } else { Icon::Open })}
-                        span { class: "ui-link-card-path", "{preview.display_target}" }
-                    }
-                    div { class: "ui-link-card-actions", role: "group", aria_label: "Link actions",
-                        Button {
-                            id: "link-card-edit",
-                            variant: Variant::Icon,
-                            label: "Edit link",
-                            tip: "Edit link",
-                            icon: Icon::Pencil,
-                            onclick: move |_| {
-                                edit_label.set(start_edit_label.clone());
-                                edit_url.set(start_edit_url.clone());
-                                copied_url.set(None);
-                                let mut w = writing;
-                                w.link_editing.set(true);
-                            },
-                        }
-                        Button {
-                            id: "link-card-copy",
-                            variant: Variant::Icon,
-                            label: "Copy link",
-                            tip: if is_copied { "Copied" } else { "Copy link" },
-                            icon: if is_copied { Icon::Check } else { Icon::Copy },
-                            selected: is_copied.then_some(true),
-                            onclick: move |_| {
-                                if writing.copy_link_target(&copy_url) {
-                                    copied_url.set(Some(copy_url.clone()));
-                                }
-                            },
-                        }
-                        if can_remove {
-                            Button {
-                                id: "link-card-remove",
-                                variant: Variant::Icon,
-                                label: "Remove link",
-                                tip: "Remove link",
-                                icon: Icon::Trash,
-                                danger: true,
-                                onclick: move |_| writing.remove_active_link(),
-                            }
-                        }
-                    }
-                }
-                div { class: "ui-link-card-body",
-                    div { class: "ui-link-card-title", "{preview.title}" }
-                    if let Some(sub) = &preview.folder_or_host {
-                        div { class: "ui-link-card-sub",
-                            {icon(if preview.is_internal { Icon::Folder } else { Icon::Link })}
-                            span { "{sub}" }
-                        }
-                    }
-                    if let Some(excerpt) = &preview.excerpt {
-                        p { class: "ui-link-card-excerpt", "{excerpt}" }
-                    }
-                    if preview.meta_left.is_some() || preview.meta_right.is_some() {
-                        div { class: "ui-link-card-meta",
-                            if let Some(left) = &preview.meta_left {
-                                span { class: "ui-link-card-meta-item",
-                                    {icon(if preview.is_internal { Icon::Clock } else { Icon::Link })}
-                                    span { "{left}" }
-                                }
-                            }
-                            if let Some(right) = &preview.meta_right {
-                                span { class: "ui-link-card-meta-item",
-                                    {icon(if preview.is_internal { Icon::Link } else { Icon::Open })}
-                                    span { "{right}" }
-                                }
-                            }
-                        }
-                    }
+                LinkPreviewBody {
+                    writing,
+                    preview,
+                    current_label,
+                    current_url,
+                    can_remove,
+                    edit_label,
+                    edit_url,
+                    copied_url,
                 }
             }
         }

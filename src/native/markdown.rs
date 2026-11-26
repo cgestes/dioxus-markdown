@@ -41,29 +41,9 @@ pub(super) fn callout_style(kind: CalloutKind) -> u32 {
 }
 
 fn callout_kind_from_style(style: u32) -> Option<CalloutKind> {
-    if style & CALLOUT_NOTE != 0 {
-        Some(CalloutKind::Note)
-    } else if style & CALLOUT_TIP != 0 {
-        Some(CalloutKind::Tip)
-    } else if style & CALLOUT_IMPORTANT != 0 {
-        Some(CalloutKind::Important)
-    } else if style & CALLOUT_WARNING != 0 {
-        Some(CalloutKind::Warning)
-    } else if style & CALLOUT_CAUTION != 0 {
-        Some(CalloutKind::Caution)
-    } else {
-        None
-    }
-}
-
-pub(super) fn callout_icon(kind: CalloutKind) -> Icon {
-    match kind {
-        CalloutKind::Note => Icon::Info,
-        CalloutKind::Tip => Icon::Spark,
-        CalloutKind::Important => Icon::Important,
-        CalloutKind::Warning => Icon::AlertTriangle,
-        CalloutKind::Caution => Icon::AlertOctagon,
-    }
+    CalloutKind::ALL
+        .into_iter()
+        .find(|&kind| style & callout_style(kind) != 0)
 }
 
 #[derive(Clone, PartialEq)]
@@ -350,7 +330,7 @@ impl CalloutBox {
                         w.callout_menu.set(next);
                     },
                     span { class: "callout-tag-inner",
-                        {icon(callout_icon(kind))}
+                        {icon(Icon::for_callout(kind))}
                         span { "{kind.label()}" }
                     }
                 }
@@ -365,7 +345,7 @@ impl CalloutBox {
                                 key: "{option.tag()}",
                                 id: format!("callout-pick-{}", option.tag().to_ascii_lowercase()),
                                 label: option.label().to_owned(),
-                                icon: callout_icon(option),
+                                icon: Icon::for_callout(option),
                                 selected: option == kind,
                                 onclick: move |_| writing.set_callout_kind(start, option),
                             }
@@ -724,31 +704,34 @@ impl Writing {
         )
     }
 
-    pub fn measured_callouts(self, field: Field) -> Vec<CalloutBox> {
+    pub fn measured_prose_boxes(self, field: Field) -> (Vec<CalloutBox>, Vec<CodeBox>) {
+        let parsed = self.parsed.read();
+        if parsed.callouts.is_empty() && parsed.code_blocks.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
         let handle = self.root.peek();
         let Some(handle) = handle.as_ref() else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
         let doc = handle.doc();
         let Some(node) = doc
             .get_element_by_id(&field.id())
             .and_then(|id| doc.get_node(id))
         else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
         let Some(input) = node.element_data().and_then(|e| e.text_input_data()) else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
         let Some(layout) = input.editor.try_layout() else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
         let proj = self.projection_peek(field);
         if input.editor.is_composing() || input.editor.raw_text() != proj.display {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
         let md = self.contents.read();
         let field_range = self.range(field, &md);
-        let parsed = self.parsed.read();
         let rich = *self.edit_mode.peek() == super::projection::EditMode::Rich;
         let selection = input.editor.raw_selection().text_range();
         let scale = layout.scale();
@@ -761,89 +744,55 @@ impl Writing {
         let left_inset = l.border.left + l.padding.left;
         let top_inset = l.border.top + l.padding.top;
         let raw_len = input.editor.raw_text().len();
-        let mut boxes = Vec::new();
-        for c in &parsed.callouts {
-            if c.range.start < field_range.start || c.range.end > field_range.end {
-                continue;
-            }
-            let (top, height) = Self::vertical_band(
-                layout,
-                &proj,
-                raw_len,
-                &c.range,
-                scroll_top,
-                scale,
-                top_inset,
-                7.0,
-            );
-            let tag_d_start = proj.source_to_display(c.tag_range.start).min(raw_len);
-            let tag_d_end = proj.source_to_display(c.tag_range.end).min(raw_len);
-            let tag_start_geom =
-                parley::Cursor::from_byte_index(layout, tag_d_start, parley::Affinity::Downstream)
-                    .geometry(layout, 0.0);
-            let tag_end_geom =
-                parley::Cursor::from_byte_index(layout, tag_d_end, parley::Affinity::Downstream)
-                    .geometry(layout, 0.0);
-            let badge_x = left_inset + tag_start_geom.x0 as f32 / scale;
-            let badge_y = top_inset + (tag_start_geom.y0 as f32 - scroll_top) / scale;
-            let badge_w = ((tag_end_geom.x0 - tag_start_geom.x0) as f32 / scale).max(24.0);
-            let badge_h = ((tag_start_geom.y1 - tag_start_geom.y0) as f32 / scale).max(20.0);
-            let revealed = !rich
-                && node.is_focussed()
-                && selection.start <= tag_d_end
-                && selection.end >= tag_d_start;
 
-            boxes.push(CalloutBox {
-                field,
-                start: c.range.start,
-                kind: c.kind,
-                top,
-                height,
-                badge_x,
-                badge_y,
-                badge_w,
-                badge_h,
-                revealed,
-            });
-        }
-        boxes
-    }
+        let callouts = parsed
+            .callouts
+            .iter()
+            .filter(|c| c.range.start >= field_range.start && c.range.end <= field_range.end)
+            .map(|c| {
+                let (top, height) = Self::vertical_band(
+                    layout,
+                    &proj,
+                    raw_len,
+                    &c.range,
+                    scroll_top,
+                    scale,
+                    top_inset,
+                    7.0,
+                );
+                let tag_d_start = proj.source_to_display(c.tag_range.start).min(raw_len);
+                let tag_d_end = proj.source_to_display(c.tag_range.end).min(raw_len);
+                let tag_start_geom = parley::Cursor::from_byte_index(
+                    layout,
+                    tag_d_start,
+                    parley::Affinity::Downstream,
+                )
+                .geometry(layout, 0.0);
+                let tag_end_geom = parley::Cursor::from_byte_index(
+                    layout,
+                    tag_d_end,
+                    parley::Affinity::Downstream,
+                )
+                .geometry(layout, 0.0);
+                CalloutBox {
+                    field,
+                    start: c.range.start,
+                    kind: c.kind,
+                    top,
+                    height,
+                    badge_x: left_inset + tag_start_geom.x0 as f32 / scale,
+                    badge_y: top_inset + (tag_start_geom.y0 as f32 - scroll_top) / scale,
+                    badge_w: ((tag_end_geom.x0 - tag_start_geom.x0) as f32 / scale).max(24.0),
+                    badge_h: ((tag_start_geom.y1 - tag_start_geom.y0) as f32 / scale).max(20.0),
+                    revealed: !rich
+                        && node.is_focussed()
+                        && selection.start <= tag_d_end
+                        && selection.end >= tag_d_start,
+                }
+            })
+            .collect();
 
-    pub fn measured_code_blocks(self, field: Field) -> Vec<CodeBox> {
-        let handle = self.root.peek();
-        let Some(handle) = handle.as_ref() else {
-            return Vec::new();
-        };
-        let doc = handle.doc();
-        let Some(node) = doc
-            .get_element_by_id(&field.id())
-            .and_then(|id| doc.get_node(id))
-        else {
-            return Vec::new();
-        };
-        let Some(input) = node.element_data().and_then(|e| e.text_input_data()) else {
-            return Vec::new();
-        };
-        let Some(layout) = input.editor.try_layout() else {
-            return Vec::new();
-        };
-        let proj = self.projection_peek(field);
-        if input.editor.is_composing() || input.editor.raw_text() != proj.display {
-            return Vec::new();
-        }
-        let md = self.contents.read();
-        let field_range = self.range(field, &md);
-        let parsed = self.parsed.read();
-        let scale = layout.scale();
-        let scroll_top = if input.is_multiline {
-            input.scroll_offset * scale
-        } else {
-            0.0
-        };
-        let l = node.final_layout();
-        let top_inset = l.border.top + l.padding.top;
-        let raw_len = input.editor.raw_text().len();
-        parsed
+        let code_blocks = parsed
             .code_blocks
             .iter()
             .filter(|cb| cb.range.start >= field_range.start && cb.range.end <= field_range.end)
@@ -867,7 +816,9 @@ impl Writing {
                     height,
                 }
             })
-            .collect()
+            .collect();
+
+        (callouts, code_blocks)
     }
 
     pub fn set_callout_kind(mut self, callout_start: usize, kind: CalloutKind) {

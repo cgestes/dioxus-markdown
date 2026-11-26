@@ -190,7 +190,7 @@ fn inline_style(tags: &[&str]) -> String {
         .join(" ")
 }
 
-fn split_highlights(line: &mut Passage, md: &str) {
+fn split_highlights(line: &mut Passage) {
     if line.kind == "pre" {
         return;
     }
@@ -244,7 +244,6 @@ fn split_highlights(line: &mut Passage, md: &str) {
             push_run(line, run.from + at, run.to, &s[at..], &run.style, true);
         }
     }
-    let _ = md;
 }
 
 pub fn document(md: &str) -> Vec<Block> {
@@ -369,7 +368,7 @@ pub fn document(md: &str) -> Vec<Block> {
     }
     for line in &mut lines {
         split_markers(line, md, &markers);
-        split_highlights(line, md);
+        split_highlights(line);
     }
     for callout in crate::callout::parse_callouts(md) {
         let first = line_of(&lines, callout.range.start);
