@@ -1,14 +1,14 @@
 use std::ops::Range;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BodyStart {
+pub enum BodyStart {
     WholeNote,
     AfterHeading,
     AfterBlankLine,
 }
 
 /// The live title and body are slices of the original Markdown, including its line endings.
-pub(crate) struct Sections {
+pub struct Sections {
     pub hashes: Option<Range<usize>>,
     pub title: Option<Range<usize>>,
     pub body: usize,
@@ -100,7 +100,7 @@ pub struct Block {
     pub kind: BlockKind,
 }
 
-pub fn blocks(md: &str, tables: &[crate::table::Table]) -> Vec<Block> {
+pub fn blocks(md: &str, tables: &[margin_editor_core::table::Table]) -> Vec<Block> {
     use pulldown_cmark::{Event, Options, Parser, Tag};
     let mut result: Vec<Block> = tables
         .iter()

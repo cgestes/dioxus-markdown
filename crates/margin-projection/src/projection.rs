@@ -6,9 +6,9 @@
 //! - In `EditMode::Markdown` (Keyboard-first Live), unfocused spans render
 //!   tightly with zero ghost gaps, while the span containing the cursor expands
 //!   inline so its Markdown delimiters can be edited directly.
-use super::markdown::{
+use crate::style::{
     BULLET, CALLOUT_ANY, CALLOUT_TITLE, CODE, CODE_BLOCK, DONE, HEADING, HIGHLIGHT, ITALIC, LINK,
-    PUNCTUATION, QUOTE, QUOTE_MARK, RULE, STRIKE, STRONG, callout_style,
+    INLINE, PUNCTUATION, QUOTE, QUOTE_MARK, RULE, STRIKE, STRONG, callout_style,
 };
 use margin_editor_core::{
     callout::{ParsedCallout, parse_callouts, strip_quote_marker},
@@ -787,7 +787,6 @@ impl Projection {
         };
 
         // Map styled tokens into display byte ranges.
-        const INLINE: u32 = STRONG | ITALIC | CODE | LINK | STRIKE | HIGHLIGHT | PUNCTUATION;
         let mut disp_tokens = Vec::new();
         let start_idx = raw_tokens.partition_point(|t| t.range.end <= field_range.start);
         for t in raw_tokens[start_idx..]

@@ -1,18 +1,18 @@
 //! Pure URL classification, Markdown summary extraction, anchor resolution,
 //! and link formatting helpers for the link popover card.
-use super::document::Sections;
-use super::projection::ParsedLink;
+use crate::document::Sections;
+use crate::projection::ParsedLink;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct CachedPage {
+pub struct CachedPage {
     pub title: Option<String>,
     pub excerpt: Option<String>,
     pub found: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum OpenTarget {
+pub enum OpenTarget {
     ExternalUrl(String),
     HeadingOffset(usize),
     SpacePage(String),
@@ -20,7 +20,7 @@ pub(super) enum OpenTarget {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct LinkPreview {
+pub struct LinkPreview {
     pub is_internal: bool,
     pub display_target: String,
     pub title: String,
@@ -31,7 +31,7 @@ pub(super) struct LinkPreview {
     pub open_target: OpenTarget,
 }
 
-pub(super) fn is_external_url(url: &str) -> bool {
+pub fn is_external_url(url: &str) -> bool {
     let lower = url.trim().to_ascii_lowercase();
     lower.starts_with("https://")
         || lower.starts_with("http://")
@@ -56,7 +56,7 @@ fn normalize_internal_path(url: &str) -> String {
     base.strip_suffix(".md").unwrap_or(base).to_owned()
 }
 
-pub(super) fn space_md_path(url: &str) -> Option<String> {
+pub fn space_md_path(url: &str) -> Option<String> {
     let norm = normalize_internal_path(url);
     if norm.is_empty() || norm.contains("..") {
         return None;
@@ -64,7 +64,7 @@ pub(super) fn space_md_path(url: &str) -> Option<String> {
     Some(format!("{norm}.md"))
 }
 
-pub(super) fn space_cache_key(space_root: &str, path: &str) -> String {
+pub fn space_cache_key(space_root: &str, path: &str) -> String {
     format!("{space_root}\0{path}")
 }
 
@@ -198,7 +198,7 @@ fn truncate_excerpt(text: &str, max_chars: usize) -> Option<String> {
     Some(format!("{}…", collapsed[..cut].trim_end_matches([',', ';', ':'])))
 }
 
-pub(super) fn extract_markdown_summary(md: &str) -> (Option<String>, Option<String>) {
+pub fn extract_markdown_summary(md: &str) -> (Option<String>, Option<String>) {
     let mut lines = md.lines().peekable();
     // Skip optional YAML frontmatter.
     if lines.peek().is_some_and(|l| l.trim() == "---") {
@@ -431,7 +431,7 @@ fn internal_preview(
     }
 }
 
-pub(super) fn build_preview(
+pub fn build_preview(
     md: &str,
     all_links: &[ParsedLink],
     link: &ParsedLink,
@@ -454,7 +454,7 @@ pub(super) fn build_preview(
     }
 }
 
-pub(super) fn format_markdown_link(
+pub fn format_markdown_link(
     label: &str,
     url: &str,
     title: &str,

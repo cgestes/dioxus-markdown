@@ -60,7 +60,7 @@ preserves concurrent edits and a recovery window.
 ## 3. Editing Modes
 
 ### 3.1 Live Mode (`EditMode::Markdown` — Keyboard-First)
-- **Tight rendering at rest:** Unfocused inline delimiters (`**`, `*`, `~~`, `` ` ``, `[`, `](url)`) and task-list `- ` prefixes collapse completely via `Projection` (`crates/margin-editor/src/notebook/projection.rs`) with zero ghost whitespace.
+- **Tight rendering at rest:** Unfocused inline delimiters (`**`, `*`, `~~`, `` ` ``, `[`, `](url)`) and task-list `- ` prefixes collapse completely via `Projection` (`crates/margin-projection/src/projection.rs`) with zero ghost whitespace.
 - **Cursor-only inline expansion:** Placing the caret inside or touching a formatted span expands **only that span's** Markdown delimiters inline so it can be edited directly with the keyboard; moving the caret away collapses it tightly again.
 - **Checkboxes (Mouse vs. Keyboard):**
   - **Mouse left-click** toggles the checkbox directly in Loro and **keeps it rendered as a visual togglebox** (repeatable click-to-toggle; never flashes into `[ ]`/`[x]` text).

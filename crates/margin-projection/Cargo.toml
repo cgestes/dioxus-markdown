@@ -1,0 +1,11 @@
+[package]
+name = "margin-projection"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The editor's Markdown model, without Dioxus: `cargo test -p margin-projection`
+# builds no renderer.
+[dependencies]
+margin-editor-core = { path = "../.." }
+pulldown-cmark = { version = "0.13", default-features = false }

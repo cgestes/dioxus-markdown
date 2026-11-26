@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/margin-note",
+    "crates/margin-projection",
     "crates/margin-vault",
     "crates/margin-vault-cli",
     "crates/margin-hub",
@@ -29,9 +30,11 @@ web-time = "1"
 
 # Dependencies run optimized (layout, text shaping and Loro are slow at -O0)
 # and carry line tables only: backtraces keep file and line, builds and links
-# skip full debug info. Workspace crates keep full debug info. Every command
-# (cargo run, cargo test, scripts/test-editor) shares these dependency builds;
-# only a crate whose features differ (margin with `vault`) builds twice.
+# skip full debug info. Workspace crates keep full debug info. Commands with
+# the same features share these builds. `--features vault`, or any build that
+# includes margin-vault-cli, turns on more tokio, futures and AppKit features
+# under Dioxus, so that stack, margin-ui and margin-editor build a second time
+# for it, and an edit then rebuilds them in both.
 [profile.dev.package."*"]
 opt-level = 2
 debug = "line-tables-only"

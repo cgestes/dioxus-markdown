@@ -1,23 +1,20 @@
 //! The Live notebook: the editor surface, its editing modules and the view that ties them together.
-pub(crate) mod blocks;
 pub(crate) mod commands;
-pub(crate) mod document;
 pub(crate) mod formatting;
 pub(crate) mod grid;
 pub(crate) mod inspector;
 pub(crate) mod link_card;
-pub(crate) mod link_preview;
-pub(crate) mod lists;
 pub(crate) mod markdown;
 pub(crate) mod marker_view;
 pub(crate) mod navigation;
 pub(crate) mod pointer;
-pub(crate) mod projection;
 pub(crate) mod selection_model;
 pub(crate) mod slash;
 pub(crate) mod source;
 pub(crate) mod store;
 pub(crate) mod writing;
+// The Markdown model, kept under the paths the editor modules use.
+pub(crate) use margin_projection::{blocks, document, link_preview, lists, projection};
 
 use crate::platform::NodeHandle;
 use crate::prelude::*;

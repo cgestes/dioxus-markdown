@@ -158,6 +158,7 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | --- | --- | --- |
 | `margin-editor-core` (root) | Markdown editing commands, the preview model, the topic and comment formats. No I/O. It builds for native and for wasm. | none |
 | `crates/margin-note` | `Note` (a Loro document) and the standalone sync file | Loro |
+| `crates/margin-projection` | The editor's Markdown model, no UI: what a field shows and how its edits map back to the source, title and body, blocks, list continuation, span styles, link cards. Its tests build no renderer. | none |
 | `crates/margin-vault` | The encrypted vault: keys, SQLite storage, relay and sync. `margin` uses it only with `--features vault`. | crypto, SQLite, tokio |
 | `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token | HTTP, WebSocket |
 | `crates/margin-ui` | The design system: tokens, components, fonts, the gallery | Dioxus |

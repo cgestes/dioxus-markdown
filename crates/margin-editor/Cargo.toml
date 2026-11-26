@@ -14,6 +14,7 @@ path = "src/lib.rs"
 margin-editor-core = { path = "../.." }
 margin-hub = { path = "../margin-hub" }
 margin-note = { path = "../margin-note" }
+margin-projection = { path = "../margin-projection" }
 margin-ui = { path = "../margin-ui" }
 anyhow = "1"
 loro = { version = "1.18.0", default-features = false }

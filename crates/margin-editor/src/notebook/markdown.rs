@@ -3,47 +3,9 @@ use super::ui::{Button, Icon, Menu, MenuItem, Variant, icon};
 use super::{Field, Writing, report};
 use crate::prelude::*;
 use margin_editor_core::callout::CalloutKind;
+use margin_projection::style::*;
 use crate::platform::text::{self, Cluster};
 use std::ops::Range;
-
-pub(super) const STRONG: u32 = 1;
-pub(super) const ITALIC: u32 = 2;
-pub(super) const CODE: u32 = 4;
-pub(super) const LINK: u32 = 8;
-pub(super) const STRIKE: u32 = 16;
-pub(super) const HEADING: u32 = 32;
-pub(super) const QUOTE: u32 = 64;
-pub(super) const RULE: u32 = 128;
-pub(super) const PUNCTUATION: u32 = 256;
-pub(super) const BULLET: u32 = 512;
-pub(super) const QUOTE_MARK: u32 = 2048;
-pub(super) const DONE: u32 = 4096;
-pub(super) const CODE_BLOCK: u32 = 8192;
-pub(super) const CALLOUT_TITLE: u32 = 1 << 15;
-pub(super) const CALLOUT_NOTE: u32 = 1 << 16;
-pub(super) const CALLOUT_TIP: u32 = 1 << 17;
-pub(super) const CALLOUT_IMPORTANT: u32 = 1 << 18;
-pub(super) const CALLOUT_WARNING: u32 = 1 << 19;
-pub(super) const CALLOUT_CAUTION: u32 = 1 << 20;
-pub(super) const HIGHLIGHT: u32 = 1 << 21;
-pub(super) const CALLOUT_ANY: u32 =
-    CALLOUT_NOTE | CALLOUT_TIP | CALLOUT_IMPORTANT | CALLOUT_WARNING | CALLOUT_CAUTION;
-
-pub(super) fn callout_style(kind: CalloutKind) -> u32 {
-    match kind {
-        CalloutKind::Note => CALLOUT_NOTE,
-        CalloutKind::Tip => CALLOUT_TIP,
-        CalloutKind::Important => CALLOUT_IMPORTANT,
-        CalloutKind::Warning => CALLOUT_WARNING,
-        CalloutKind::Caution => CALLOUT_CAUTION,
-    }
-}
-
-fn callout_kind_from_style(style: u32) -> Option<CalloutKind> {
-    CalloutKind::ALL
-        .into_iter()
-        .find(|&kind| style & callout_style(kind) != 0)
-}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct CaretInk {
@@ -306,7 +268,7 @@ impl Ink {
             letter,
             ..
         } = self;
-        let callout = callout_kind_from_style(style);
+        let callout = callout_kind(style);
         let callout_cls = callout.map_or("", CalloutKind::css_class);
         let is_callout_quote_mark = callout.is_some() && style & QUOTE_MARK != 0;
         let is_callout_title = callout.is_some() && style & CALLOUT_TITLE != 0;
@@ -348,12 +310,11 @@ impl Ink {
     }
 }
 
-const INLINE_STYLES: u32 = STRONG | ITALIC | CODE | LINK | STRIKE | HIGHLIGHT | PUNCTUATION;
 
 impl Writing {
     pub fn inline_fields(self) -> Vec<Field> {
         let mut fields = Vec::new();
-        for start in self.parsed.read().inline_token_starts(INLINE_STYLES) {
+        for start in self.parsed.read().inline_token_starts(INLINE) {
             let field = self.field_at(start);
             if !matches!(field, Field::Body(_)) && !fields.contains(&field) {
                 fields.push(field);

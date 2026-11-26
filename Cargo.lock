@@ -4303,6 +4303,7 @@ dependencies = [
  "margin-editor-core",
  "margin-hub",
  "margin-note",
+ "margin-projection",
  "margin-ui",
  "parley",
  "png 0.18.1",
@@ -4347,6 +4348,14 @@ dependencies = [
  "margin-editor-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "margin-projection"
+version = "0.1.0"
+dependencies = [
+ "margin-editor-core",
+ "pulldown-cmark",
 ]
 
 [[package]]
