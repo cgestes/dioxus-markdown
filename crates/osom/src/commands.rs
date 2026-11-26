@@ -2,7 +2,7 @@
 //! the topics, and one real comment turn.
 use crate::cli::{Cli, Command};
 use crate::live::{Live, load};
-use margin_editor::support::worker;
+use margin_runtime::worker;
 use margin_editor_core::comments as file;
 use margin_hub::{self as hub, Ask, Endpoints, Space};
 

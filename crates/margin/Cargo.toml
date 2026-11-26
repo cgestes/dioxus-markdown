@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 margin-editor = { path = "../margin-editor" }
+margin-runtime = { path = "../margin-runtime" }
 margin-note = { path = "../margin-note" }
 margin-ui = { path = "../margin-ui" }
 clap = { version = "4", features = ["derive"] }

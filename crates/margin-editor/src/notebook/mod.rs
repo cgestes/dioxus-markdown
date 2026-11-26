@@ -26,7 +26,7 @@ use margin_ui::Icon;
 pub(crate) use writing::Writing;
 pub(crate) use document::{LandmarkKind, Sections};
 use margin_ui as ui;
-use crate::support::restart;
+use margin_runtime::restart;
 use crate::CSS;
 pub use store::{InMemory, NoteStore, Store};
 
@@ -412,8 +412,8 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         let title = Sections::read(&md).title(&md).trim();
         let title = if title.is_empty() { "Untitled" } else { title };
         match restart::worktree_name() {
-            Some(name) => format!("{} · {name} · {title}", crate::app_title()),
-            None => format!("{} · {title}", crate::app_title()),
+            Some(name) => format!("{} · {name} · {title}", margin_runtime::app_title()),
+            None => format!("{} · {title}", margin_runtime::app_title()),
         }
     });
     let desktop = window.is_some();

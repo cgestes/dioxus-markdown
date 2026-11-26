@@ -5,7 +5,7 @@
 //! server through `PageFiles` (Osom: the agent's space).
 use super::Writing;
 use crate::ui::{Button, Variant};
-use crate::support::worker::work;
+use margin_runtime::worker::work;
 use crate::prelude::*;
 pub use margin_editor_core::files::{PageFiles, WriteError};
 use std::sync::Arc;

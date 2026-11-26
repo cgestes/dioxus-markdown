@@ -4292,6 +4292,7 @@ dependencies = [
  "loro",
  "margin-editor",
  "margin-note",
+ "margin-runtime",
  "margin-ui",
  "margin-vault",
  "rfd",
@@ -4309,19 +4310,16 @@ dependencies = [
  "anyrender_vello_cpu",
  "blitz-dom",
  "blitz-paint",
- "blitz-shell",
  "blitz-traits",
  "dioxus",
- "dioxus-devtools",
  "dioxus-native",
  "elsa",
- "futures-channel",
- "futures-util",
  "js-sys",
  "loro",
  "margin-editor-core",
  "margin-note",
  "margin-projection",
+ "margin-runtime",
  "margin-ui",
  "parley",
  "png 0.18.1",
@@ -4376,6 +4374,21 @@ dependencies = [
  "margin-editor-core",
  "pulldown-cmark",
  "two-face",
+]
+
+[[package]]
+name = "margin-runtime"
+version = "0.1.0"
+dependencies = [
+ "blitz-dom",
+ "blitz-shell",
+ "dioxus",
+ "dioxus-devtools",
+ "dioxus-native",
+ "futures-channel",
+ "futures-util",
+ "margin-editor-core",
+ "margin-ui",
 ]
 
 [[package]]
@@ -4444,6 +4457,7 @@ name = "margin-web"
 version = "0.1.0"
 dependencies = [
  "margin-editor",
+ "margin-runtime",
  "margin-ui",
  "web-sys",
 ]
@@ -5209,6 +5223,7 @@ dependencies = [
  "margin-editor",
  "margin-editor-core",
  "margin-hub",
+ "margin-runtime",
  "margin-ui",
  "osom-topics",
  "png 0.18.1",

@@ -5,7 +5,6 @@ mod notebook;
 mod comments;
 mod platform;
 mod reading;
-pub mod support;
 // Always built on native: a feature would make test builds compile the editor twice.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod testing;
@@ -14,6 +13,7 @@ mod tests;
 
 pub(crate) use margin_ui::prelude;
 use platform::NodeHandle;
+#[cfg(test)]
 use prelude::*;
 use margin_editor_core::table;
 use margin_ui as ui;
@@ -44,20 +44,6 @@ const CSS: &str = concat!(
     "\n",
     include_str!("notebook/inspector.css"),
 );
-
-/// The app's name, as `launch` was given it: the notebook's window titles
-/// start with it.
-static APP_TITLE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-
-pub(crate) fn app_title() -> &'static str {
-    APP_TITLE.get().map_or("Margin", String::as_str)
-}
-
-/// Open a window (or, in a browser, the page) titled `title` whose content is `root`.
-pub fn launch(title: &str, size: (f64, f64), root: fn() -> Element) {
-    let _ = APP_TITLE.set(title.to_owned());
-    platform::launch(title, size, root);
-}
 
 #[cfg(test)]
 fn notebook(initial: &'static str) -> Element {

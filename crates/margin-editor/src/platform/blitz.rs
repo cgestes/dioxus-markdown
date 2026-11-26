@@ -280,23 +280,3 @@ pub fn save_report(bytes: &[u8]) -> std::io::Result<String> {
 pub fn Head() -> Element {
     rsx! {}
 }
-
-/// Open a window titled `title` whose content is `root`.
-pub fn launch(title: &str, size: (f64, f64), root: fn() -> Element) {
-    let window = dioxus_native::WindowAttributes::default().with_title(title);
-    // On iPhone and iPad the window is the screen; a requested size would crop it.
-    let window = if cfg!(target_os = "ios") {
-        window
-    } else {
-        window.with_surface_size(dioxus_native::LogicalSize::new(size.0, size.1))
-    };
-    #[cfg(target_os = "macos")]
-    super::macos::launch(window, root);
-    #[cfg(not(target_os = "macos"))]
-    {
-        let config = dioxus_native::Config::new()
-            .with_window_attributes(window)
-            .with_font_ctx(margin_ui::typefaces::fonts());
-        dioxus_native::launch_cfg(root, vec![], vec![Box::new(config)]);
-    }
-}

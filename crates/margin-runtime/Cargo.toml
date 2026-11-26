@@ -1,0 +1,29 @@
+[package]
+name = "margin-runtime"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# What an app runs around its interface: the window it opens (`launch`),
+# blocking work and agent turns off the UI thread (`worker`), and the restart
+# into a newer build (`restart`). Margin's apps and Osom share it; the editor
+# uses its worker and its restart control.
+[dependencies]
+margin-editor-core = { path = "../.." }
+margin-ui = { path = "../margin-ui" }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+futures-channel = "0.3"
+
+# Native: a Blitz window.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
+
+# Browser: the page is the window.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dioxus = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", features = ["web"] }
+
+# macOS: the window runs its own event loop, for the AppKit key bridge.
+[target.'cfg(target_os = "macos")'.dependencies]
+blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
+blitz-shell = { version = "=0.3.0-beta.4", default-features = false }
+dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7" }

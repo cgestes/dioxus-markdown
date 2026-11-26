@@ -1,6 +1,15 @@
+//! The macOS window, with the AppKit key bridge.
+//!
 //! AppKit sends doCommandBySelector and winit also forwards the physical key.
-//! Deliver an editor-owned command once. Unpaired selectors (including custom
-//! Cocoa bindings) and marked-text input still go through the native renderer.
+//! A command the page owns is delivered once. Unpaired selectors (including
+//! custom Cocoa bindings) and marked-text input still go through the native
+//! renderer.
+//!
+//! Two attributes on the focused text input say which commands the page owns
+//! beyond Enter, the arrows and forward delete:
+//! - `data-range-keys="true"`: Backspace too (it clears a selected range).
+//! - `data-grid-keys="true"`: word moves with a selection, as arrow keys
+//!   (they extend a selection across cells).
 use blitz_dom::BaseDocument;
 use blitz_shell::{BlitzShellProxy, WindowConfig, create_default_event_loop};
 use dioxus_native::{
@@ -47,9 +56,7 @@ impl ApplicationHandlerExtMacOS for EditorWindow {
             .and_then(|n| n.element_data()?.text_input_data())
             .is_some();
         let cells = node.is_some_and(|n| n.attr("data-range-keys".into()) == Some("true"));
-        let in_grid = node
-            .and_then(|n| n.attr("id".into()))
-            .is_some_and(|id| id.starts_with("cell-"));
+        let in_grid = node.is_some_and(|n| n.attr("data-grid-keys".into()) == Some("true"));
         drop(doc);
         let key = match action {
             "insertNewline:" => Some(NamedKey::Enter),

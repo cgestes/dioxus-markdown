@@ -164,6 +164,7 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | `crates/osom-topics` | Osom's model: the topics of the agent's space, its chats and reminders. It parses; the hub does the I/O. | none |
 | `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token. It implements the core's agent and page-file interfaces. | HTTP, WebSocket |
 | `crates/margin-ui` | The design system: tokens, components, fonts, the gallery. It uses no other workspace crate: it knows no Markdown and no app. | Dioxus |
+| `crates/margin-runtime` | What an app runs around its interface: the window it opens (`launch`, with the macOS key bridge), blocking work and agent turns off the UI thread (`worker`), and the restart into a newer build (`restart`). It knows no notebook. | Dioxus Native, Blitz |
 | `crates/margin-editor` | The Markdown editor: Rich, Live and Source views, tables, comments, undo, on Blitz (native) or Dioxus Web (browser). The app that opens it decides where the note lives (`NoteStore`: a vault, a sync file, a page on a server) and who answers comments (`AgentChat`). Also Markdown to read (`MarkdownView`). | Dioxus Native, Blitz |
 | `crates/margin` | `margin`, the notebook app: your personal vault (`--features vault`), a sync file or the Field notes sample, and the gallery (`margin ui`) | clap |
 | `crates/margin-web` | `margin-web`, the notebook in a browser page, installable as a web app (`dx serve --web --package margin-web`) | Dioxus Web |

@@ -1152,7 +1152,7 @@ fn GridRow(
                                     if value.is_empty() { "\u{a0}" } else { "{value}" }
                                 }
                                 textarea {
-                                    id: field.id(), "data-range-keys": if selected && !*writing.grid.editing.read() { "true" }, class: "grid-cell",
+                                    id: field.id(), "data-grid-keys": "true", "data-range-keys": if selected && !*writing.grid.editing.read() { "true" }, class: "grid-cell",
                                     aria_label: format!("Row {}, column {}", row + 1, col + 1), value: "{value}",
                                     onmounted: move |e| {
                                         mounted_field(e, field, writing.focus);

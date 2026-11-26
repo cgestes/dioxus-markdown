@@ -25,7 +25,7 @@ mod page {
     }
 
     pub fn main() {
-        margin_editor::launch("Margin", (920.0, 650.0), app);
+        margin_runtime::launch("Margin", (920.0, 650.0), app);
     }
 
     /// `?gallery`: the design system's gallery, then Markdown as the editor

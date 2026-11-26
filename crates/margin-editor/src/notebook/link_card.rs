@@ -7,7 +7,7 @@ use super::link_preview::{
 use super::projection::ParsedLink;
 use crate::platform::text;
 use crate::ui::{Button, Icon, Popover, TextField, Variant, icon};
-use crate::support::worker::work;
+use margin_runtime::worker::work;
 use super::{Field, Writing, report};
 use crate::prelude::*;
 use std::collections::HashMap;

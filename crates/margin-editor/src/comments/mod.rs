@@ -6,7 +6,7 @@
 use crate::notebook::page::{PageSource, WriteError};
 use crate::platform::text;
 use crate::ui::{Badge, Banner, Button, Card, Chip, Composer, Icon, Message, MessageStyle, Segment, Segmented, Tone, Variant};
-use crate::support::worker::{batch, turn, work};
+use margin_runtime::worker::{batch, turn, work};
 use crate::{Field, MarkdownView, Writing, report};
 use crate::prelude::*;
 use loro::cursor::Cursor;

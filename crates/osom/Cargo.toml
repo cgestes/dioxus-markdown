@@ -14,6 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 margin-editor = { path = "../margin-editor" }
+margin-runtime = { path = "../margin-runtime" }
 margin-ui = { path = "../margin-ui" }
 margin-editor-core = { path = "../.." }
 osom-topics = { path = "../osom-topics" }

@@ -2,6 +2,7 @@
 members = [
     "crates/margin-note",
     "crates/margin-projection",
+    "crates/margin-runtime",
     "crates/margin-vault",
     "crates/margin-vault-cli",
     "crates/margin-hub",

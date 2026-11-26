@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 margin-editor = { path = "../margin-editor" }
+margin-runtime = { path = "../margin-runtime" }
 margin-ui = { path = "../margin-ui" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

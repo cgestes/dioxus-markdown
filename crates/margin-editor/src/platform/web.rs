@@ -1256,8 +1256,3 @@ pub fn Head() -> dioxus::prelude::Element {
         style { {include_str!("web.css")} }
     }
 }
-
-/// Open the notebook in the page.
-pub fn launch(_title: &str, _size: (f64, f64), root: fn() -> dioxus::prelude::Element) {
-    dioxus::launch(root);
-}

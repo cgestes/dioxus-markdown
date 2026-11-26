@@ -142,7 +142,7 @@ These touch the most files. Do them when no other branch is in flight.
 | Step | Change | Findings | Size |
 | --- | --- | --- | --- |
 | 4.1 | Done. `preview` (as `reading`, read with `reading::read`) and `syntax` are in `margin-projection`. Highlighting is chosen by target (native yes, browser no) instead of a feature. `osom-topics` depends on `margin-projection` for `tasks`, so its own tests now build the grammars. The core dropped `two-face` and the feature. | C4 | M |
-| 4.2 | New crate `margin-runtime`: `launch`, `worker`, `restart`. The macOS key bridge moves with `launch`; its two editor markers become attributes the crate documents. The editor uses the crate for `worker` and `restart`; apps call `launch`. The editor drops `blitz-shell` and `dioxus-devtools`. | E1 | L |
+| 4.2 | Done. New crate `margin-runtime`: `launch`, `worker`, `restart`. The macOS key bridge moved with `launch`; it reads two attributes the crate documents (`data-range-keys`, `data-grid-keys`) instead of the editor's cell ids. The editor uses the crate for `worker` and `restart`; apps call `launch`. The editor dropped `blitz-shell`, `dioxus-devtools` and its `support` module. The real-window key test (`scripts/test-editor` without `--headless`) was not run for this step: it takes over the keyboard. | E1 | L |
 | 4.3 | Rename `margin-hub` to `osom-hub` | H1 | S |
 | 4.4 | Move the root crate to `crates/margin-core` and rename it. The root `Cargo.toml` becomes a workspace manifest only. 50 references in 27 files and 6 manifests change. | C1 | M |
 

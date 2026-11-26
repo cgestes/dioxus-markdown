@@ -30,7 +30,7 @@ use margin_ui::{
     self, Badge, Banner, Button, Card, CardTitle, CheckItem, Chip, Composer, DateBox, Message,
     MessageStyle, NavItem, Row, Rows, ChannelGlyph, SubItem, TabItem, Tabs, TextField, Tile, TileSize, Tone, Variant,
 };
-use margin_editor::support::worker::{batch, turn, work};
+use margin_runtime::worker::{batch, turn, work};
 use margin_editor::{Comments, Host, HostAction, HostBar, MarkdownView, NotebookOptions, View};
 use margin_ui::prelude::*;
 use margin_editor_core::dates;

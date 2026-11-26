@@ -8,16 +8,16 @@ mod personal;
 mod tests;
 
 use margin_ui::prelude::*;
-use margin_editor::{Comments, INPUT_CHECK, InMemory, MarkdownView, NoteStore, NotebookOptions, SAMPLE, Store, launch, notebook_view};
+use margin_editor::{Comments, INPUT_CHECK, InMemory, MarkdownView, NoteStore, NotebookOptions, SAMPLE, Store, notebook_view};
 use margin_note::note::Note;
 use margin_ui::gallery::{GRID, Gallery, section};
 use margin_ui::{Card, CardTitle, Icon};
 
 fn main() {
-    margin_editor::support::restart::answer_build_probe(if cfg!(feature = "vault") { "margin, with the vault" } else { "margin, without the vault" });
+    margin_runtime::restart::answer_build_probe(if cfg!(feature = "vault") { "margin, with the vault" } else { "margin, without the vault" });
     let args = cli::init();
     let size = if args.is_gallery() { (1180.0, 900.0) } else { (920.0, 650.0) };
-    launch("Margin", size, app);
+    margin_runtime::launch("Margin", size, app);
 }
 
 fn app() -> Element {
