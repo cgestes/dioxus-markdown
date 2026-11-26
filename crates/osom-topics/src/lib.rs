@@ -8,9 +8,9 @@
 //! holds open questions. This crate only parses; `margin-hub` does the I/O.
 pub mod calendar;
 
-pub use margin_editor_core::heading::{h1, page_title, split_heading};
 use margin_editor_core::{
     dates,
+    heading::{h1, split_heading},
     preview::{self, Block},
     table,
 };

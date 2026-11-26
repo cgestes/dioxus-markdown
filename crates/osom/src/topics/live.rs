@@ -2,7 +2,7 @@
 //! the demo. Both end as a `view::Workspace`.
 use crate::topics::demo;
 use crate::topics::view::*;
-use margin_editor_core::dates;
+use margin_editor_core::{dates, heading};
 use margin_hub::{AgentChat, Canned, Endpoints, Page, Space, ZeroClaw};
 use osom_topics::{self as model, Kind, Origin, Reminder, Session, Topic, calendar};
 use std::collections::HashMap;
@@ -319,7 +319,7 @@ fn live_topic(t: &Topic, cx: &Cx) -> TopicView {
             DocRow {
                 kind: kind_of(f).into(),
                 name: model::basename(f).into(),
-                meta: match d.pages.get(f).and_then(|p| model::page_title(&p.text)) {
+                meta: match d.pages.get(f).and_then(|p| heading::page_title(&p.text)) {
                     Some(h) => format!("{h} · {size}"),
                     None => size,
                 },
@@ -334,7 +334,7 @@ fn live_topic(t: &Topic, cx: &Cx) -> TopicView {
         .filter_map(|f| d.pages.get(f))
         .filter_map(|page| {
             let items = model::tasks(&page.text);
-            let title = model::page_title(&page.text).unwrap_or(&page.path).to_string();
+            let title = heading::page_title(&page.text).unwrap_or(&page.path).to_string();
             let lower = title.to_lowercase();
             (!items.is_empty()).then(|| Checklist {
                 shopping: lower.contains("grocer") || lower.contains("shopping"),
