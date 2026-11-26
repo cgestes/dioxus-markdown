@@ -15,6 +15,7 @@ pub mod prelude {
 }
 
 mod button;
+mod combobox;
 mod content;
 mod field;
 pub mod gallery;
@@ -25,6 +26,7 @@ mod message;
 pub mod typefaces;
 
 pub use button::{Button, Chip, Segment, Segmented, TabItem, Tabs, Variant};
+pub use combobox::{Combobox, ComboboxItem};
 pub use content::{Avatar, Badge, Banner, Card, CardTitle, DateBox, NavItem, Row, Rows, SourceGlyph, SubItem, Tile, TileSize};
 pub use field::{CheckItem, Checkbox, Composer, TextField};
 pub use icon::{Icon, icon};

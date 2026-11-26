@@ -14,6 +14,7 @@ pub fn Popover(
     #[props(default)] label: Option<String>,
     #[props(default = true)] keep_focus: bool,
     #[props(default = true)] contain: bool,
+    #[props(default)] onwheel: Option<EventHandler<WheelEvent>>,
     children: Element,
 ) -> Element {
     rsx! {
@@ -24,6 +25,11 @@ pub fn Popover(
                 }
                 if contain {
                     e.stop_propagation();
+                }
+            },
+            onwheel: move |e| {
+                if let Some(h) = onwheel {
+                    h.call(e);
                 }
             },
             {children}

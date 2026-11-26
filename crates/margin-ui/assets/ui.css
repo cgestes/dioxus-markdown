@@ -12,7 +12,7 @@ body { color: var(--ink); background: var(--page); font: var(--font-ui); }
 /* Components size themselves the same in every window (the editor sets
    border-box globally; other windows do not). */
 .ui-btn, .ui-chip, .ui-segment, .ui-tab, .ui-composer, .ui-card, .ui-row, .ui-nav, .ui-badge, .ui-banner,
-.ui-popover, .ui-popover *, .ui-toolbar, .ui-toolbar *, .ui-md, .ui-md * { box-sizing: border-box; }
+.ui-popover, .ui-popover *, .ui-toolbar, .ui-toolbar *, .ui-combobox, .ui-combobox *, .ui-md, .ui-md * { box-sizing: border-box; }
 
 /* ── Icons ─────────────────────────────────────────────────────────────── */
 .i { flex: 0 0 auto; width: 16px; height: 16px; }
@@ -108,6 +108,52 @@ body { color: var(--ink); background: var(--page); font: var(--font-ui); }
 .ui-menu-row { display: flex; gap: 2px; padding: 1px; }
 .ui-menu-row .ui-btn.icon { flex: 1 1 0; width: auto; height: 26px; }
 .ui-menu-row .ui-btn.icon .tool-icon, .ui-menu-row .ui-btn.icon .tool-icon svg { width: 13px; height: 13px; }
+
+/* Searchable combobox (trigger + filter input + scrollable listbox). */
+.ui-combobox { position: relative; display: inline-flex; align-items: center; }
+.ui-combobox-trigger {
+    display: inline-flex; align-items: center; gap: 3px;
+    height: 22px; margin: 0; padding: 0 6px;
+    border: 1px solid transparent; border-radius: var(--radius-s);
+    background: transparent; color: var(--faint); font: var(--font-mono-ui);
+    cursor: pointer; user-select: none; white-space: nowrap;
+}
+.ui-combobox-trigger:hover, .ui-combobox-trigger.open {
+    background: var(--pale); color: var(--accent-deep);
+}
+.ui-combobox-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ui-combobox-trigger .i { width: 11px; height: 11px; opacity: .75; }
+.ui-combobox-menu {
+    position: fixed; z-index: 30;
+    width: 214px; padding: var(--space-1); gap: var(--space-1);
+}
+.ui-combobox-menu.fallback { position: absolute; right: 0; top: 26px; }
+.ui-combobox-search {
+    display: flex; align-items: center; gap: 6px;
+    height: 28px; padding: 0 8px;
+    border: 1px solid var(--line); border-radius: var(--radius-s);
+    background: var(--page); font: var(--font-hint);
+}
+.ui-combobox-search:focus-within { border-color: var(--accent); }
+.ui-combobox-search .i { width: 13px; height: 13px; color: var(--faint); flex: 0 0 auto; }
+.ui-combobox-search .ui-field { align-items: center; height: 26px; }
+.ui-combobox-search .ui-field input { width: 100%; height: 26px; line-height: 26px; }
+.ui-combobox-search .ui-field-ph {
+    left: 0; top: 0; bottom: 0;
+    display: flex; align-items: center;
+    line-height: 26px; white-space: nowrap;
+}
+.ui-combobox-list {
+    display: flex; flex-direction: column; gap: 1px;
+    max-height: 210px; overflow-x: hidden; overflow-y: auto;
+}
+.ui-combobox-list .ui-menu-item { height: 26px; min-width: 0; overflow: hidden; font: var(--font-hint); }
+.ui-combobox-list .ui-menu-item:hover:not(.active) { background: transparent; color: var(--ink); }
+.ui-combobox-list .ui-menu-item:hover:not(.active) .tool-icon,
+.ui-combobox-list .ui-menu-item:hover:not(.active) .ui-badge-glyph { color: var(--muted); }
+.ui-combobox-list .ui-menu-item .tool-caption { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-combobox-list .ui-btn-hint { flex: 0 0 auto; }
+.ui-combobox-empty { padding: 8px; color: var(--faint); font: var(--font-hint); text-align: center; }
 
 .ui-toolbar { display: flex; align-items: center; gap: 2px; user-select: none; }
 .ui-toolbar-sep { flex: 0 0 auto; width: 1px; height: 14px; margin: 0 3px; background: var(--line); }
@@ -411,6 +457,17 @@ body { color: var(--ink); background: var(--page); font: var(--font-ui); }
 .ui-md .callout-badge.callout-caution { color: var(--alert); }
 .ui-md .read-line.rule { height: 0; min-height: 0; margin: 12px 0; border-top: 1px solid var(--line-strong); }
 .ui-md .read-line.pre { padding: 0 10px; background: var(--rail); font: var(--font-source); }
+.ui-md .read-line.pre .code { padding: 0; border-radius: 0; background: transparent; color: var(--ink); font: inherit; }
+.ui-md .read-line.pre .tok-comment { color: var(--syn-comment); font-style: italic; }
+.ui-md .read-line.pre .tok-keyword { color: var(--syn-keyword); }
+.ui-md .read-line.pre .tok-string { color: var(--syn-string); }
+.ui-md .read-line.pre .tok-number { color: var(--syn-number); }
+.ui-md .read-line.pre .tok-type { color: var(--syn-type); }
+.ui-md .read-line.pre .tok-function { color: var(--syn-function); }
+.ui-md .read-line.pre .tok-constant { color: var(--syn-constant); }
+.ui-md .read-line.pre .tok-attribute { color: var(--syn-attribute); }
+.ui-md .read-line.pre .tok-operator { color: var(--syn-operator); }
+.ui-md .read-line.pre .tok-tag { color: var(--syn-tag); }
 .ui-md .strong { font-weight: 600; color: var(--ink-strong); }
 .ui-md .em { font-style: italic; }
 .ui-md .strike { text-decoration: line-through; }

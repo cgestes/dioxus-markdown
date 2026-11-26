@@ -24,6 +24,18 @@ pub fn Gallery() -> Element {
     let mut tab = use_signal(|| 1usize);
     let mut segment = use_signal(|| 1usize);
     let mut checked = use_signal(|| true);
+    let mut combo_open = use_signal(|| false);
+    let mut combo_lang = use_signal(|| "rust".to_string());
+    let combo_items = vec![
+        ComboboxItem { value: String::new(), label: "Plain text".into(), hint: None, keywords: vec!["plain".into()], id: None },
+        ComboboxItem { value: "rust".into(), label: "Rust".into(), hint: Some("rust".into()), keywords: vec!["rs".into()], id: None },
+        ComboboxItem { value: "ts".into(), label: "TypeScript".into(), hint: Some("ts".into()), keywords: vec!["typescript".into()], id: None },
+        ComboboxItem { value: "python".into(), label: "Python".into(), hint: Some("python".into()), keywords: vec!["py".into()], id: None },
+    ];
+    let combo_label = combo_items
+        .iter()
+        .find(|i| i.value == *combo_lang.read())
+        .map_or_else(|| combo_lang.read().clone(), |i| i.label.clone());
     let segments = ["Rich", "Live", "Source"]
         .iter()
         .enumerate()
@@ -170,6 +182,20 @@ pub fn Gallery() -> Element {
                     }
                     Popover { label: "Popover",
                         div { class: "gallery-pop", "A popover holds any small surface: a picker, a preview, a confirmation." }
+                    }
+                    Combobox {
+                        label: "Code language",
+                        value_label: combo_label,
+                        selected: combo_lang(),
+                        items: combo_items,
+                        open: combo_open(),
+                        placeholder: "Search language…".to_owned(),
+                        allow_custom: true,
+                        ontoggle: move |next| combo_open.set(next),
+                        onselect: move |val| {
+                            combo_lang.set(val);
+                            combo_open.set(false);
+                        },
                     }
                 }
                 div { class: "gallery-line",
