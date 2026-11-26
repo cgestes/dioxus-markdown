@@ -4,7 +4,7 @@ Work in `loro-dev/loro`. We want a device to open a small checkpoint, edit offli
 
 ## Start from the working reproducer
 
-Copy the [two Rust tests](../tests/loro_history.rs) into `crates/loro/tests/loro_history.rs` in the upstream checkout and run `cargo test -p loro --test loro_history`. They use Loro’s public API and require no Margin code.
+Copy the [two Rust tests](../crates/margin-note/tests/loro_history.rs) into `crates/loro/tests/loro_history.rs` in the upstream checkout and run `cargo test -p loro --test loro_history`. They use Loro’s public API and require no Margin code.
 
 - **Missing delivery.** Loro 1.18.0 exposes external operation IDs through `decodeImportBlobMeta(update, true).startFrontiers`. Combined with the receiver’s version vector, they identify ranges a client can request. Importing those ranges releases pending edits. Re-read pending metadata after each import. A disjoint export from one writer exposed a second gap after the first was filled. [Runnable JS tests](../mockup/test/loro-history-recovery.test.mjs)
 - **Edit before the latest shallow root.** An old full snapshot imported into the same shallow replica leaves the cutoff in place. A **fresh replica from an earlier shallow checkpoint** merged the original offline edit, the later local branch, and the intervening encrypted ranges. It recovered a comment inside deleted text at exactly the reference position. The Rust reproducer passes on 1.18.0 and upstream commit `934563c`. [Standalone Rust test](../tests/loro_history.rs) · [Upstream shallow-root contract](https://github.com/loro-dev/loro/blob/934563cfb4117373f237bc8b282533eacb17207d/docs/shallow-snapshot-concurrency.md)

@@ -42,14 +42,14 @@ def generate_report(run, log, passed, results):
     outcome = "Passed" if passed else "Failed"
     outcomes = "".join(f'<li><span>{html.escape(driver)}</span><strong class="{"ok" if result == "Passed" else "issue"}">{html.escape(result)}</strong></li>'
                        for driver, result in results)
-    theme = (ROOT / "assets/theme.css").read_text()
+    theme = (ROOT / "crates/margin-ui/assets/theme.css").read_text()
     report_css = (ROOT / "scripts/report.css").read_text()
     fonts = []
     for family, slug, weight in (("Instrument Serif", "instrument-serif", 400), ("DM Sans", "dm-sans", 400), ("DM Sans", "dm-sans", 600)):
-        data = (ROOT / "assets/fonts" / f"{slug}-latin-{weight}-normal.woff2").read_bytes()
+        data = (ROOT / "crates/margin-ui/assets/fonts" / f"{slug}-latin-{weight}-normal.woff2").read_bytes()
         encoded = base64.b64encode(data).decode("ascii")
         fonts.append(f'@font-face{{font-family:"{family}";font-weight:{weight};src:url(data:font/woff2;base64,{encoded}) format("woff2")}}')
-    notices = "\n".join((ROOT / "assets/fonts" / f"{slug}-LICENSE.txt").read_text()
+    notices = "\n".join((ROOT / "crates/margin-ui/assets/fonts" / f"{slug}-LICENSE.txt").read_text()
                         for slug in ("dm-sans", "instrument-serif"))
     failures = '<section><h2>Failed checks</h2>' + "".join(failed_cards) + '</section>' if failed_cards else ""
     passed_section = (f'<details class="group"><summary>Passed checks <span>{len(passed_cards)}</span></summary>'
@@ -80,18 +80,16 @@ def main():
         parser.error("--mac-window needs macOS")
     os.chdir(ROOT)
     env = dict(os.environ)
-    env.setdefault("CARGO_PROFILE_DEV_DEBUG", "0")
-    env.setdefault("CARGO_PROFILE_TEST_DEBUG", "0")
     if args.inspect:
         env.setdefault("MARGIN_REPORT_DIR", str(OUTPUT / "reports"))
         print(f"F9 saves an inspection report to {env['MARGIN_REPORT_DIR']}", flush=True)
-        os.execvpe("cargo", ["cargo", "run", "--locked", "--features", "native", "--bin", "margin", "--", "--test-editor"], env)
+        os.execvpe("cargo", ["cargo", "run", "--locked", "-p", "margin-editor", "--bin", "margin", "--", "--test-editor"], env)
     if args.seed is not None:
         env["MARGIN_TEST_SEED"] = str(args.seed)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=datetime.now().strftime("%Y%m%d-%H%M%S-"), dir=OUTPUT))
     env["MARGIN_TEST_ARTIFACTS"] = str(run)
-    command = ["cargo", "test", "--locked", "--features", "native", "--bin", "margin", "tests::live_workflows::", "--", "--nocapture"]
+    command = ["cargo", "test", "--locked", "-p", "margin-editor", "--lib", "tests::live_workflows::", "--", "--nocapture"]
     lines = []
     results = []
     status = 0

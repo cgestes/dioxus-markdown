@@ -1,6 +1,6 @@
 # Anchored comments: the real backend
 
-Status: implemented (2026-11-25). It builds on the anchored AI comments on `main` (`src/native/comments.rs`, fake backend `mock_llm_reply`) and on the Topics window (`docs/topics-design.md`), which already edits SilverBullet pages and talks to ZeroClaw.
+Status: implemented (2026-11-25). It builds on the anchored AI comments on `main` (`crates/margin-editor/src/comments/mod.rs`, fake backend `mock_llm_reply`) and on the Topics window (`docs/topics-design.md`), which already edits SilverBullet pages and talks to ZeroClaw.
 
 **What shipped**
 
@@ -8,12 +8,12 @@ Status: implemented (2026-11-25). It builds on the anchored AI comments on `main
 - **Choosing the backend:** every agent turn goes through one object-safe trait, `hub::AgentChat` (`chat(ask, on, decide)`, streaming `ChatEvent`s and ending with exactly one `Done` or `Error`). `ZeroClaw` implements it, and so does `hub::Canned`, the stand-in that streams a fixed reply. The editor's `comments::CommentAgent` is an alias plus an `Arc<dyn AgentChat>`: a page opened from Topics while paired gets ZeroClaw's comment agent (alias `comment_agent` in `~/.config/margin/topics.json`, default `scribe`); unpaired, an agent that fails with "not paired"; every other notebook the local stand-in (`CommentAgent::mock`, the former `mock_llm_reply`). Mock and real replies take the same path (`worker::turn`), so the tests exercise the real code.
 - **Where the code is:**
   - Core (`src/comments.rs`): anchors, comment file and merge, the turn builder (`turn`: preamble with the contract and the page on the first turn, the quote on every turn), `visible`/`edit` parsers, `Proposal::fits`.
-  - Editor (`src/native/comments.rs`): a `CommentThread` wraps the file's `Thread` with this session's Loro cursors, the reply being written and failed replies. `post` sends your message and streams the answer into `Writing::comment_stream` (one bubble re-renders per chunk). `save_comments` merges and retries on 412; `use_comment_file` loads on open (absent = no file yet) and shows an error banner when the file cannot be read or written.
+  - Editor (`crates/margin-editor/src/comments/mod.rs`): a `CommentThread` wraps the file's `Thread` with this session's Loro cursors, the reply being written and failed replies. `post` sends your message and streams the answer into `Writing::comment_stream` (one bubble re-renders per chunk). `save_comments` merges and retries on 412; `use_comment_file` loads on open (absent = no file yet) and shows an error banner when the file cannot be read or written.
   - Saving: conversation changes (messages, resolve, delete) save the comment file at once. Anchors and applied/undone proposal states describe the saved page, so they are written when the page is saved (`page::Writing::save_page` → `commit_comments`).
   - A proposal applies only while the text under the thread is what it was made for (`Proposal::fits`, checked both ways, for Apply and Undo); otherwise the thread offers *Ask again*. Staleness is derived, not stored.
 - **Checks:**
   - Offline unit tests cover the core, a stale proposal, and a comment file round trip after the page was edited elsewhere.
-  - `margin comment-test <page> "<quote>" "<request>"` runs one real turn on a throwaway session.
+  - `osom comment-test <page> "<quote>" "<request>"` runs one real turn on a throwaway session.
   - An opt-in live editor test (`live_comment_streams_a_reply_and_saves_the_thread`) streamed a real reply and saved, then removed, the comment file.
 
 ## 1. Goal
@@ -135,8 +135,8 @@ The contract is defined in scribe's `AGENTS.md`, and the first turn restates it 
 | Place | What |
 | --- | --- |
 | `src/comments.rs` (core, pure, tested) | Thread, message and proposal model (serde); sidecar merge; `TextQuote` capture and resolve on `&str`; request builder; `visible` and `proposal` parsers |
-| `src/hub.rs` | Reuse `ZeroClaw::chat` and `Space::read/write`; add `abort(session)` (`POST /api/sessions/{id}/abort`) for a **Stop** button |
-| `src/native/comments.rs` (from `main`) | Replace the two `mock_llm_reply` call sites with `CommentAgent::reply`, run on a worker thread like the topic chat. Stream into a pending AI message. Load the sidecar when a vault page opens and save it on change. |
+| `crates/margin-hub/src/lib.rs` | Reuse `ZeroClaw::chat` and `Space::read/write`; add `abort(session)` (`POST /api/sessions/{id}/abort`) for a **Stop** button |
+| `crates/margin-editor/src/comments/mod.rs` (from `main`) | Replace the two `mock_llm_reply` call sites with `CommentAgent::reply`, run on a worker thread like the topic chat. Stream into a pending AI message. Load the sidecar when a vault page opens and save it on change. |
 | `hub::AgentChat` (as built) | `trait AgentChat { fn chat(&self, ask: &Ask, on: &mut dyn FnMut(ChatEvent) -> bool, decide: &mut dyn FnMut() -> bool) }`, events `Chunk / Tool / Approval / Done(full) / Error`, exactly one of the last two. Implemented by `ZeroClaw` and `Canned` (the stand-in). Chosen per notebook through `NotebookOptions::comments`: vault page + paired → scribe; otherwise the stand-in. `on` returning false stops the turn. |
 
 Server side, one config block plus scribe's own workspace files:

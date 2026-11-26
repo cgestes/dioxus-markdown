@@ -1,9 +1,22 @@
+[workspace]
+members = [
+    "crates/margin-note",
+    "crates/margin-vault",
+    "crates/margin-vault-cli",
+    "crates/margin-hub",
+    "crates/margin-ui",
+    "crates/margin-editor",
+    "crates/osom",
+]
+resolver = "3"
+
+# The pure core: Markdown editing commands, the preview model and the topic
+# and comment formats, with no I/O. The browser study builds it to wasm.
 [package]
 name = "margin-editor-core"
 version = "0.1.0"
 edition = "2024"
 publish = false
-default-run = "margin"
 
 [lib]
 crate-type = ["rlib", "cdylib"]
@@ -13,75 +26,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 pulldown-cmark = { version = "0.13", default-features = false }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-loro = { version = "1.18.0", default-features = false }
-aes-gcm = "0.10"
-anyhow = "1"
-argon2 = "0.5"
-base64 = "0.22"
-clap = { version = "4", features = ["derive"] }
-crypto_secretstream = "0.2"
-directories = "6"
-ed25519-dalek = "2"
-hex = "0.4"
-hkdf = "0.12"
-keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust", "vendored"] }
-loro-protocol = "0.3"
-qrcode = { version = "0.14", default-features = false }
-rand = "0.8"
-rusqlite = { version = "0.38", features = ["bundled"] }
-sha2 = "0.10"
-tempfile = "3"
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "signal"] }
-tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
-url = "2"
-zeroize = "1"
-futures-channel = "0.3"
-futures-util = { version = "0.3", default-features = false, features = ["std"] }
-blitz-dom = { version = "=0.3.0-beta.4", default-features = false, optional = true }
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"], optional = true }
-parley = { version = "=0.12.0", default-features = false, optional = true }
-# Topics: SilverBullet + ZeroClaw over the tailnet (native-tls uses the system trust store).
-ureq = { version = "3.5", default-features = false, features = ["native-tls-no-default"], optional = true }
-tungstenite = { version = "0.29", features = ["native-tls"], optional = true }
-percent-encoding = { version = "2.3", optional = true }
-webbrowser = { version = "1.2", optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.dioxus-native]
-git = "https://github.com/DioxusLabs/dioxus.git"
-rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7"
-optional = true
-default-features = false
-features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"]
-
-[target.'cfg(target_os = "macos")'.dependencies]
-blitz-shell = { version = "=0.3.0-beta.4", default-features = false, optional = true }
-dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", optional = true }
-security-framework = { version = "3", optional = true }
-
-[features]
-default = ["native"]
-hub = ["dep:ureq", "dep:tungstenite", "dep:percent-encoding", "dep:security-framework"]
-native = ["hub", "dep:rfd", "dep:dioxus-native", "dep:parley", "dep:blitz-dom", "dep:blitz-shell", "dep:dioxus-devtools", "dep:webbrowser"]
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-blitz-traits = "=0.3.0-beta.4"
-blitz-paint = { version = "=0.3.0-beta.4", default-features = false }
-anyrender = "=0.14.0"
-anyrender_vello_cpu = { version = "=0.18.0", default-features = false }
-png = "0.18"
-
-[[bin]]
-name = "margin-vault"
-path = "src/vault_cli.rs"
-
-[[bin]]
-name = "margin"
-path = "src/native.rs"
-required-features = ["native"]
-
+# Dependencies run optimized (layout, text shaping and Loro are slow at -O0)
+# and carry line tables only: backtraces keep file and line, builds and links
+# skip full debug info. Workspace crates keep full debug info. Every command
+# (cargo run, cargo test, scripts/test-editor) shares this one build.
 [profile.dev.package."*"]
 opt-level = 2
+debug = "line-tables-only"
 
 [profile.release]
 opt-level = "s"

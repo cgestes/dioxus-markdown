@@ -1,6 +1,6 @@
 # Topics — browsing a ZeroClaw agent from Margin over Tailscale
 
-Status: implemented as `margin topics` (2026-11-24). Mockup: [`mockup/topics.html`](../mockup/topics.html) · native: [`mockup/topics-native.png`](../mockup/topics-native.png).
+Status: implemented as `osom topics` (2026-11-24). Mockup: [`mockup/topics.html`](../mockup/topics.html) · native: [`mockup/topics-native.png`](../mockup/topics-native.png).
 
 ## 0. What shipped, and how it differs from the plan below
 
@@ -10,9 +10,9 @@ The real setup already had most of the plan's pieces, so the implementation is s
 - **Reminders** come from `reminders.md` (the agent's single deadline table, pinged by its sweeper crons), not from per-reminder cron jobs.
 - **Tailscale:** nothing to set up. ZeroClaw's `[tunnel] tunnel_provider = "tailscale"` (`funnel = false`) runs `tailscale serve --https=443 42617` itself; SilverBullet is a persistent `serve` on `:8443`.
 - **Questions** (`questions.md`) became their own facet; **Known facts** (memory) and **Code** are rendered when present but not yet read from the live space.
-- **Code:** `src/topics.rs` (parsing, no I/O), `src/hub.rs` (SilverBullet, ZeroClaw REST + `/ws/chat`, Keychain), `src/native/topics.rs` (window, CLI, live adapter), `topics_view.rs` (the shared view model), `topics_demo.rs` (the mockup's sample data).
+- **Code:** `src/topics.rs` (parsing, no I/O), `crates/margin-hub/src/lib.rs` (SilverBullet, ZeroClaw REST + `/ws/chat`, Keychain), `crates/osom/src/topics/` (window, CLI, live adapter, `view.rs` the shared view model, `demo.rs` the mockup's sample data).
 
-**Later: anchored comments on the real backend.** Main has anchored AI comment threads (`src/native/comments.rs`) answered by `mock_llm_reply`, which returns a reply and an optional before/after edit proposal. Once vault docs open in the editor here, comments can go to the agent instead. To decide then:
+**Later: anchored comments on the real backend.** Main has anchored AI comment threads (`crates/margin-editor/src/comments/mod.rs`) answered by `mock_llm_reply`, which returns a reply and an optional before/after edit proposal. Once vault docs open in the editor here, comments can go to the agent instead. To decide then:
 
 - **Session per thread:** for example `margin-comment-<page>-<thread>`, so a follow-up keeps its context.
 - **Prompt:** the page path, the quoted passage and the user's request.
@@ -231,7 +231,7 @@ client-side from `schedule` + `tz`, and recent runs come from `/api/cron/{id}/ru
 
 ## 8. UI
 
-See the mockup for the full layout. It reuses Margin's paper theme (`assets/theme.css`):
+See the mockup for the full layout. It reuses Margin's paper theme (`crates/margin-ui/assets/theme.css`):
 Instrument Serif titles, DM Sans for UI, IBM Plex Mono for data, pine accent. Each topic gets a
 single hue, used only on its icon tile.
 
@@ -281,7 +281,7 @@ single hue, used only on its icon tile.
   - `cron.rs` — `[slug]` name convention and next-run computation (`cron` crate).
   - `cache.rs` — SQLite mirror of the topic index, timeline page and cron list for offline
     reading.
-- **`src/native/topics/`** — `sidebar.rs`, `page.rs`, `facets/{overview,discussions,calendar,docs,procedures,lists,code}.rs`,
+- **`crates/osom/src/topics/`** — `sidebar.rs`, `page.rs`, `facets/{overview,discussions,calendar,docs,procedures,lists,code}.rs`,
   `chat.rs`, `inbox.rs`. The existing note view hosts vault docs unchanged.
 - **Data flow.** Hub client tasks run on tokio and push into Dioxus `Signal`s. Chat `chunk` frames
   append to the streaming message, and `done` commits it.

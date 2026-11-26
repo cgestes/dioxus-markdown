@@ -1,0 +1,30 @@
+[package]
+name = "osom"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Osom: the agent's topics, as a macOS app of its own.
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "osom"
+path = "src/main.rs"
+
+[dependencies]
+margin-editor = { path = "../margin-editor" }
+margin-ui = { path = "../margin-ui" }
+margin-editor-core = { path = "../.." }
+margin-hub = { path = "../margin-hub" }
+dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
+webbrowser = "1.2"
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
+blitz-traits = "=0.3.0-beta.4"
+blitz-paint = { version = "=0.3.0-beta.4", default-features = false }
+anyrender = "=0.14.0"
+anyrender_vello_cpu = { version = "=0.18.0", default-features = false }
+png = "0.18"

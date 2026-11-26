@@ -3686,52 +3686,128 @@ dependencies = [
 ]
 
 [[package]]
-name = "margin-editor-core"
+name = "margin-editor"
 version = "0.1.0"
 dependencies = [
- "aes-gcm",
  "anyhow",
  "anyrender",
  "anyrender_vello_cpu",
- "argon2",
- "base64 0.22.1",
  "blitz-dom",
  "blitz-paint",
  "blitz-shell",
  "blitz-traits",
  "clap",
- "crypto_secretstream",
  "dioxus-devtools",
  "dioxus-native",
+ "futures-channel",
+ "futures-util",
+ "loro",
+ "margin-editor-core",
+ "margin-hub",
+ "margin-note",
+ "margin-ui",
+ "margin-vault",
+ "parley",
+ "png 0.18.1",
+ "pulldown-cmark",
+ "rfd",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "webbrowser",
+]
+
+[[package]]
+name = "margin-editor-core"
+version = "0.1.0"
+dependencies = [
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "margin-hub"
+version = "0.1.0"
+dependencies = [
+ "margin-editor-core",
+ "percent-encoding",
+ "security-framework 3.7.0",
+ "serde",
+ "serde_json",
+ "tungstenite",
+ "ureq",
+]
+
+[[package]]
+name = "margin-note"
+version = "0.1.0"
+dependencies = [
+ "loro",
+ "margin-editor-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "margin-ui"
+version = "0.1.0"
+dependencies = [
+ "anyrender",
+ "anyrender_vello_cpu",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
+ "dioxus-native",
+ "margin-editor-core",
+ "parley",
+ "png 0.18.1",
+]
+
+[[package]]
+name = "margin-vault"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "argon2",
+ "base64 0.22.1",
+ "crypto_secretstream",
  "directories",
  "ed25519-dalek",
- "futures-channel",
  "futures-util",
  "hex",
  "hkdf",
  "keyring",
  "loro",
  "loro-protocol",
- "parley",
- "percent-encoding",
- "png 0.18.1",
- "pulldown-cmark",
- "qrcode",
+ "margin-note",
  "rand 0.8.8",
- "rfd",
  "rusqlite",
- "security-framework 3.7.0",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
- "tungstenite",
- "ureq",
  "url",
- "webbrowser",
  "zeroize",
+]
+
+[[package]]
+name = "margin-vault-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "loro",
+ "margin-note",
+ "margin-vault",
+ "qrcode",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -4440,6 +4516,25 @@ checksum = "9aa2b01e1d916879f73a53d01d1d6cee68adbb31d6d9177a8cfce093cced1d50"
 dependencies = [
  "futures-core",
  "pin-project-lite",
+]
+
+[[package]]
+name = "osom"
+version = "0.1.0"
+dependencies = [
+ "anyrender",
+ "anyrender_vello_cpu",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
+ "clap",
+ "dioxus-native",
+ "margin-editor",
+ "margin-editor-core",
+ "margin-hub",
+ "margin-ui",
+ "png 0.18.1",
+ "webbrowser",
 ]
 
 [[package]]

@@ -120,7 +120,7 @@ def run_window(root, run, env):
                     CFBundleExecutable="margin", CFBundlePackageType="APPL",
                     CFBundleVersion="1", NSHighResolutionCapable=True)
         (contents / "Info.plist").write_bytes(plistlib.dumps(info))
-        subprocess.run(["cargo", "build", "--locked", "--features", "native", "--bin", "margin"], cwd=root, env=env, check=True)
+        subprocess.run(["cargo", "build", "--locked", "-p", "margin-editor", "--bin", "margin"], cwd=root, env=env, check=True)
         target = Path(env.get("CARGO_TARGET_DIR", root / "target"))
         exe = contents / "MacOS" / "margin"
         try:

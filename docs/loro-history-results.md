@@ -45,7 +45,7 @@ For Margin, this would require an authenticated archive of earlier checkpoints a
 ```sh
 npm ci --prefix mockup
 node --test mockup/test/loro-history-recovery.test.mjs
-cargo test --locked --features native --test loro_history
+cargo test --locked -p margin-note --test loro_history
 npm --prefix mockup run experiment:history
 npm --prefix mockup run experiment:history -- --constrained
 ```

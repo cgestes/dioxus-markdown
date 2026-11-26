@@ -24,7 +24,7 @@ verified full checkpoints from enrolled devices. Pruning follows causal coverage
 preserves concurrent edits and a recovery window.
 
 1. **Literal Markdown as Single Source of Truth**
-   - The note’s Markdown lives in one Loro `LoroText` (`markdown`) managed by `Note` (`src/note.rs`). Encrypted attachment manifests live in the document’s `attachments` map.
+   - The note’s Markdown lives in one Loro `LoroText` (`markdown`) managed by `Note` (`crates/margin-note/src/note.rs`). Encrypted attachment manifests live in the document’s `attachments` map.
    - Editing must preserve untouched bytes exactly (line endings `LF`/`CRLF`, trailing newlines, spacing, escapes). Never re-serialize the whole document from an AST.
    - Undo/redo captures directed UTF-8 byte selections via Loro cursors; structural commands (table moves, pastes, formatting) commit as a single undoable step.
    - Shared core (`src/lib.rs`) remains portable across Native and Web/WASM (`mockup/`).
@@ -32,7 +32,7 @@ preserves concurrent edits and a recovery window.
    - No heavy branded top header, no permanent formatting ribbon.
    - Contextual UI appears only where and when needed (inline empty-line icons, selection format bar, docked table action bar).
 3. **One Design System**
-   - Every window is built from the components in `src/native/ui/` (buttons, chips, segmented switch, tabs, fields, composer, checkboxes, cards, rows, messages, read-only Markdown, popovers, menus, toolbars, icons and marks), including the editor's own chrome (mode bar, format bar, slash/block/table menus, empty-line tools, status bar). Headings, prose and tables share one type scale (`--font-h*`, `--font-prose*`, `--font-table*`), so a read-only page reads like the page in Rich mode, styled by `assets/ui.css` from the tokens in `assets/theme.css`. Features compose them and add layout only: no per-feature button, card, row, Markdown or checkbox styles. `margin ui` shows every component in every state. See `docs/design-system.md`.
+   - Every window is built from the components in `crates/margin-ui/src/` (buttons, chips, segmented switch, tabs, fields, composer, checkboxes, cards, rows, messages, read-only Markdown, popovers, menus, toolbars, icons and marks), including the editor's own chrome (mode bar, format bar, slash/block/table menus, empty-line tools, status bar). Headings, prose and tables share one type scale (`--font-h*`, `--font-prose*`, `--font-table*`), so a read-only page reads like the page in Rich mode, styled by `crates/margin-ui/assets/ui.css` from the tokens in `crates/margin-ui/assets/theme.css`. Features compose them and add layout only: no per-feature button, card, row, Markdown or checkbox styles. `margin ui` shows every component in every state. See `docs/design-system.md`.
 4. **Out of Scope (for UX polish)**
    - **Split view** (`View::Split`) is retained only as a regression baseline; do not spend UX effort polishing Split view, but keep existing Split tests passing.
 
@@ -51,7 +51,7 @@ preserves concurrent edits and a recovery window.
 - **Bottom Status Bar (`.statusbar`):**
   - Quiet footer in normal flex flow (`margin-top: auto`; never `position: fixed` so it never overlaps bottom table controls).
   - Shows word count, contextual hints (`Space or X toggles` / `Edit as text · F2` / `Press Enter or type to edit`), caret `Ln / Col`, and total line count.
-- **Typography & Bundled Fonts (`src/native/typefaces.rs`):**
+- **Typography & Bundled Fonts (`crates/margin-ui/src/typefaces.rs`):**
   - Modern Claude-inspired pairing — every bundled `.woff2` font is registered with an explicit `FontInfoOverride` (`family_name`, `weight`, `style`) so CSS font matching never splits weights into separate families:
     - `Geist` (`400 Normal`, `500 Normal`, `600 Normal`, `400 Italic`) — headings (`600`, tight `-0.03em` tracking), Rich mode prose (`15.5px/26px`), UI controls, menus, and table labels/headers/body
     - `JetBrains Mono` (`400 Normal`, `500 Normal`, `600 Normal`, `400 Italic`) — Live mode prose (`14px/25px`), inline code, code blocks, Source mode, numeric table columns, and status hints
@@ -61,7 +61,7 @@ preserves concurrent edits and a recovery window.
 ## 3. Editing Modes
 
 ### 3.1 Live Mode (`EditMode::Markdown` — Keyboard-First)
-- **Tight rendering at rest:** Unfocused inline delimiters (`**`, `*`, `~~`, `` ` ``, `[`, `](url)`) and task-list `- ` prefixes collapse completely via `Projection` (`src/native/projection.rs`) with zero ghost whitespace.
+- **Tight rendering at rest:** Unfocused inline delimiters (`**`, `*`, `~~`, `` ` ``, `[`, `](url)`) and task-list `- ` prefixes collapse completely via `Projection` (`crates/margin-editor/src/notebook/projection.rs`) with zero ghost whitespace.
 - **Cursor-only inline expansion:** Placing the caret inside or touching a formatted span expands **only that span's** Markdown delimiters inline so it can be edited directly with the keyboard; moving the caret away collapses it tightly again.
 - **Checkboxes (Mouse vs. Keyboard):**
   - **Mouse left-click** toggles the checkbox directly in Loro and **keeps it rendered as a visual togglebox** (repeatable click-to-toggle; never flashes into `[ ]`/`[x]` text).
@@ -177,8 +177,8 @@ preserves concurrent edits and a recovery window.
   - Cross-field drags deduplicate unchanged spans, guard unchanged signal writes in `Writing::open`, defer `FormatBar` until mouse-up, and skip height measurements while dragging.
   - Non-render paths use `projection_peek` (reading `Memo`s via `.read()` so dirty memos recompute, while reading `Signal`s via `.peek()` to avoid reactive subscriptions).
 - **Quality Bar:**
-  - `cargo check --locked --features native --bin margin` must pass with **0 warnings**.
-  - `cargo test --locked --features native` must pass 100%.
+  - `cargo check --locked -p margin-editor --bin margin` must pass with **0 warnings**.
+  - `cargo test --locked --workspace` must pass 100%.
   - Visual changes must be verified by inspecting rendered PNG screenshots from `MARGIN_TEST_ARTIFACTS`.
 
 ---
@@ -203,7 +203,7 @@ preserves concurrent edits and a recovery window.
 - **One reply path:** the mock and the real agent both implement `hub::AgentChat` and stream through `worker::turn`; the reply streams into its message (only that message re-renders), and a final ` ```margin-edit ` block (label, `---`, replacement) becomes the proposal and is never shown as text.
 - **Real backend (pages of the space):** an editor opened from the Topics window on a live, paired page asks the read-only ZeroClaw agent `scribe` (`comment_agent` in `topics.json`) instead of the mock. Each thread is its own session (`margin-comment-<id>`). The first turn carries the reply contract and the page; every turn carries the section or table cell, the selection and the request. **Apply** and **Undo** act only while the text under the thread is what the proposal expects; otherwise the thread offers *Ask again* (staleness is derived, never stored). Threads are saved to `_margin/comments/<page>.json` in the space, anchored by quote and context and merged on 412; conversation changes save at once, anchors and applied states are saved with the page. They re-attach after edits made outside Margin. A comment file that cannot be read or written shows a banner in the pane. See `docs/comments-backend.md`.
 
-## 10. Topics Window (`margin topics`)
+## 10. Topics Window (`osom topics`)
 
 - **Sources:** the SilverBullet space is the source of truth for topics and documents (`GET/PUT /.fs`); ZeroClaw provides conversations (`GET /api/sessions`, `GET /api/sessions/{key}/messages`) and chat (`/ws/chat`). Both are reached over the tailnet; the device token lives in the Keychain in release builds and in a private file next to `topics.json` in dev builds (every rebuild is a binary the Keychain no longer trusts), never in a file in the repo.
 - **Topics:** every top-level folder except `Library/` and `Repositories/` is a topic; sub-folders are sub-topics; each page in `people/` and every page a README route targets is a topic of its own. Titles come from the page's first heading, up to an em dash.

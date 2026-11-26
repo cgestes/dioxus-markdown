@@ -40,7 +40,7 @@ const fonts = [
   ["IBM Plex Mono", "ibm-plex-mono", 600, "normal"], ["IBM Plex Mono", "ibm-plex-mono", 400, "italic"]
 ];
 const faces = await Promise.all(fonts.map(async ([family, slug, weight, style]) => {
-  const directory = slug === "stix-two-text" ? `node_modules/@fontsource/${slug}/files` : "../assets/fonts";
+  const directory = slug === "stix-two-text" ? `node_modules/@fontsource/${slug}/files` : "../crates/margin-ui/assets/fonts";
   const bytes = await readFile(`${directory}/${slug}-latin-${weight}-${style}.woff2`);
   return `@font-face{font-family:"${family}";font-weight:${weight};font-style:${style};font-display:swap;src:url(data:font/woff2;base64,${bytes.toString("base64")}) format("woff2")}`;
 }));
@@ -60,7 +60,7 @@ const licenses = await Promise.all([...packages].map(async pkg => {
   throw new Error("Missing distribution notice for " + pkg);
 }));
 let html = await readFile("src/shell.html", "utf8");
-const css = (await Promise.all(["../assets/theme.css", "../assets/table.css", "src/editor.css"].map(path => readFile(path, "utf8")))).join("\n");
+const css = (await Promise.all(["../crates/margin-ui/assets/theme.css", "../crates/margin-ui/assets/table.css", "src/editor.css"].map(path => readFile(path, "utf8")))).join("\n");
 for (const [key, value] of Object.entries({
   FONTS: faces.join("\n"), CSS: css, ICONS: symbols.join("\n"),
   BUNDLE: bundle.outputFiles[0].text.replace(/<\/script/gi, "<\\/script"),

@@ -1,6 +1,6 @@
 # Margin design system
 
-Margin's windows (the notebook, its comments, the Topics window) are built from one set of components in `src/native/ui/`, styled by one stylesheet, `assets/ui.css`, from the tokens in `assets/theme.css`. `margin ui` (or `margin --gallery`) opens a window with every component in every state; `cargo test --features native --bin margin ui_gallery_shot -- --ignored` paints it to `target/ui-gallery.png`.
+Margin's windows (the notebook, its comments, the Topics window) are built from one set of components in `crates/margin-ui/src/`, styled by one stylesheet, `crates/margin-ui/assets/ui.css`, from the tokens in `crates/margin-ui/assets/theme.css`. `margin ui` (or `margin --gallery`) opens a window with every component in every state; `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints it to `target/ui-gallery.png`.
 
 ## Principles
 
@@ -11,7 +11,7 @@ These follow the product principles in `SPEC.md` §1.
 3. **Markdown reads the same everywhere.** Read-only Markdown (a topic's page, a chat reply, a transcript, a comment) goes through `MarkdownView`, which uses the notebook's reading projection (`preview::document`) and the editor's table markup.
 4. **Features compose; they don't restyle.** A feature's stylesheet (`topics.css`, `comments.css`, `editor.css`) holds layout and marks that exist only there. It has no button, card, row, Markdown or checkbox styles of its own, and no raw colour where a token exists.
 
-## Tokens (`assets/theme.css`)
+## Tokens (`crates/margin-ui/assets/theme.css`)
 
 | Group | Tokens | Use |
 | --- | --- | --- |
