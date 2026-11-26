@@ -1,20 +1,20 @@
 # Margin · a Rust Markdown notebook
 
-Margin is a live Markdown notebook built with Dioxus Native and Loro. Run `cargo run --locked -p margin-editor` to open the desktop editor on *Field notes*, a sample note with an editable checklist, a listening table and two anchored discussions, kept in memory. Build with the `vault` feature (`cargo run --locked -p margin-editor --features vault`) to keep your notes encrypted on your device: Margin then reopens your selected note on the next launch. The same editor runs in a browser with Dioxus Web.
+Margin is a live Markdown notebook built with Dioxus Native and Loro. Run `cargo run --locked -p margin` to open the desktop editor on *Field notes*, a sample note with an editable checklist, a listening table and two anchored discussions, kept in memory. Build with the `vault` feature (`cargo run --locked -p margin --features vault`) to keep your notes encrypted on your device: Margin then reopens your selected note on the next launch. The same editor runs in a browser with Dioxus Web.
 
 The editor and every read-only view use the same table stylesheet. A light header with small muted labels sits above a single rule, fine horizontal rules separate the rows, and the accent appears only for focus and selection. The first left-aligned column uses a medium weight, descriptions use the body sans, and right-aligned values use the mono font. Columns keep their widths while you type. Long cell text wraps and its row grows. [Table styles](crates/margin-ui/assets/table.css) · [Desktop](mockup/native-table.png)
 
-- Run `cargo run --locked -p margin-editor -- --demo` for a fresh, in-memory copy of *Field notes*. Click the first letter of that title or any later ATX heading. At that position, **#** adds a heading level up to six, **Space** accepts the Markdown separator, and **Backspace** removes one level. Removing the last hash makes the line a paragraph. The left gutter shows the prefix while that heading is focused. Up and Down move one visual line at a time through headings, wrapped prose, blank lines and table rows. **Source** exposes the same Loro text and undo history. [Native table preview](mockup/native-table.png)
+- Run `cargo run --locked -p margin -- --demo` for a fresh, in-memory copy of *Field notes*. Click the first letter of that title or any later ATX heading. At that position, **#** adds a heading level up to six, **Space** accepts the Markdown separator, and **Backspace** removes one level. Removing the last hash makes the line a paragraph. The left gutter shows the prefix while that heading is focused. Up and Down move one visual line at a time through headings, wrapped prose, blank lines and table rows. **Source** exposes the same Loro text and undo history. [Native table preview](mockup/native-table.png)
 
 ## Personal vault
 
-The personal vault needs the editor's `vault` feature: `cargo run --locked -p margin-editor --features vault`. Without it, `margin` opens *Field notes* in memory, and its status bar says nothing is saved.
+The personal vault needs `margin`'s `vault` feature: `cargo run --locked -p margin --features vault`. Without it, `margin` opens *Field notes* in memory, and its status bar says nothing is saved.
 
 **Notes** lists your notes, creates a device-only note, attaches a file, and exports an attachment. The first time an older vault resumes, Margin opens its most recently created note or its existing inbox if you wrote there. If vault access fails, **Try again** retries the unlock. **Open Field notes demo** opens an in-memory copy for that session.
 
 **Sync a copy of current text** starts a fresh Loro document with the current Markdown. Earlier drafts, existing files and private conversations stay on the original device. Files attached to the new copy sync with its edits. F9 saves private inspector reports as encrypted files in the device inbox. Reopen a specific note with `--note ID`. Give the GUI `--vault PATH` and the CLI `--dir PATH` to select the same nondefault device directory.
 
-`cargo run --locked -p margin-editor -- --sync-file PATH` opens a standalone Loro history file. This explicit file mode reads and writes unencrypted local JSON, with or without the `vault` feature.
+`cargo run --locked -p margin -- --sync-file PATH` opens a standalone Loro history file. This explicit file mode reads and writes unencrypted local JSON, with or without the `vault` feature.
 
 ### Start a relay and pair devices
 
@@ -86,21 +86,21 @@ The notebook is one editor on two renderers. Blitz draws it on the desktop and o
 
 ```sh
 rustup target add wasm32-unknown-unknown
-dx serve --web --package margin-editor
+dx serve --web --package margin-web
 ```
 
 That is the notebook itself: Live and Rich editing, Source, tables, checkboxes, the slash menu, comments and Loro undo. Only `crates/margin-editor/src/platform/` differs. Natively it re-exports Blitz's document and Parley's text layouts. In a browser it answers the same calls from the DOM, and measures text with a hidden mirror of each field. It is the build without the `vault` feature: the page opens *Field notes*, keeps it in memory and says **Not saved** in the status bar, so a reload starts over. The vault, the relay and the space need an operating system. Comments are answered by the stand-in agent. The inspector's **Save report** downloads its JSON. [Platform layer](crates/margin-editor/src/platform/mod.rs) · [Browser side](crates/margin-editor/src/platform/web.rs)
 
-`scripts/deploy-web` bundles a release build and publishes it to GitHub Pages from the `gh-pages` branch. `crates/margin-editor/public/` adds the web app manifest, icons and an offline worker, so **Share → Add to Home Screen** in Safari installs it full screen. One online visit is enough to open it offline afterwards.
+`scripts/deploy-web` bundles a release build and publishes it to GitHub Pages from the `gh-pages` branch. `crates/margin-web/public/` adds the web app manifest, icons and an offline worker, so **Share → Add to Home Screen** in Safari installs it full screen. One online visit is enough to open it offline afterwards.
 
 On iPhone it is the Dioxus Native app. Install the Dioxus CLI from the commit `dioxus-native` is pinned to, then boot a simulator and serve the `margin` binary:
 
 ```sh
 cargo install --git https://github.com/DioxusLabs/dioxus --rev 0a7242a2a72b08975584bf8ecb05076a5ee0b9c7 dioxus-cli --locked
-dx serve --ios --renderer native --package margin-editor
+dx serve --ios --renderer native --package margin
 ```
 
-Add `--features vault` for the personal vault. Edits to `rsx!` reload in the running app. In `crates/margin-editor`, `Dioxus.toml` sets the bundle identifier, and `build.rs` embeds the simulator's Keychain entitlement so the encrypted vault can store its key. For your own phone, add `--device` once Xcode has an Apple Development certificate and a provisioning profile for `dev.margin.native`. Typing, Backspace, checkboxes and the encrypted vault work, and tables render. winit's iOS view only implements `UIKeyInput`. Autocorrect, dictation, input methods, selection handles, and arrow keys from a hardware keyboard are therefore missing. The layout doesn't resize for the on-screen keyboard. Attaching and exporting files needs a native file dialog, so those menu items are hidden on iOS.
+Add `--features vault` for the personal vault. Edits to `rsx!` reload in the running app. In `crates/margin`, `Dioxus.toml` sets the bundle identifier, and `build.rs` embeds the simulator's Keychain entitlement so the encrypted vault can store its key. For your own phone, add `--device` once Xcode has an Apple Development certificate and a provisioning profile for `dev.margin.native`. Typing, Backspace, checkboxes and the encrypted vault work, and tables render. winit's iOS view only implements `UIKeyInput`. Autocorrect, dictation, input methods, selection handles, and arrow keys from a hardware keyboard are therefore missing. The layout doesn't resize for the on-screen keyboard. Attaching and exporting files needs a native file dialog, so those menu items are hidden on iOS.
 
 ## Try the editor
 
@@ -136,7 +136,7 @@ Dioxus Native and Loro can support this editor. The weak point in the first prot
 
 Live uses multiple native text inputs, and Source one input for the whole note. Dragging beyond the viewport, marked-text composition with a real IME, and selection announcements through VoiceOver remain to be checked by hand in Live. The automated suite covers native IME events, a long 2× viewport, Unicode, CRLF, escaped pipes and backward selections. Native two-window editing and typing latency on large tables remain unverified.
 
-Run `cargo test --locked --workspace --all-features` for the Rust input and storage tests; `--all-features` includes the personal vault. For the browser build, run `npm --prefix mockup ci` once and keep `dx serve --web --package margin-editor --port 8741` running. With Chrome installed, `npm --prefix mockup run test:web` then drives real pointer gestures, touch, paste, selection, typing and undo in the same editor. After `dx bundle --web --release --package margin-editor`, `npm --prefix mockup run test:web:offline` checks that the bundle opens without the network. `npm --prefix mockup test` runs the Loro history recovery study.
+Run `cargo test --locked --workspace --all-features` for the Rust input and storage tests; `--all-features` includes the personal vault. For the browser build, run `npm --prefix mockup ci` once and keep `dx serve --web --package margin-web --port 8741` running. With Chrome installed, `npm --prefix mockup run test:web` then drives real pointer gestures, touch, paste, selection, typing and undo in the same editor. After `dx bundle --web --release --package margin-web`, `npm --prefix mockup run test:web:offline` checks that the bundle opens without the network. `npm --prefix mockup test` runs the Loro history recovery study.
 
 ## Native architecture
 
@@ -161,7 +161,9 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | `crates/margin-vault` | The encrypted vault: keys, SQLite storage, relay and sync. `margin` uses it only with `--features vault`. | crypto, SQLite, tokio |
 | `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token | HTTP, WebSocket |
 | `crates/margin-ui` | The design system: tokens, components, fonts, the gallery | Dioxus |
-| `crates/margin-editor` | The notebook editor (`margin`) and the API a host embeds it with | Dioxus Native, Blitz |
+| `crates/margin-editor` | The Markdown editor: Rich, Live and Source views, tables, comments, undo, on Blitz (native) or Dioxus Web (browser). The app that opens it decides where the note lives (`NoteStore`). | Dioxus Native, Blitz |
+| `crates/margin` | `margin`, the notebook app: your personal vault (`--features vault`), a sync file or the Field notes sample, and the gallery (`margin ui`) | clap |
+| `crates/margin-web` | `margin-web`, the notebook in a browser page, installable as a web app (`dx serve --web --package margin-web`) | Dioxus Web |
 | `crates/osom` | The Topics window (`osom`) | |
 | `crates/margin-vault-cli` | `margin-vault`, the vault from the terminal | |
 

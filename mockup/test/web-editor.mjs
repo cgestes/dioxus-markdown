@@ -1,7 +1,7 @@
 // Drives the Dioxus Web build of the notebook in Chrome: the same editor as
 // the native app, so this is the quickest place to exercise it end to end.
 //
-//   dx serve --web --package margin-editor --port 8741     (in another terminal)
+//   dx serve --web --package margin-web --port 8741     (in another terminal)
 //   npm --prefix mockup run test:web                       (MARGIN_WEB_URL overrides the address)
 import assert from "node:assert/strict";
 import { chromium } from "playwright-core";

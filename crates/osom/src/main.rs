@@ -4,7 +4,7 @@ use dioxus_native::prelude::*;
 use osom::topics::{Shell, Start, commands};
 
 fn main() {
-    margin_editor::support::restart::answer_build_probe();
+    margin_editor::support::restart::answer_build_probe("osom");
     let cli = osom::cli::init();
     if let Some(code) = commands::run(cli) {
         std::process::exit(code);

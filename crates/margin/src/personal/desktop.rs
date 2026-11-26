@@ -1,8 +1,8 @@
 //! The personal notebook on the encrypted vault. Editor signals are updated on
 //! the Dioxus thread.
-use crate::{CSS, notebook_view};
+use margin_editor::notebook_view;
 use anyhow::{Result, ensure};
-use crate::prelude::*;
+use dioxus_native::prelude::*;
 use futures_util::StreamExt;
 use loro::LoroDoc;
 use margin_note::note::Note;
@@ -42,14 +42,17 @@ fn initialize() -> Result<()> {
 
 pub(crate) fn open_note(vault: &Vault, requested: Option<&str>) -> Result<String> {
     vault.open_desktop_note(requested, || {
-        let note = Note::new(crate::SAMPLE);
-        let threads = crate::comments::seed_sample_comments(&note);
+        let note = Note::new(margin_editor::SAMPLE);
+        let threads = margin_editor::seed_sample_comments(&note);
         Ok((note.document().clone(), serde_json::to_vec(&threads)?))
     })
 }
 
 #[derive(Clone)]
 pub(crate) struct Menu(pub Signal<bool>);
+
+/// The vault screens' styles (startup, notes menu); the editor brings its own.
+const CSS: &str = include_str!("personal.css");
 
 #[derive(Clone)]
 pub(super) struct RelayStatus(Arc<Mutex<String>>);
@@ -60,28 +63,45 @@ pub(crate) struct Session {
     pub room: String,
     pub doc: LoroDoc,
     pub seq: i64,
-    pub threads: Vec<crate::comments::CommentThread>,
+    pub threads: Vec<margin_editor::CommentThread>,
 }
 
-impl Session {
-    /// The note this session opened.
-    pub(crate) fn note(&self) -> Note {
-        Note::from_doc(self.doc.clone())
+/// A vault note as the notebook's store: the note and its threads come from
+/// the vault, edits and threads are saved back, reports go to the inbox.
+pub(crate) struct VaultStore {
+    pub session: Session,
+    /// The notes menu's open state, when the desktop shows one.
+    pub menu: Option<Signal<bool>>,
+}
+
+impl margin_editor::NoteStore for VaultStore {
+    fn note(&self) -> Option<Note> {
+        Some(Note::from_doc(self.session.doc.clone()))
     }
 
-    /// The note's comment threads, as the vault keeps them.
-    pub(crate) fn threads(&self) -> Vec<crate::comments::CommentThread> {
-        self.threads.clone()
+    fn threads(&self) -> Option<Vec<margin_editor::CommentThread>> {
+        Some(self.session.threads.clone())
     }
 
-    /// Save the comment threads, given what was saved last.
-    pub(crate) fn save_discussion(&self, previous: &[u8], current: &[u8]) -> Result<()> {
-        save_discussion(&self.vault, &self.room, previous, current)
+    fn use_persistence(&self, note: Signal<Note>) -> Signal<String> {
+        use_persistence(Some(self.session.clone()), note)
     }
 
-    /// Keep a diagnostics report as an encrypted inbox attachment; returns its id.
-    pub(crate) fn attach_report(&self, name: &str, bytes: &[u8]) -> Result<String> {
-        self.vault.attach(&self.vault.inbox(), name, bytes)
+    fn save_discussion(&self, previous: &[u8], current: &[u8]) -> Result<()> {
+        save_discussion(&self.session.vault, &self.session.room, previous, current)
+    }
+
+    fn attach_report(&self, name: &str, bytes: &[u8]) -> Option<Result<String>> {
+        let vault = &self.session.vault;
+        Some(vault.attach(&vault.inbox(), name, bytes).map(|blob| format!("encrypted inbox attachment {blob}")))
+    }
+
+    fn title(&self) -> Option<String> {
+        Some("Margin · Personal vault".to_owned())
+    }
+
+    fn menu(&self) -> Option<Signal<bool>> {
+        self.menu
     }
 }
 
@@ -103,6 +123,7 @@ pub(crate) fn Desktop() -> Element {
         None => None,
     };
     rsx! {
+        style { "{margin_ui::CSS}" }
         style { "{CSS}" }
         main { class: "vault-startup",
             if let Some(error) = error {
@@ -202,6 +223,7 @@ fn Home() -> Element {
         Ok(Vec::new())
     };
     rsx! {
+        style { "{CSS}" }
         if menu() {
             div { class: "vault-menu", role: "dialog", aria_label: "Personal notes",
                 match notes {
@@ -301,13 +323,15 @@ fn PrivateEditor(room: String) -> Element {
     };
     let show_discussion = session.room == session.vault.field_notes_room()
         && session.threads.iter().any(|thread| !thread.file.resolved);
-    use_context_provider(|| session);
-    // The vault's own threads come from the session; `Sample` only opens the
+    let menu = try_consume_context::<Menu>().map(|Menu(open)| open);
+    let store = use_hook(|| margin_editor::Store::new(VaultStore { session, menu }));
+    // The vault's own threads come from the store; `Sample` only opens the
     // discussion pane on them.
     notebook_view(
         "",
-        crate::NotebookOptions {
-            comments: if show_discussion { crate::Comments::Sample } else { crate::Comments::Empty },
+        margin_editor::NotebookOptions {
+            comments: if show_discussion { margin_editor::Comments::Sample } else { margin_editor::Comments::Empty },
+            store: Some(store),
             ..Default::default()
         },
     )
@@ -326,7 +350,7 @@ fn flush(v: &Vault, room: &str, queue: &Pending) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn use_persistence(session: Option<Session>, mut note: Signal<Note>) -> Signal<String> {
+fn use_persistence(session: Option<Session>, mut note: Signal<Note>) -> Signal<String> {
     let mut status = use_signal(String::new);
     let relay = use_hook(try_consume_context::<RelayStatus>);
     use_hook(move || {

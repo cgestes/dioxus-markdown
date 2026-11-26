@@ -23,5 +23,5 @@ What Loro gives the editor:
 ## Consequences
 
 - `margin-note` and Loro are always compiled. Build speed comes from the crate layering instead (see the crate map in the README).
-- The encrypted vault is a separate choice from the document model. It is storage and device sync, built only with the editor's `vault` feature.
+- The encrypted vault is a separate choice from the document model. It is storage and device sync, built only with `margin`'s `vault` feature. The editor (`margin-editor`) asks the app where a note lives through its `NoteStore` interface.
 - Next step this enables: Osom can bring an agent's change to an open page in as a second writer and merge it, instead of rejecting the save when the page's etag has changed.

@@ -16,6 +16,7 @@ pub(crate) mod projection;
 pub(crate) mod selection_model;
 pub(crate) mod slash;
 pub(crate) mod source;
+pub(crate) mod store;
 pub(crate) mod writing;
 
 use crate::platform::NodeHandle;
@@ -28,7 +29,8 @@ pub(crate) use writing::Writing;
 pub(crate) use document::{BlockKind, Sections};
 use margin_ui as ui;
 use crate::support::{page, restart};
-use crate::{CSS, SyncFile, personal};
+use crate::CSS;
+pub use store::{InMemory, NoteStore, Store};
 
 pub(crate) fn report<T>(result: loro::LoroResult<T>, mut message: Signal<String>) {
     if let Err(error) = result {
@@ -185,6 +187,9 @@ pub struct NotebookOptions {
     /// editor's bar then starts with the host's way back and ends with its
     /// actions, and the page aligns with the host's column.
     pub host: Option<HostBar>,
+    /// Where the note lives (a vault, a sync file); without one it is edited
+    /// in memory and the status bar says nothing about it.
+    pub store: Option<Store>,
 }
 
 /// The host's part of an embedded editor's bar.
@@ -206,31 +211,23 @@ pub struct HostAction {
 
 
 pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
-    let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, page: page_source, host } = options;
+    let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, page: page_source, host, store } = options;
     let embedded = host.is_some();
     let seed_comments = start_comments == Comments::Sample;
     let agent = match start_comments {
         Comments::Agent(agent) => agent,
         _ => crate::comments::CommentAgent::mock(),
     };
-    let personal = use_signal(try_consume_context::<personal::Session>);
-    let menu = use_hook(try_consume_context::<personal::Menu>);
-    let sync_file = use_hook(try_consume_context::<SyncFile>);
-    // Nothing keeps the note: no vault session, no sync file, no host saving its page.
-    let unsaved = personal.peek().is_none() && sync_file.is_none() && !embedded;
-    let note = use_signal(|| {
-        if let Some(s) = personal.peek().as_ref() {
-            s.note()
-        } else if let Some(file) = &sync_file {
-            Note::from_doc(file.state.note().document().clone())
-        } else {
-            Note::new(initial)
-        }
-    });
-    let vault_status = personal::use_persistence(personal.peek().clone(), note);
+    let store = use_signal(move || store);
+    let note = use_signal(|| store.peek().as_ref().and_then(|s| s.note()).unwrap_or_else(|| Note::new(initial)));
+    // The store's line for the status bar ("Saved on device", "Not saved").
+    let store_status = match store.peek().clone() {
+        Some(s) => s.use_persistence(note),
+        None => use_signal(String::new),
+    };
     let comments = use_signal(move || {
-        if let Some(s) = personal.peek().as_ref() {
-            s.threads()
+        if let Some(threads) = store.peek().as_ref().and_then(|s| s.threads()) {
+            threads
         } else if seed_comments {
             crate::comments::seed_sample_comments(&note.peek())
         } else {
@@ -257,7 +254,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         ))
     });
     use_effect(move || {
-        if let Some(s) = personal.peek().as_ref() {
+        if let Some(s) = store.peek().as_ref() {
             let mut prior = prior_discussion.borrow_mut();
             let result = serde_json::to_vec(&*comments.read())
                 .map_err(anyhow::Error::from)
@@ -289,15 +286,6 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         rev_counter += 1;
         rev_counter
     });
-    use_effect(move || {
-        if let Some(file) = &sync_file {
-            let _ = doc_rev();
-            if let Err(error) = file.state.save_to_file(&file.path) {
-                let mut status = message;
-                status.set(format!("Couldn’t save the sync file. {error}"));
-            }
-        }
-    });
     let index = use_memo(move || markdown_markers(&contents.read()));
     let draft_table = use_signal(|| None);
     let tables = use_memo(move || {
@@ -308,7 +296,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         list
     });
     let writing = Writing {
-        personal,
+        store,
         note,
         root,
         focus,
@@ -384,22 +372,24 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         use_signal(|| inspector::Trace::new(if inspect_at_start { initial } else { "" }));
     let window = crate::platform::use_window();
     let window_title = use_memo(move || {
-        if personal.peek().is_some() {
-            return "Margin · Personal vault".to_owned();
+        if let Some(title) = store.peek().as_ref().and_then(|s| s.title()) {
+            return title;
         }
         let md = contents.read();
         let title = Sections::read(&md).title(&md).trim();
         let title = if title.is_empty() { "Untitled" } else { title };
         match restart::worktree_name() {
-            Some(name) => format!("Margin · {name} · {title}"),
-            None => format!("Margin · {title}"),
+            Some(name) => format!("{} · {name} · {title}", crate::app_title()),
+            None => format!("{} · {title}", crate::app_title()),
         }
     });
     let desktop = window.is_some();
     use_effect(move || {
         let title = window_title.read();
-        if let Some(window) = &window {
-            if personal.peek().is_none() && inspecting() && view() == View::Live {
+        // A host (Osom) owns its window's title.
+        if let Some(window) = window.as_ref().filter(|_| !embedded) {
+            let names_place = store.peek().as_ref().is_some_and(|s| s.title().is_some());
+            if !names_place && inspecting() && view() == View::Live {
                 window.set_title(&format!("{title}  |  {}", trace.read().title_status()));
             } else {
                 window.set_title(&title);
@@ -606,8 +596,8 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
             },
             div { id: "mode-bar", class: "mode-dock",
                 nav { class: "mode-pill-bar", aria_label: "Editor tools",
-                    if let Some(personal::Menu(mut open)) = menu {
-                        ui::Button { id: "vault-notes", label: "Notes", text: "Notes", expanded: open(), onclick: move |_| { let visible = open(); open.set(!visible); } }
+                    if let Some(mut open) = store.peek().as_ref().and_then(|s| s.menu()) {
+                        ui::Button { id: "notes-menu", label: "Notes", text: "Notes", expanded: open(), onclick: move |_| { let visible = open(); open.set(!visible); } }
                     }
                     if let Some(h) = host.as_ref() {
                         div { class: "dock-host",
@@ -762,8 +752,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 if desktop { marker_view::WindowLayout { writing } }
             }
             footer { class: "statusbar",
-                if personal.peek().is_some() { span { class: "vault-status", "{vault_status}" } }
-                if unsaved { span { id: "save-status", class: "vault-status", "{personal::UNSAVED}" } }
+                if !store_status.read().is_empty() { span { id: "save-status", class: "store-status", "{store_status}" } }
                 span { class: "status-words", {
                     let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();
                     format!("{words} {}", if words == 1 { "word" } else { "words" })

@@ -3,21 +3,17 @@ name = "margin-editor"
 version = "0.1.0"
 edition = "2024"
 publish = false
-default-run = "margin"
 
-# Margin: the live Markdown notebook, its comments and the Topics window.
+# The Markdown editor: the notebook (Rich, Live and Source views, tables,
+# comments, undo) that `margin` opens in a window, `margin-web` in a page, and
+# Osom embeds. Native builds render with Blitz, browser builds with Dioxus Web.
 [lib]
 path = "src/lib.rs"
-
-[[bin]]
-name = "margin"
-path = "src/main.rs"
 
 [dependencies]
 margin-editor-core = { path = "../.." }
 margin-hub = { path = "../margin-hub" }
 margin-note = { path = "../margin-note" }
-margin-vault = { path = "../margin-vault", optional = true }
 margin-ui = { path = "../margin-ui" }
 anyhow = "1"
 loro = { version = "1.18.0", default-features = false }
@@ -27,34 +23,26 @@ pulldown-cmark = { version = "0.13", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 futures-channel = "0.3"
 web-time = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "signal"], optional = true }
 
 [features]
-default = []
-# The personal notebook on the encrypted vault (SQLite, crypto, keychain, relay
-# sync). Without it, `margin` opens the Field notes sample, and `--sync-file`
-# still keeps a note in a local Loro file. Native only: a browser has no vault yet.
-vault = ["dep:margin-vault", "dep:rfd", "dep:tokio"]
+# `margin_editor::testing` (native): drive a rendered editor from another crate's tests.
+testing = ["dep:blitz-traits"]
 
-# Native: Blitz renders the notebook; the command line needs an OS.
+# Native: Blitz renders the notebook.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-clap = { version = "4", features = ["derive"] }
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
 parley = { version = "=0.12.0", default-features = false }
 webbrowser = "1.2"
+blitz-traits = { version = "=0.3.0-beta.4", optional = true }
 
-# Browser: the same notebook on Dioxus Web (`dx serve --web --package margin-editor`).
+# Browser: the same notebook on Dioxus Web (the `margin-web` app).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dioxus = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", features = ["web"] }
 wasm-bindgen = "0.2"
 js-sys = "0.3"
 elsa = "1"
 web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlTextAreaElement", "HtmlInputElement", "CssStyleDeclaration", "DomRect", "Range", "Node", "Navigator", "Location", "Event", "EventTarget", "FontFaceSet", "Blob", "BlobPropertyBag", "Url"] }
-
-# The vault's file dialogs. rfd has no iOS backend; attachments stay desktop-only there for now.
-[target.'cfg(not(target_os = "ios"))'.dependencies]
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 blitz-shell = { version = "=0.3.0-beta.4", default-features = false }

@@ -10,20 +10,20 @@
     position: fixed; top: 36px; left: 0; right: 0; height: 0; z-index: 10;
 }
 /* The editor's own controls (ui::Variant::Bare buttons). Scoped to the
-   notebook (and the vault screens around it), with no specificity of their
+   notebook, with no specificity of their
    own, so ui-* components and other windows that embed a notebook keep their
    look. */
-:where(.notebook) nav, .history-tools, :where(.notebook, .vault-startup, .vault-menu) button { display: flex; align-items: center; }
+:where(.notebook) nav, .history-tools, :where(.notebook) button { display: flex; align-items: center; }
 :where(.notebook) nav { gap: 6px; }
-:where(.notebook, .vault-startup, .vault-menu) button {
+:where(.notebook) button {
     justify-content: center; gap: 6px; height: 28px; padding: 0 8px;
     border: 1px solid transparent; border-radius: var(--radius); background: transparent;
     color: var(--muted); font: var(--font-ui); cursor: pointer; user-select: none;
 }
-:where(.notebook, .vault-startup, .vault-menu) button:hover { background: var(--pale); color: var(--accent-deep); }
-:where(.notebook, .vault-startup, .vault-menu) button:active { background: var(--line); }
-:where(.notebook, .vault-startup, .vault-menu) button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-:where(.notebook, .vault-startup, .vault-menu) button:disabled { color: var(--faint); opacity: .36; background: transparent; cursor: default; }
+:where(.notebook) button:hover { background: var(--pale); color: var(--accent-deep); }
+:where(.notebook) button:active { background: var(--line); }
+:where(.notebook) button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+:where(.notebook) button:disabled { color: var(--faint); opacity: .36; background: transparent; cursor: default; }
 .restart-app { color: var(--accent-deep); border-color: var(--accent-deep); }
 .history-tools { padding-left: 5px; border-left: 1px solid var(--line); gap: 1px; }
 .mode-dock .ui-btn.icon { width: 26px; height: 24px; border-radius: 5px; }
@@ -301,14 +301,7 @@ textarea.body-editor {
 }
 
 
-.vault-menu { position: fixed; top: 48px; left: 12px; z-index: 16; display: flex; flex-direction: column; gap: 4px; width: 235px; max-height: 70vh; overflow: auto; padding: 8px; background: var(--page); border: 1px solid var(--line); border-radius: 8px; }
-.vault-menu button { display: flex; justify-content: space-between; align-items: center; }
-.vault-menu small, .vault-status { color: var(--muted); font: 11px var(--sans); }
-.vault-startup { max-width: 580px; margin: 64px auto; padding: 0 24px; }
-.vault-startup h1 { font: 600 26px var(--display); }
-.vault-startup p { color: var(--muted); }
-.vault-actions { display: flex; gap: 8px; }
-.vault-actions button { border-color: var(--line-strong); }
+.store-status { color: var(--muted); font: 11px var(--sans); }
 
 /* Hosted in another window (Topics): the dock is the host's pane bar, and the
    page lines up with the host's column instead of centering itself. The block

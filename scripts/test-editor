@@ -83,7 +83,7 @@ def main():
     if args.inspect:
         env.setdefault("MARGIN_REPORT_DIR", str(OUTPUT / "reports"))
         print(f"F9 saves an inspection report to {env['MARGIN_REPORT_DIR']}", flush=True)
-        os.execvpe("cargo", ["cargo", "run", "--locked", "-p", "margin-editor", "--bin", "margin", "--", "--test-editor"], env)
+        os.execvpe("cargo", ["cargo", "run", "--locked", "-p", "margin", "--", "--test-editor"], env)
     if args.seed is not None:
         env["MARGIN_TEST_SEED"] = str(args.seed)
     OUTPUT.mkdir(parents=True, exist_ok=True)

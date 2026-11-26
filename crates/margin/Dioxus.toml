@@ -1,5 +1,5 @@
 # Dioxus CLI settings for the native app (the `margin` binary).
-# iOS: `dx serve --ios --renderer native --package margin-editor` — see the README.
+# iOS: `dx serve --ios --renderer native --package margin` — see the README.
 [application]
 name = "Margin"
 
@@ -10,7 +10,3 @@ publisher = "Margin"
 
 [ios]
 deployment_target = "17.0"
-
-# Browser: `dx serve --web --package margin-editor`.
-[web.app]
-title = "Margin"

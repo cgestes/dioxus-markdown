@@ -1848,7 +1848,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
- "webpki-roots 1.0.12",
+ "webpki-roots",
  "xxhash-rust",
 ]
 
@@ -4262,6 +4262,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "margin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dioxus-native",
+ "futures-channel",
+ "futures-util",
+ "loro",
+ "margin-editor",
+ "margin-note",
+ "margin-ui",
+ "margin-vault",
+ "rfd",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "margin-editor"
 version = "0.1.0"
 dependencies = [
@@ -4272,7 +4292,6 @@ dependencies = [
  "blitz-paint",
  "blitz-shell",
  "blitz-traits",
- "clap",
  "dioxus",
  "dioxus-devtools",
  "dioxus-native",
@@ -4285,15 +4304,12 @@ dependencies = [
  "margin-hub",
  "margin-note",
  "margin-ui",
- "margin-vault",
  "parley",
  "png 0.18.1",
  "pulldown-cmark",
- "rfd",
  "serde",
  "serde_json",
  "tempfile",
- "tokio",
  "wasm-bindgen",
  "web-sys",
  "web-time",
@@ -4394,6 +4410,16 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "margin-web"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "margin-editor",
+ "margin-ui",
+ "web-sys",
 ]
 
 [[package]]
@@ -7283,6 +7309,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-native-tls"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
+dependencies = [
+ "native-tls",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-rustls"
 version = "0.26.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7300,12 +7336,10 @@ checksum = "8f72a05e828585856dacd553fba484c242c46e391fb0e58917c942ee9202915c"
 dependencies = [
  "futures-util",
  "log",
- "rustls",
- "rustls-pki-types",
+ "native-tls",
  "tokio",
- "tokio-rustls",
+ "tokio-native-tls",
  "tungstenite",
- "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -7506,8 +7540,6 @@ dependencies = [
  "log",
  "native-tls",
  "rand 0.9.5",
- "rustls",
- "rustls-pki-types",
  "sha1",
  "thiserror 2.0.21",
 ]
@@ -8118,15 +8150,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "293198dcebfb821155b5092ab94b5a82ff180eddd7241df3bd6e66a4ffd1a585"
 dependencies = [
  "rustls-pki-types",
-]
-
-[[package]]
-name = "webpki-roots"
-version = "0.26.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
-dependencies = [
- "webpki-roots 1.0.12",
 ]
 
 [[package]]

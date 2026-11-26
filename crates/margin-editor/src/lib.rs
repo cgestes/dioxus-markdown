@@ -1,34 +1,34 @@
-//! Margin: the notebook editor, its comments and personal notes.
-#[cfg(not(target_arch = "wasm32"))]
-mod cli;
+//! The Markdown editor: the notebook (Rich, Live and Source views, tables,
+//! comments, undo) that an app opens in a window or a page, or embeds, as Osom
+//! does. Where a note lives is up to the app (`NoteStore`).
 mod notebook;
 mod comments;
-mod personal;
 mod platform;
 pub mod support;
-#[cfg(target_arch = "wasm32")]
-mod web;
-#[cfg(target_arch = "wasm32")]
-use web::cli;
+#[cfg(all(not(target_arch = "wasm32"), any(test, feature = "testing")))]
+pub mod testing;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use margin_ui::prelude;
 use platform::NodeHandle;
 use prelude::*;
-use margin_note::note::Note;
 use margin_editor_core::table;
 use margin_ui as ui;
 use margin_ui::typefaces;
 use notebook::*;
 
-// What a host (the Topics window, Osom) builds a notebook from.
-pub use comments::CommentAgent;
-pub use notebook::{Comments, HostAction, HostBar, NotebookOptions, View, notebook_view};
+// What an app builds a notebook from.
+pub use comments::{CommentAgent, CommentThread, seed_sample_comments};
+pub use notebook::{Comments, HostAction, HostBar, InMemory, NoteStore, NotebookOptions, Store, View, notebook_view};
 use ui::Icon;
 
+/// *Field notes*, the sample note: the demo, a new vault's first note, the tests.
+pub const SAMPLE: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x].\n\n## Listening stops\n\n| Stop | Listen for | Take |\n| :--- | :--- | ---: |\n| North lock | Water through the gate | 45 s |\n| Footbridge | Steps on the steel deck | 30 s |\n\n- [ ] Leave **ten seconds** of silence.\n- [x] Set the recorder to `48 kHz`.";
 
-const SAMPLE: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x].\n\n## Listening stops\n\n| Stop | Listen for | Take |\n| :--- | :--- | ---: |\n| North lock | Water through the gate | 45 s |\n| Footbridge | Steps on the steel deck | 30 s |\n\n- [ ] Leave **ten seconds** of silence.\n- [x] Set the recorder to `48 kHz`.";
+/// The note an app's input-check window opens (`--test-window`, `?test-window`).
+pub const INPUT_CHECK: &str = "# Input check\n\nabcd\nefgh\nijkl\nmnop\n\n| A | B |\n| --- | --- |\n| one | two |\n| three | four |";
+
 /// The editor's own styles; tokens and components come from `ui::CSS`.
 const CSS: &str = concat!(
     include_str!("notebook/editor.css"),
@@ -38,83 +38,21 @@ const CSS: &str = concat!(
     include_str!("comments/comments.css"),
 );
 
-/// The `margin` app: the notebook window.
-pub fn run() {
-    support::restart::answer_build_probe();
-    let args = cli::init();
-    let size = if args.is_gallery() {
-        (1180.0, 900.0)
-    } else {
-        (920.0, 650.0)
-    };
-    launch("Margin", size, app);
+/// The app's name, as `launch` was given it: the notebook's window titles
+/// start with it.
+static APP_TITLE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+pub(crate) fn app_title() -> &'static str {
+    APP_TITLE.get().map_or("Margin", String::as_str)
 }
 
 /// Open a window (or, in a browser, the page) titled `title` whose content is `root`.
-pub use platform::launch;
-
-fn app() -> Element {
-    let args = cli::current();
-    if args.is_gallery() {
-        return rsx! { ui::gallery::Gallery {} };
-    }
-    if args.test_window {
-        return notebook_view(
-            "# Input check\n\nabcd\nefgh\nijkl\nmnop\n\n| A | B |\n| --- | --- |\n| one | two |\n| three | four |",
-            NotebookOptions { inspect: true, ..Default::default() },
-        );
-    }
-    let inspect = args.test_editor;
-    if let Some(path) = args.sync_file.clone() {
-        return rsx! { SyncFileEditor { path, inspect } };
-    }
-    if inspect || args.demo {
-        return rsx! { SampleEditor { inspect } };
-    }
-    rsx! { personal::Desktop {} }
-}
-
-/// The sample note's options: sample comment threads unless inspecting.
-fn sample_options(inspect: bool) -> NotebookOptions {
-    NotebookOptions {
-        inspect,
-        comments: if inspect { Comments::Empty } else { Comments::Sample },
-        ..Default::default()
-    }
-}
-
-#[component]
-fn SampleEditor(inspect: bool) -> Element {
-    notebook_view(SAMPLE, sample_options(inspect))
+pub fn launch(title: &str, size: (f64, f64), root: fn() -> Element) {
+    let _ = APP_TITLE.set(title.to_owned());
+    platform::launch(title, size, root);
 }
 
 #[cfg(test)]
 fn notebook(initial: &'static str) -> Element {
     notebook_view(initial, NotebookOptions::default())
 }
-
-#[derive(Clone)]
-struct SyncFile {
-    path: std::path::PathBuf,
-    state: std::rc::Rc<margin_note::sync::NoteSync>,
-}
-
-#[component]
-fn SyncFileEditor(path: std::path::PathBuf, inspect: bool) -> Element {
-    use margin_note::sync::NoteSync;
-    let loaded = use_hook(|| {
-        let sync = match NoteSync::load_from_file(&path) {
-            Ok(sync) => sync,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => NoteSync::new(Note::new(SAMPLE), 1),
-            Err(e) => return Err(e.to_string()),
-        };
-        Ok(SyncFile { path, state: std::rc::Rc::new(sync) })
-    });
-    let file = match loaded {
-        Ok(file) => file,
-        Err(error) => return rsx! { p { role: "alert", "Couldn’t open the sync file. {error}" } },
-    };
-    use_context_provider(|| file);
-    notebook_view(SAMPLE, sample_options(inspect))
-}
-

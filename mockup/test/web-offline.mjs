@@ -1,17 +1,17 @@
-// Checks the installed web app's offline copy (crates/margin-editor/public/sw.js)
+// Checks the installed web app's offline copy (crates/margin-web/public/sw.js)
 // against a release bundle: one online visit is enough to open the notebook
 // offline, and the files of an earlier build are dropped.
 //
-//   dx bundle --web --release --package margin-editor
+//   dx bundle --web --release --package margin-web
 //   npm --prefix mockup run test:web:offline               (or pass the bundle's directory)
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
-const bundle = process.argv[2] || fileURLToPath(new URL("../../target/dx/margin/release/web/public", import.meta.url));
+const bundle = process.argv[2] || fileURLToPath(new URL("../../target/dx/margin-web/release/web/public", import.meta.url));
 const types = {
   ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".svg": "image/svg+xml",
   ".png": "image/png", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json",
@@ -38,9 +38,10 @@ try {
 
   // An earlier build left its wasm in the cache. The page registers the worker
   // only on https, so the test does it here.
-  const earlier = "/assets/margin_bg-dxh0123456789abcdef.wasm";
+  const wasmFile = (await readdir(join(bundle, "assets"))).find(name => /-dxh[0-9a-f]+\.wasm$/.test(name));
+  const earlier = `/assets/${wasmFile.replace(/-dxh[0-9a-f]+\.wasm$/, "")}-dxh0123456789abcdef.wasm`;
   await page.evaluate(async earlier => {
-    const cache = await caches.open("margin-shell-v2");
+    const cache = await caches.open("margin-shell-v3");
     await cache.put(earlier, new Response("an earlier build"));
     await navigator.serviceWorker.register("sw.js");
     await navigator.serviceWorker.ready;
@@ -48,7 +49,7 @@ try {
   // The page tells the worker what it loaded before the worker was there: the
   // worker keeps this build's script, wasm and fonts, and drops the earlier wasm.
   const cached = () => page.evaluate(async () =>
-    (await (await caches.open("margin-shell-v2")).keys()).map(request => new URL(request.url).pathname));
+    (await (await caches.open("margin-shell-v3")).keys()).map(request => new URL(request.url).pathname));
   let files = [];
   for (const deadline = Date.now() + 15000; Date.now() < deadline; await page.waitForTimeout(200)) {
     files = await cached();

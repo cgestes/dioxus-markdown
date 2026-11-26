@@ -166,11 +166,8 @@ impl Trace {
     /// session, otherwise wherever the platform keeps a file.
     fn save(&self, writing: Writing) -> io::Result<String> {
         let bytes = self.report_bytes(writing)?;
-        if let Some(session) = writing.personal.peek().as_ref() {
-            let blob = session
-                .attach_report("Editor report.json", bytes.as_slice())
-                .map_err(io::Error::other)?;
-            return Ok(format!("encrypted inbox attachment {blob}"));
+        if let Some(kept) = writing.store.peek().as_ref().and_then(|s| s.attach_report("Editor report.json", &bytes)) {
+            return kept.map_err(io::Error::other);
         }
         crate::platform::save_report(&bytes)
     }

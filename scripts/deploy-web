@@ -9,10 +9,10 @@ url=$(git -C "$root" remote get-url "$remote")
 
 # GitHub Pages serves a project site under /<repository>/.
 base=$(basename "$url" .git)
-bundle="${CARGO_TARGET_DIR:-$root/target}/dx/margin/release/web/public"
+bundle="${CARGO_TARGET_DIR:-$root/target}/dx/margin-web/release/web/public"
 # An earlier bundle's hashed files would be published again with this one.
 rm -rf "$bundle"
-(cd "$root" && dx bundle --web --release --package margin-editor --base-path "$base")
+(cd "$root" && dx bundle --web --release --package margin-web --base-path "$base")
 [ -f "$bundle/index.html" ] || { echo "No web bundle at $bundle" >&2; exit 1; }
 
 source=$(git -C "$root" rev-parse --short HEAD)

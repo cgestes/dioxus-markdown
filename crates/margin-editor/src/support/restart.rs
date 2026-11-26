@@ -18,14 +18,18 @@ const POLL_INTERVAL: Duration = Duration::from_millis(1500);
 /// exits, instead of opening a window.
 const PROBE: &str = "--build-identity";
 
-/// What this build was compiled with. Restarts only swap into the same identity.
-const IDENTITY: &str = if cfg!(feature = "vault") { "margin-editor features: vault" } else { "margin-editor features: none" };
+/// What this build is, as its app declared it (`answer_build_probe`).
+/// Restarts only swap into a build with the same identity.
+static IDENTITY: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
 
-/// Answer a running build's probe (see `same_build`) and exit. Every app that
-/// shows the notebook calls this first in `main`, before parsing its arguments.
-pub fn answer_build_probe() {
+/// Declare what this build is (the app and the features it was built with),
+/// and answer a running build's probe (see `same_build`) by printing it and
+/// exiting. Every app that shows the notebook calls this first in `main`,
+/// before parsing its arguments.
+pub fn answer_build_probe(identity: &'static str) {
+    let _ = IDENTITY.set(identity);
     if std::env::args().nth(1).as_deref() == Some(PROBE) {
-        println!("{IDENTITY}");
+        println!("{identity}");
         std::process::exit(0);
     }
 }
@@ -34,6 +38,9 @@ pub fn answer_build_probe() {
 /// that cannot answer within a few seconds (still being written, or too old to
 /// know the probe) is not.
 fn same_build(path: &Path) -> bool {
+    let Some(identity) = IDENTITY.get() else {
+        return false;
+    };
     let Ok(mut child) = Command::new(path).arg(PROBE).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
         return false;
     };
@@ -45,7 +52,7 @@ fn same_build(path: &Path) -> bool {
                 if let Some(mut stdout) = child.stdout.take() {
                     let _ = std::io::Read::read_to_string(&mut stdout, &mut out);
                 }
-                return status.success() && out.trim() == IDENTITY;
+                return status.success() && out.trim() == *identity;
             }
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(50)),
             _ => {
@@ -79,7 +86,8 @@ pub fn worktree_name() -> Option<String> {
 
 /// Shows the Restart control once a newer build of the running executable appears, and
 /// restarts into it automatically. The control stays available if the automatic restart fails.
-/// A newer build with other features (see `IDENTITY`) is ignored until the binary changes again.
+/// A newer build with another identity (see `answer_build_probe`) is ignored until the binary
+/// changes again.
 ///
 /// A plain thread polls the file and reports through a channel, so the hook does not
 /// depend on any particular async timer. The thread exits once the component unmounts.

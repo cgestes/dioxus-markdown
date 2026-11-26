@@ -1,0 +1,7 @@
+# Dioxus CLI settings for the browser app (the `margin-web` binary).
+# `dx serve --web --package margin-web`; `scripts/deploy-web` publishes a release bundle.
+[application]
+name = "Margin"
+
+[web.app]
+title = "Margin"

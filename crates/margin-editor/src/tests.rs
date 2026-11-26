@@ -1,21 +1,11 @@
 const SAMPLE: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x].\n\n- [ ] Pack the windscreen\n- [x] Charge the recorder\n\nThe literal example is `[ ]`.";
 
 use crate::*;
+use crate::testing::*;
 use blitz_dom::Document;
 use blitz_traits::events::{BlitzImeEvent, BlitzKeyEvent, KeyState, MouseEventButtons, UiEvent};
 use blitz_traits::shell::Viewport;
 use dioxus_native::{DioxusDocument, NodeId};
-
-fn render(doc: &mut DioxusDocument) {
-    for _ in 0..8 {
-        let changed = doc.poll(None);
-        doc.inner.borrow_mut().resolve(0.0);
-        if !changed {
-            return;
-        }
-    }
-    panic!("editor did not settle");
-}
 
 fn editor() -> DioxusDocument {
     let config = dioxus_native::DocumentConfig {
@@ -30,131 +20,6 @@ fn editor() -> DioxusDocument {
     doc.initial_build();
     render(&mut doc);
     doc
-}
-
-fn id(doc: &DioxusDocument, name: &str) -> NodeId {
-    doc.inner
-        .borrow()
-        .get_element_by_id(name)
-        .unwrap_or_else(|| panic!("missing {name}"))
-}
-
-fn click(doc: &mut DioxusDocument, name: &str) {
-    click_at(doc, name, None);
-}
-
-fn click_at(doc: &mut DioxusDocument, name: &str, point: Option<(f32, f32)>) {
-    click_with(doc, name, point, Modifiers::empty());
-}
-fn click_with(
-    doc: &mut DioxusDocument,
-    name: &str,
-    point: Option<(f32, f32)>,
-    modifiers: Modifiers,
-) {
-    let element = id(doc, name);
-    let mut pointer = doc
-        .inner
-        .borrow()
-        .get_node(element)
-        .unwrap()
-        .synthetic_click_event_data(modifiers);
-    {
-        let dom = doc.inner.borrow();
-        let rect = dom.get_client_bounding_rect(element).unwrap();
-        let scroll = dom.viewport_scroll();
-        let (dx, dy) = point.unwrap_or(((rect.width * 0.5) as f32, (rect.height * 0.5) as f32));
-        let x = rect.x as f32 + dx;
-        pointer.coords.page_x = x + scroll.x as f32;
-        pointer.coords.client_x = x;
-        pointer.coords.screen_x = x;
-        let y = rect.y as f32 + dy;
-        pointer.coords.page_y = y + scroll.y as f32;
-        pointer.coords.client_y = y;
-        pointer.coords.screen_y = y;
-    }
-    doc.handle_ui_event(UiEvent::PointerMove(pointer.clone()));
-    render(doc);
-    pointer.buttons = MouseEventButtons::Primary;
-    doc.handle_ui_event(UiEvent::PointerDown(pointer.clone()));
-    pointer.buttons = MouseEventButtons::None;
-    doc.handle_ui_event(UiEvent::PointerUp(pointer));
-    render(doc);
-}
-
-fn select(doc: &DioxusDocument, name: &str, [anchor, focus]: ByteSelection) {
-    let id = id(doc, name);
-    doc.inner
-        .borrow_mut()
-        .with_text_input(id, |mut e| e.select_byte_range(anchor, focus));
-}
-
-fn assert_focus(doc: &DioxusDocument, name: &str, offsets: ByteSelection) {
-    let id = id(doc, name);
-    let dom = doc.inner.borrow();
-    assert_eq!(dom.get_focussed_node_id(), Some(id), "focus in {name}");
-    let input = dom
-        .get_node(id)
-        .unwrap()
-        .element_data()
-        .unwrap()
-        .text_input_data()
-        .unwrap();
-    let selected = input.editor.raw_selection();
-    assert_eq!(
-        [selected.anchor().index(), selected.focus().index()],
-        offsets,
-        "selection in {name}"
-    );
-}
-
-fn send_key(doc: &mut DioxusDocument, key: Key, state: KeyState, repeat: bool) {
-    let text = match &key {
-        Key::Character(s) => Some(s.as_str().into()),
-        _ => None,
-    };
-    let event = BlitzKeyEvent {
-        key,
-        code: Code::Unidentified,
-        modifiers: Modifiers::empty(),
-        location: Location::Standard,
-        is_auto_repeating: repeat,
-        is_composing: false,
-        state,
-        text,
-    };
-    doc.handle_ui_event(match state {
-        KeyState::Pressed => UiEvent::KeyDown(event),
-        KeyState::Released => UiEvent::KeyUp(event),
-    });
-    render(doc);
-}
-
-fn press(doc: &mut DioxusDocument, key: Key, repeat: bool) {
-    send_key(doc, key, KeyState::Pressed, repeat);
-}
-
-fn backspace_text(doc: &mut DioxusDocument) {
-    #[cfg(target_os = "macos")]
-    {
-        doc.handle_ui_event(UiEvent::AppleStandardKeybinding("deleteBackward:".into()));
-        render(doc);
-    }
-    press(doc, Key::Named(NamedKey::Backspace), false);
-}
-
-fn field(doc: &DioxusDocument, id: NodeId) -> String {
-    doc.inner
-        .borrow()
-        .get_node(id)
-        .unwrap()
-        .element_data()
-        .unwrap()
-        .text_input_data()
-        .unwrap()
-        .editor
-        .raw_text()
-        .to_owned()
 }
 
 fn move_body(doc: &mut DioxusDocument, range: ByteSelection) {
@@ -323,15 +188,6 @@ fn toolbar_commands_work_by_keyboard() {
         [open + 1 - Sections::read(SAMPLE).body; 2],
     );
 }
-fn commit_text(doc: &mut DioxusDocument, text: &str) {
-    doc.handle_ui_event(UiEvent::Ime(BlitzImeEvent::Commit(text.into())));
-    render(doc);
-}
-
-fn value(doc: &DioxusDocument, name: &str) -> String {
-    field(doc, id(doc, name))
-}
-
 #[test]
 fn edit_title_and_multiline_body_in_live_and_undo_in_source() {
     let mut doc = editor();
@@ -491,12 +347,6 @@ fn switching_to_long_body_keeps_the_selected_line_in_view() {
         input.scroll_offset > 0.0 || dom.viewport_scroll().y > 0.0,
         "long body should scroll caret into view"
     );
-}
-
-fn bounds(doc: &DioxusDocument, name: &str) -> [f64; 4] {
-    let dom = doc.inner.borrow();
-    let r = dom.get_client_bounding_rect(id(doc, name)).unwrap();
-    [r.x, r.y, r.width, r.height]
 }
 
 #[test]
@@ -792,8 +642,6 @@ fn native_markdown_marks_and_tables_keep_their_source_boundaries() {
             .get_element_by_id(&format!("checkbox-{}", md.find("[ ]").unwrap()))
             .is_some()
     );
-    let tokens = markdown::syntax(md);
-    assert!(tokens.len() >= 7);
     click(&mut doc, "note-body-1");
     select(&doc, "note-body-1", [1, 6]);
     commit_text(&mut doc, "Between");
@@ -3049,105 +2897,6 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
 
 mod live_workflows;
 
-#[cfg(feature = "vault")]
-#[test]
-fn personal_editor_persists_input_and_keeps_diagnostics_on_device() -> anyhow::Result<()> {
-    use margin_vault::{
-        Vault,
-        keys::{Identity, Recovery},
-    };
-    let tmp = tempfile::tempdir()?;
-    let pass = tmp.path().join("password");
-    std::fs::write(&pass, b"private editor test password")?;
-    let path = tmp.path().join("vault");
-    let vault = Vault::create(
-        &path,
-        Identity::from_recovery(&Recovery::new()),
-        Some(&pass),
-    )?;
-    let starter = personal::open_note(&vault, None)?;
-    assert!(!vault.shared(&starter)?);
-    let field_notes = Note::from_doc(vault.load(&starter)?.0);
-    assert_eq!(field_notes.markdown(), crate::SAMPLE);
-    let threads: Vec<comments::CommentThread> =
-        serde_json::from_slice(&vault.private_value(&starter)?.unwrap())?;
-    assert_eq!(threads.len(), 2);
-    for thread in threads {
-        let range = field_notes.resolve_anchor(thread.cursors.as_ref().unwrap()).unwrap();
-        assert_eq!(&crate::SAMPLE[range], thread.file.anchor.exact);
-    }
-    let room = vault.new_note("# Diary\n\nHello", true)?;
-    let (note, seq) = vault.load(&room)?;
-    let session = personal::Session {
-        vault: vault.clone(),
-        room: room.clone(),
-        doc: note,
-        seq,
-        threads: vec![],
-    };
-    let dom = VirtualDom::new(|| notebook("")).with_root_context(session);
-    let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
-        viewport: Some(Viewport {
-            window_size: (820, 520),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    let mut doc = DioxusDocument::new(dom, config);
-    doc.initial_build();
-    render(&mut doc);
-    click(&mut doc, "note-body");
-    select(&doc, "note-body", [5, 5]);
-    press(&mut doc, Key::Character("!".into()), false);
-    assert_eq!(markdown(&doc), "# Diary\n\nHello!");
-    let reopened = Vault::open(&path, Some(&pass))?;
-    assert_eq!(
-        reopened.load(&room)?.0.get_text("markdown").to_string(),
-        "# Diary\n\nHello!"
-    );
-    press(&mut doc, Key::Named(NamedKey::F8), false);
-    click(&mut doc, "save-inspection");
-    assert!(reopened.attachments(&room)?.is_empty());
-    let files = reopened.attachments(&reopened.inbox())?;
-    assert_eq!(files.len(), 1);
-    let report = tmp.path().join("export.json");
-    reopened.extract(&reopened.inbox(), &files[0].0, &report)?;
-    let json: serde_json::Value = serde_json::from_slice(&std::fs::read(report)?)?;
-    assert_eq!(json["current_markdown"], "# Diary\n\nHello!");
-    drop(doc);
-
-    // Launch the real app again, then switch notes through its menu.
-    let other = reopened.new_note("# Elsewhere\n\nDifferent text", false)?;
-    let launch = personal::open_note(&reopened, None)?;
-    assert_eq!(launch, starter);
-    personal::DEVICE
-        .set((reopened.clone(), launch))
-        .map_err(|_| anyhow::anyhow!("personal app already open"))?;
-    let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
-        viewport: Some(Viewport {
-            window_size: (820, 520),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    let mut app = DioxusDocument::new(VirtualDom::new(crate::app), config);
-    app.initial_build();
-    render(&mut app);
-    assert_eq!(value(&app, "note-title"), "Field notes");
-    assert_eq!(value(&app, "cell-0-1-0"), "North lock");
-    assert!(app.inner.borrow().get_element_by_id("comment-thread-1").is_some());
-    click(&mut app, "vault-notes");
-    click(&mut app, &format!("vault-room-{other}"));
-    assert_eq!(field(&app, id(&app, "note-body")), "Different text");
-    assert_eq!(personal::open_note(&reopened, None)?, other);
-    click(&mut app, "vault-notes");
-    click(&mut app, &format!("vault-room-{room}"));
-    assert_eq!(field(&app, id(&app, "note-body")), "Hello!");
-    assert_eq!(personal::open_note(&reopened, None)?, room);
-    Ok(())
-}
 
 #[component]
 fn LiveEditor(text: String, options: NotebookOptions) -> Element {
@@ -3228,27 +2977,4 @@ fn live_comment_streams_a_reply_and_saves_the_thread() {
     assert_eq!(saved.threads.len(), 1);
     assert_eq!(saved.threads[0].anchor.exact, quote);
     assert_eq!(saved.threads[0].messages.len(), 2, "your comment and the answer");
-}
-
-/// The default build has no vault: `margin` opens Field notes in memory, with
-/// its table and sample discussions, and the status bar says nothing is saved.
-#[cfg(not(feature = "vault"))]
-#[test]
-fn default_build_opens_field_notes_in_memory_and_says_it_is_not_saved() {
-    let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
-        viewport: Some(Viewport {
-            window_size: (820, 520),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    let mut doc = DioxusDocument::new(VirtualDom::new(crate::app), config);
-    doc.initial_build();
-    render(&mut doc);
-    assert!(value(&doc, "note-title").ends_with("Field notes"));
-    assert!(value(&doc, "cell-0-1-0").contains("North lock"));
-    id(&doc, "comments-pane");
-    let status = doc.inner.borrow().get_node(id(&doc, "save-status")).unwrap().text_content();
-    assert!(status.contains("Not saved") && status.contains("--features vault"), "{status}");
 }

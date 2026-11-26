@@ -1,6 +1,8 @@
 // Offline copy of the notebook for the installed web app. Only the app's own
 // files are cached; notes never pass through here.
-const CACHE = "margin-shell-v2";
+// v3: the web app's files are named `margin-web…` now; activating drops the
+// v2 cache with the earlier `margin…` names, which no stem below would match.
+const CACHE = "margin-shell-v3";
 const SHELL = ["./", "manifest.webmanifest", "icon.svg", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 // The bundler names the script, the wasm and the fonts after a hash of their
 // content: a file with such a name never changes, and a new build has new names.

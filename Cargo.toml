@@ -6,6 +6,8 @@ members = [
     "crates/margin-hub",
     "crates/margin-ui",
     "crates/margin-editor",
+    "crates/margin",
+    "crates/margin-web",
     "crates/osom",
 ]
 resolver = "3"
@@ -29,7 +31,7 @@ web-time = "1"
 # and carry line tables only: backtraces keep file and line, builds and links
 # skip full debug info. Workspace crates keep full debug info. Every command
 # (cargo run, cargo test, scripts/test-editor) shares these dependency builds;
-# only a crate whose features differ (margin-editor with `vault`) builds twice.
+# only a crate whose features differ (margin with `vault`) builds twice.
 [profile.dev.package."*"]
 opt-level = 2
 debug = "line-tables-only"
