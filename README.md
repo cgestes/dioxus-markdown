@@ -1,6 +1,6 @@
 # Margin · a Rust Markdown notebook
 
-Margin is a live Markdown notebook built with Dioxus Native and Loro. Run `cargo run --locked -p margin-editor` to open the desktop editor. A fresh notebook opens *Field notes* with its editable checklist, listening table, and two anchored discussions. Edits are encrypted on your device. Margin reopens your selected note on the next launch. The browser mockup also supports two-writer sessions and inline agent proposals.
+Margin is a live Markdown notebook built with Dioxus Native and Loro. Run `cargo run --locked -p margin-editor` to open the desktop editor on *Field notes*, a sample note with an editable checklist, a listening table and two anchored discussions, kept in memory. Build with the `vault` feature (`cargo run --locked -p margin-editor --features vault`) to keep your notes encrypted on your device: Margin then reopens your selected note on the next launch. The browser mockup also supports two-writer sessions and inline agent proposals.
 
 Both editors use the same table stylesheet, and so does every read-only view. A light header with small muted labels sits above a single rule, fine horizontal rules separate the rows, and the accent appears only for focus and selection. The first left-aligned column uses a medium weight, descriptions use the body sans, and right-aligned values use the mono font. Columns keep their widths while you type. The browser wraps long descriptions at the same positions in reading and editing. [Table styles](assets/table.css) · [Desktop](mockup/native-table.png) · [Browser](mockup/preview.png) · [Phone](mockup/table-mobile.png)
 
@@ -9,11 +9,13 @@ Both editors use the same table stylesheet, and so does every read-only view. A 
 
 ## Personal vault
 
+The personal vault needs the editor's `vault` feature: `cargo run --locked -p margin-editor --features vault`. Without it, `margin` opens *Field notes* in memory, and its status bar says nothing is saved.
+
 **Notes** lists your notes, creates a device-only note, attaches a file, and exports an attachment. The first time an older vault resumes, Margin opens its most recently created note or its existing inbox if you wrote there. If vault access fails, **Try again** retries the unlock. **Open Field notes demo** opens an in-memory copy for that session.
 
 **Sync a copy of current text** starts a fresh Loro document with the current Markdown. Earlier drafts, existing files and private conversations stay on the original device. Files attached to the new copy sync with its edits. F9 saves private inspector reports as encrypted files in the device inbox. Reopen a specific note with `--note ID`. Give the GUI `--vault PATH` and the CLI `--dir PATH` to select the same nondefault device directory.
 
-`cargo run --locked -p margin-editor -- --sync-file PATH` opens a standalone Loro history file. This explicit file mode reads and writes unencrypted local JSON. Ordinary desktop launches store personal notes in the encrypted vault.
+`cargo run --locked -p margin-editor -- --sync-file PATH` opens a standalone Loro history file. This explicit file mode reads and writes unencrypted local JSON, with or without the `vault` feature.
 
 In the browser, choose **Private notebook** in the sidebar and set a passphrase. **Lock notebook** requires it again. **Collaborate → Pair device** accepts a separate invitation issued for this browser. Paired notes then appear in the sidebar. **Attachments** imports and explicitly exports files. Use the same browser profile and origin to reopen the notebook. The fieldwork demo uses an origin-stored key for automatic access. Private mode derives its key from the passphrase each time. [Browser notebook](mockup/index.html)
 
@@ -70,7 +72,7 @@ On **Today**, **Key dates** shows the next three weeks of entries from the `Key 
 
 Run `./scripts/test-editor --inspect` to open a fresh native note, or double-click the [macOS inspector launcher](scripts/inspect-editor.command). In an existing Live note, click in the text and press **F8** to toggle the inspector. On keyboards with media keys, use **Fn+F8** and **Fn+F9**. [Inspector preview](mockup/native-inspector.png)
 
-The inspector colors headings, blank lines and prose, outlines table controls and paints the active caret magenta. The header shows the focused field, Markdown line and column, directed UTF-8 byte selection and latest input. The native window title keeps the position visible when the header scrolls away. **Save report** or **F9** captures a JSON report with the starting and current Markdown, focus, text selection, selected table corners, field and caret rectangles, window scale and the last 48 groups of inputs. A frame can contain several inputs between draws. The launcher writes reports under `target/editor-tests/reports`. In a personal vault the report is an encrypted inbox attachment. In demo mode the default is the system temporary directory under `margin-reports`. Set `MARGIN_REPORT_DIR` for demo or test reports. Existing plaintext exports and inspector files from earlier versions remain in their original locations.
+The inspector colors headings, blank lines and prose, outlines table controls and paints the active caret magenta. The header shows the focused field, Markdown line and column, directed UTF-8 byte selection and latest input. The native window title keeps the position visible when the header scrolls away. **Save report** or **F9** captures a JSON report with the starting and current Markdown, focus, text selection, selected table corners, field and caret rectangles, window scale and the last 48 groups of inputs. A frame can contain several inputs between draws. The launcher writes reports under `target/editor-tests/reports`. In a personal vault the report is an encrypted inbox attachment. Otherwise, as in demo mode or any build without the `vault` feature, it is a plain JSON file readable only by you, in the system temporary directory under `margin-reports`. Set `MARGIN_REPORT_DIR` for demo or test reports. Existing plaintext exports and inspector files from earlier versions remain in their original locations.
 
 | Command | What it exercises |
 | --- | --- |
@@ -104,7 +106,7 @@ The same Rust parser supplies the reading layout and the source range for each d
 
 The browser encrypts Loro updates in IndexedDB and encrypts updates and cursor presence between tabs. A one-time migration verifies the encrypted copies before clearing the old Loro rows. Opening an older fieldwork notebook also archives each original Yjs update under an origin-local key, preserving the exact update bytes and retiring its plaintext in the same transaction. The HTML includes the Rust checkbox module, Loro, fonts, scripts, icons, and distribution notices.
 
-For a consistent origin across tabs, run `python3 -m http.server 4327 --bind 127.0.0.1 --directory mockup` and open the loopback preview. To rebuild, install the Rust target with `rustup target add wasm32-unknown-unknown`, then run `npm ci` and `npm run build` inside `mockup`. Run `npm test` there for browser editing regressions and `cargo test --locked --workspace` at the repository root for the Rust model and Dioxus Native keyboard tests. [Open Before the walk](http://127.0.0.1:4327/index.html#departure)
+For a consistent origin across tabs, run `python3 -m http.server 4327 --bind 127.0.0.1 --directory mockup` and open the loopback preview. To rebuild, install the Rust target with `rustup target add wasm32-unknown-unknown`, then run `npm ci` and `npm run build` inside `mockup`. Run `npm test` there for browser editing regressions and `cargo test --locked --workspace --all-features` at the repository root for the Rust model and Dioxus Native keyboard tests. [Open Before the walk](http://127.0.0.1:4327/index.html#departure)
 
 In a local Orca browser run with two Loro editors connected, 20 keystrokes in the middle of a 100-row, eight-column table kept the same focused cell input and its vertical position. Time from `beforeinput` through the cell update and a synchronous layout read was 4.9 ms at the median and 8.0 ms at the 95th percentile. Concurrent same-cell typing, adding and undoing a column, and rectangular paste also converged in both tabs.
 
@@ -131,7 +133,7 @@ Dioxus Native and Loro can support this editor. The weak point in the first prot
 
 Live uses multiple native text inputs. Split provides a baseline with one native input for the same document. Compare both on dragging beyond the viewport, marked-text composition with a real IME, and selection announcements through VoiceOver before choosing a default. The automated suite covers native IME events, a long 2× viewport, Unicode, CRLF, escaped pipes and backward selections. Native two-window editing and typing latency on large tables remain unverified.
 
-Run `cargo test --locked --workspace` for the Rust input and storage tests. Run `npm --prefix mockup test` for browser model tests. With Chrome installed, `npm --prefix mockup run build` followed by `npm --prefix mockup run test:browser` drives real pointer gestures, selection, typing and undo. It also checks that a second writer can change a heading while the first edits a cell. After building the CLI and browser, run `npm --prefix mockup run test:vault` for browser/native encrypted sync and file interoperability.
+Run `cargo test --locked --workspace --all-features` for the Rust input and storage tests; `--all-features` includes the personal vault. Run `npm --prefix mockup test` for browser model tests. With Chrome installed, `npm --prefix mockup run build` followed by `npm --prefix mockup run test:browser` drives real pointer gestures, selection, typing and undo. It also checks that a second writer can change a heading while the first edits a cell. After building the CLI and browser, run `npm --prefix mockup run test:vault` for browser/native encrypted sync and file interoperability.
 
 ## Native architecture
 
@@ -143,7 +145,7 @@ Run `cargo test --locked --workspace` for the Rust input and storage tests. Run 
 | Files and sync | Native vaults store encrypted Loro records and file chunks in SQLite. A durable outbox and cursor resume interrupted transfers. Devices provide full checkpoints and the relay prunes the covered history. |
 | Inline agent | Keep the prompt and proposed diff private until acceptance. Resolve relative positions and compare the original passage before committing one undoable edit. |
 
-The native study pins Dioxus main at `0a7242a` with Blitz `0.3.0-beta.4`. This revision applies DOM mutations after Dioxus finishes rendering, so a component can access the native editor from an effect to restore its selection. When updating the pin, run `cargo test --locked --workspace` to exercise pointer, keyboard, and text input across the two views. [Pinned Dioxus renderer](https://github.com/DioxusLabs/dioxus/tree/0a7242a2a72b08975584bf8ecb05076a5ee0b9c7/packages/native) · [Upstream mutation handling change](https://github.com/DioxusLabs/dioxus/pull/5943)
+The native study pins Dioxus main at `0a7242a` with Blitz `0.3.0-beta.4`. This revision applies DOM mutations after Dioxus finishes rendering, so a component can access the native editor from an effect to restore its selection. When updating the pin, run `cargo test --locked --workspace --all-features` to exercise pointer, keyboard, and text input across the two views. [Pinned Dioxus renderer](https://github.com/DioxusLabs/dioxus/tree/0a7242a2a72b08975584bf8ecb05076a5ee0b9c7/packages/native) · [Upstream mutation handling change](https://github.com/DioxusLabs/dioxus/pull/5943)
 
 ### Crates
 
@@ -153,12 +155,14 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | --- | --- | --- |
 | `margin-editor-core` (root) | Markdown editing commands, the preview model, the topic and comment formats. No I/O. The browser study builds it to wasm. | none |
 | `crates/margin-note` | `Note` (a Loro document) and the standalone sync file | Loro |
-| `crates/margin-vault` | The encrypted vault: keys, SQLite storage, relay and sync | crypto, SQLite, tokio |
+| `crates/margin-vault` | The encrypted vault: keys, SQLite storage, relay and sync. `margin` uses it only with `--features vault`. | crypto, SQLite, tokio |
 | `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token | HTTP, WebSocket |
 | `crates/margin-ui` | The design system: tokens, components, fonts, the gallery | Dioxus |
 | `crates/margin-editor` | The notebook editor (`margin`) and the API a host embeds it with | Dioxus Native, Blitz |
 | `crates/osom` | The Topics window (`osom`) | |
 | `crates/margin-vault-cli` | `margin-vault`, the vault from the terminal | |
+
+Loro is the document model in every build: it merges your edits with an agent's and gives undo that restores the selection. [Why Loro stays](docs/decisions/0001-loro-is-the-document-model.md)
 
 `margin-ui` depends only on the pure core, so vault, sync or agent changes never rebuild it. `margin --help`, `osom --help` and `margin-vault --help` list each binary's options.
 

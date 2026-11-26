@@ -3164,6 +3164,7 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
 
 mod live_workflows;
 
+#[cfg(feature = "vault")]
 #[test]
 fn personal_editor_persists_input_and_keeps_diagnostics_on_device() -> anyhow::Result<()> {
     use margin_vault::{
@@ -3342,4 +3343,27 @@ fn live_comment_streams_a_reply_and_saves_the_thread() {
     assert_eq!(saved.threads.len(), 1);
     assert_eq!(saved.threads[0].anchor.exact, quote);
     assert_eq!(saved.threads[0].messages.len(), 2, "your comment and the answer");
+}
+
+/// The default build has no vault: `margin` opens Field notes in memory, with
+/// its table and sample discussions, and the status bar says nothing is saved.
+#[cfg(not(feature = "vault"))]
+#[test]
+fn default_build_opens_field_notes_in_memory_and_says_it_is_not_saved() {
+    let config = dioxus_native::DocumentConfig {
+        font_ctx: Some(typefaces::notebook_fonts()),
+        viewport: Some(Viewport {
+            window_size: (820, 520),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut doc = DioxusDocument::new(VirtualDom::new(crate::app), config);
+    doc.initial_build();
+    render(&mut doc);
+    assert!(value(&doc, "note-title").ends_with("Field notes"));
+    assert!(value(&doc, "cell-0-1-0").contains("North lock"));
+    id(&doc, "comments-pane");
+    let status = doc.inner.borrow().get_node(id(&doc, "save-status")).unwrap().text_content();
+    assert!(status.contains("Not saved") && status.contains("--features vault"), "{status}");
 }

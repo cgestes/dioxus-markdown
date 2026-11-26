@@ -216,9 +216,11 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let personal = use_signal(try_consume_context::<personal::Session>);
     let menu = use_hook(try_consume_context::<personal::Menu>);
     let sync_file = use_hook(try_consume_context::<SyncFile>);
+    // Nothing keeps the note: no vault session, no sync file, no host saving its page.
+    let unsaved = personal.peek().is_none() && sync_file.is_none() && !embedded;
     let note = use_signal(|| {
         if let Some(s) = personal.peek().as_ref() {
-            Note::from_doc(s.doc.clone())
+            s.note()
         } else if let Some(file) = &sync_file {
             Note::from_doc(file.state.note().document().clone())
         } else {
@@ -228,7 +230,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let vault_status = personal::use_persistence(personal.peek().clone(), note);
     let comments = use_signal(move || {
         if let Some(s) = personal.peek().as_ref() {
-            s.threads.clone()
+            s.threads()
         } else if seed_comments {
             crate::comments::seed_sample_comments(&note.peek())
         } else {
@@ -259,7 +261,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 .map_err(anyhow::Error::from)
                 .and_then(|bytes| {
                     if *prior != bytes {
-                        personal::save_discussion(&s.vault, &s.room, &prior, &bytes)?;
+                        s.save_discussion(&prior, &bytes)?;
                         *prior = bytes;
                     }
                     Ok(())
@@ -762,6 +764,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
             if view() != View::Split {
                 footer { class: "statusbar",
                     if personal.peek().is_some() { span { class: "vault-status", "{vault_status}" } }
+                    if unsaved { span { id: "save-status", class: "vault-status", "{personal::UNSAVED}" } }
                     span { class: "status-words", {
                         let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();
                         format!("{words} {}", if words == 1 { "word" } else { "words" })

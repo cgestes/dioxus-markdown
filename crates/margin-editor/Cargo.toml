@@ -17,7 +17,7 @@ path = "src/main.rs"
 margin-editor-core = { path = "../.." }
 margin-hub = { path = "../margin-hub" }
 margin-note = { path = "../margin-note" }
-margin-vault = { path = "../margin-vault" }
+margin-vault = { path = "../margin-vault", optional = true }
 margin-ui = { path = "../margin-ui" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
@@ -28,11 +28,18 @@ dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a724
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
 parley = { version = "=0.12.0", default-features = false }
 webbrowser = "1.2"
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"], optional = true }
 pulldown-cmark = { version = "0.13", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 futures-channel = "0.3"
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "signal"], optional = true }
+
+[features]
+default = []
+# The personal notebook on the encrypted vault (SQLite, crypto, keychain, relay
+# sync). Without it, `margin` opens the Field notes sample, and `--sync-file`
+# still keeps a note in a local Loro file.
+vault = ["dep:margin-vault", "dep:rfd", "dep:tokio"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 blitz-shell = { version = "=0.3.0-beta.4", default-features = false }

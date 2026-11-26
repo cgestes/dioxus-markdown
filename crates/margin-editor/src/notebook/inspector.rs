@@ -168,12 +168,7 @@ impl Trace {
         let bytes = self.report_bytes(writing)?;
         if let Some(session) = writing.personal.peek().as_ref() {
             let blob = session
-                .vault
-                .attach(
-                    &session.vault.inbox(),
-                    "Editor report.json",
-                    bytes.as_slice(),
-                )
+                .attach_report("Editor report.json", bytes.as_slice())
                 .map_err(io::Error::other)?;
             return Ok(PathBuf::from(format!("encrypted inbox attachment {blob}")));
         }
@@ -183,7 +178,12 @@ impl Trace {
             .map_err(io::Error::other)?
             .as_nanos();
         let path = dir.join(format!("margin-{time}-{}.json", std::process::id()));
-        let mut file = std::fs::File::create_new(&path)?;
+        // The report holds the note's text: readable by its owner only.
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        let mut file = options.open(&path)?;
         file.write_all(&bytes)?;
         Ok(path)
     }

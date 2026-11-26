@@ -37,6 +37,7 @@ const CSS: &str = concat!(
 
 /// The `margin` app: the notebook window.
 pub fn run() {
+    support::restart::answer_build_probe();
     let args = cli::init();
     let size = if args.is_gallery() {
         (1180.0, 900.0)

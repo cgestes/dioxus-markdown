@@ -9,8 +9,9 @@
 
 ### Personal vaults
 
-The desktop opens *Field notes* in a fresh vault, with its checklist, listening table
-and two anchored discussions saved on the device. Desktop note selection is local
+Built with the editor's `vault` feature, the desktop opens *Field notes* in a fresh vault,
+with its checklist, listening table and two anchored discussions saved on the device.
+Without the feature it opens the same note in memory. Desktop note selection is local
 and survives a restart. An existing vault with notes resumes its own content.
 
 Devices edit Loro in memory and persist authenticated ciphertext. New personal notes,
@@ -177,8 +178,8 @@ preserves concurrent edits and a recovery window.
   - Cross-field drags deduplicate unchanged spans, guard unchanged signal writes in `Writing::open`, defer `FormatBar` until mouse-up, and skip height measurements while dragging.
   - Non-render paths use `projection_peek` (reading `Memo`s via `.read()` so dirty memos recompute, while reading `Signal`s via `.peek()` to avoid reactive subscriptions).
 - **Quality Bar:**
-  - `cargo check --locked -p margin-editor --bin margin` must pass with **0 warnings**.
-  - `cargo test --locked --workspace` must pass 100%.
+  - `cargo check --locked --workspace --all-targets` must pass with **0 warnings**, with and without `--all-features` (the editor's `vault` feature).
+  - `cargo test --locked --workspace` must pass 100%, both with and without `--all-features` (only the build without the vault compiles `personal/off.rs`).
   - Visual changes must be verified by inspecting rendered PNG screenshots from `MARGIN_TEST_ARTIFACTS`.
 
 ---
