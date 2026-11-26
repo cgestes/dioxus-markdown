@@ -10,7 +10,7 @@ These follow the product principles in `SPEC.md` §1.
 
 1. **Calm paper.** A warm page, thin rules, one accent (pine). No heavy chrome: a control appears where it is used, and quiet actions stay quiet (ghost and link buttons) until hovered.
 2. **One source for each look.** A colour, radius, space or type size is a token in `theme.css`. A button, card, row, checkbox or block of Markdown looks the same wherever it appears, because it is the same component.
-3. **Markdown reads the same everywhere.** Read-only Markdown (a topic's page, a chat reply, a transcript, a comment) goes through the editor crate's `MarkdownView`, which uses the notebook's reading projection (`preview::document`) and the editor's table markup.
+3. **Markdown reads the same everywhere.** Read-only Markdown (a topic's page, a chat reply, a transcript, a comment) goes through the editor crate's `MarkdownView`, which uses the notebook's reading projection (`margin_projection::reading`) and the editor's table markup.
 4. **Features compose; they don't restyle.** Features compose `margin-ui` components and Tailwind v4 utilities using tokens from `tailwind.in.css` / `theme.css`. Hand-written CSS stays limited to low-level editor surface/overlay rules (`editor.css`), data-table geometry (`table.css`), read-only Markdown prose (`ui.css`), debug overlays (`inspector.css`), and browser quirks (`web.css`).
 
 ## Tokens (`crates/margin-ui/assets/theme.css`)

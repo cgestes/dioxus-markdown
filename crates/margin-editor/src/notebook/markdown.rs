@@ -3,10 +3,8 @@ use super::ui::{Button, Combobox, ComboboxItem, Icon, Menu, MenuItem, Variant, i
 use super::{Field, Writing, report};
 use crate::platform::text::{self, Cluster};
 use crate::prelude::*;
-use margin_editor_core::{
-    callout::CalloutKind,
-    syntax::{available_languages, display_language},
-};
+use margin_editor_core::callout::CalloutKind;
+use margin_projection::syntax::{available_languages, display_language};
 use margin_projection::style::*;
 use std::ops::Range;
 #[derive(Clone, Copy, PartialEq, Debug)]

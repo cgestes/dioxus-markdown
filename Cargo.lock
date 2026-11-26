@@ -4342,7 +4342,6 @@ dependencies = [
  "pulldown-cmark",
  "serde",
  "serde_json",
- "two-face",
  "web-time",
 ]
 
@@ -4376,6 +4375,7 @@ version = "0.1.0"
 dependencies = [
  "margin-editor-core",
  "pulldown-cmark",
+ "two-face",
 ]
 
 [[package]]
@@ -5221,6 +5221,7 @@ name = "osom-topics"
 version = "0.1.0"
 dependencies = [
  "margin-editor-core",
+ "margin-projection",
  "pulldown-cmark",
  "serde",
  "serde_json",

@@ -157,9 +157,9 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | Crate | Holds | Heavy dependencies |
 | --- | --- | --- |
 | `crates/workspace-hack` | No code: it pins the dependency features that builds would otherwise resolve differently, so `cargo run`, a vault build and `cargo test` share one compile of Dioxus, Blitz and the workspace crates | none |
-| `margin-editor-core` (root) | Markdown editing commands, the preview model, the comment format, page titles and dates, and the interfaces to an agent (`agent::AgentChat`) and to versioned files on a server (`files::PageFiles`). No I/O. It builds for native and for wasm. | none |
+| `margin-editor-core` (root) | What every crate shares: edits to Markdown source, the comment file and what an agent is asked about a comment, page titles and dates, and the interfaces to an agent (`agent::AgentChat`) and to versioned files on a server (`files::PageFiles`). No I/O. It builds for native and for wasm. | none |
 | `crates/margin-note` | `Note` (a Loro document) and the standalone sync file | Loro |
-| `crates/margin-projection` | The editor's Markdown model, no UI: what a field shows and how its edits map back to the source, title and body, blocks, list continuation, span styles, link cards. Its tests build no renderer. | none |
+| `crates/margin-projection` | Markdown as it is shown, no UI. For editing: what a field shows and how its edits map back to the source, title and body, blocks, list continuation, span styles, link cards. For reading: lines of styled runs, and tables. Both highlight code on native builds. Its tests build no renderer. | the highlighter's grammars (native) |
 | `crates/margin-vault` | The encrypted vault: keys, SQLite storage, relay and sync. `margin` uses it only with `--features vault`. | crypto, SQLite, tokio |
 | `crates/osom-topics` | Osom's model: the topics of the agent's space, its chats and reminders. It parses; the hub does the I/O. | none |
 | `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token. It implements the core's agent and page-file interfaces. | HTTP, WebSocket |

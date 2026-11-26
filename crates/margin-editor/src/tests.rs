@@ -2823,16 +2823,16 @@ fn callouts_render_insert_via_slash_and_empty_bar_and_continue_on_enter() {
     click(&mut doc, "undo");
     assert!(markdown(&doc).ends_with("> [!NOTE]\n> "));
 
-    // 5. Read-only preview::document classifies callouts with kind and header badge.
-    let blocks = margin_editor_core::preview::document(MD);
+    // 5. The reading projection classifies callouts with kind and header badge.
+    let blocks = margin_projection::reading::read(MD);
     assert!(blocks.iter().any(|b| matches!(
         b,
-        margin_editor_core::preview::Block::Text { passage }
+        margin_projection::reading::Block::Text { passage }
             if passage.kind.contains("callout-note") && passage.kind.contains("callout-head")
     )));
     assert!(blocks.iter().any(|b| matches!(
         b,
-        margin_editor_core::preview::Block::Text { passage }
+        margin_projection::reading::Block::Text { passage }
             if passage.kind.contains("callout-tip")
                 && passage.runs.iter().any(|r| r.text.contains("Quick check"))
     )));
@@ -2857,10 +2857,10 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
 
     // 1. Highlight delimiters collapse tightly at rest in Live/Rich mode and read-only preview splits highlight runs.
     assert!(!value(&doc, "note-body").contains("=="));
-    let preview_blocks = margin_editor_core::preview::document(MD);
+    let preview_blocks = margin_projection::reading::read(MD);
     assert!(preview_blocks.iter().any(|b| matches!(
         b,
-        margin_editor_core::preview::Block::Text { passage }
+        margin_projection::reading::Block::Text { passage }
             if passage
                 .runs
                 .iter()

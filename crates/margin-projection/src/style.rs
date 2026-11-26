@@ -1,7 +1,7 @@
 //! The style flags of a display token: one bit per kind of Markdown span or
 //! marker, so a token inside bold link text carries `STRONG | LINK`.
 use margin_editor_core::callout::CalloutKind;
-use margin_editor_core::syntax::HighlightKind;
+use crate::syntax::HighlightKind;
 
 pub const STRONG: u32 = 1;
 pub const ITALIC: u32 = 2;

@@ -1,11 +1,11 @@
 //! Read-only Markdown, in the notebook's reading projection
-//! (`preview::document`): the same lines, spans and tables everywhere. The
+//! (`margin_projection::reading`): the same lines, spans and tables everywhere. The
 //! styles are the design system's (`.ui-md`); the Markdown is read here, so
 //! the design system knows none.
 use crate::prelude::*;
 use crate::ui::{Icon, icon};
 use margin_editor_core::callout::CalloutKind;
-use margin_editor_core::preview::{self, Block, Passage};
+use margin_projection::reading::{self, Block, Passage};
 
 /// The glyph of a GFM/Obsidian callout, in the editor and in reading.
 pub(crate) const fn callout_icon(kind: CalloutKind) -> Icon {
@@ -53,7 +53,7 @@ fn runs(p: &Passage) -> Element {
 /// text is not parsed again.
 #[component]
 pub fn MarkdownView(text: String, #[props(default)] compact: bool) -> Element {
-    let blocks = preview::document(&text);
+    let blocks = reading::read(&text);
     rsx! {
         div { class: "ui-md", class: if compact { "compact" },
             for (i, block) in blocks.iter().enumerate() {

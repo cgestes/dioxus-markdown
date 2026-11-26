@@ -10,11 +10,11 @@ use crate::style::{
     BULLET, CALLOUT_ANY, CALLOUT_TITLE, CODE, CODE_BLOCK, DONE, HEADING, HIGHLIGHT, ITALIC, LINK,
     INLINE, PUNCTUATION, QUOTE, QUOTE_MARK, RULE, STRIKE, STRONG, callout_style, syntax_style,
 };
+use crate::syntax::highlight_code;
 use margin_editor_core::{
     callout::{ParsedCallout, parse_callouts, strip_quote_marker},
     checkbox::{Marker, marker_beside},
     edit::{Splice, text_change},
-    syntax::highlight_code,
     table,
 };
 use pulldown_cmark::{CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};

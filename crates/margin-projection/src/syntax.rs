@@ -1,10 +1,11 @@
-//! Optional syntax highlighting for fenced code blocks.
+//! Syntax highlighting for fenced code blocks.
 //!
-//! When the `syntax-highlighting` Cargo feature is enabled, highlighting is
-//! powered by `two-face`'s pure-Rust `syntect` grammar bundle (`syntect-fancy`)
-//! and mapped into a compact set of semantic [`HighlightKind`] classes styled
-//! with CSS variables in `theme.css`. When disabled (e.g. for slim WASM
-//! builds), [`highlight_code`] is a zero-cost no-op.
+//! Native builds highlight with `two-face`'s pure-Rust `syntect` grammar
+//! bundle (`syntect-fancy`), mapped into a compact set of semantic
+//! [`HighlightKind`] classes styled with CSS variables in `theme.css`. A
+//! browser build leaves the grammars out (a smaller wasm): there
+//! [`highlight_code`] returns nothing. The target decides, so no two builds
+//! of one target can disagree.
 use std::ops::Range;
 
 /// Semantic syntax token category mapped to a `.tok-*` CSS class.
@@ -115,7 +116,7 @@ const CURATED_LANGUAGES: &[(&str, &str, &[&str])] = &[
 ];
 
 /// Returns all available syntax options (popular languages first, followed by
-/// the remaining grammars bundled in `two-face` when `syntax-highlighting` is enabled).
+/// the remaining grammars bundled in `two-face` on native builds).
 pub fn available_languages() -> &'static [LanguageOption] {
     static ALL: std::sync::OnceLock<Vec<LanguageOption>> = std::sync::OnceLock::new();
     ALL.get_or_init(|| {
@@ -128,7 +129,7 @@ pub fn available_languages() -> &'static [LanguageOption] {
                 aliases: aliases.iter().map(|a| (*a).to_owned()).collect(),
             })
             .collect();
-        #[cfg(feature = "syntax-highlighting")]
+        #[cfg(not(target_arch = "wasm32"))]
         imp::append_extra_languages(&mut out);
         out
     })
@@ -194,18 +195,18 @@ pub fn display_language(lang: &str) -> String {
 /// relative to `code`.
 ///
 /// Returns an empty `Vec` when `lang` is empty or unrecognized, `code` is
-/// empty, or the `syntax-highlighting` feature is not enabled.
-#[cfg(not(feature = "syntax-highlighting"))]
+/// empty, or the build is for a browser.
+#[cfg(target_arch = "wasm32")]
 pub fn highlight_code(_lang: &str, _code: &str) -> Vec<HighlightSpan> {
     Vec::new()
 }
 
-#[cfg(feature = "syntax-highlighting")]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn highlight_code(lang: &str, code: &str) -> Vec<HighlightSpan> {
     imp::highlight_code(lang, code)
 }
 
-#[cfg(feature = "syntax-highlighting")]
+#[cfg(not(target_arch = "wasm32"))]
 mod imp {
     use super::{HighlightKind, HighlightSpan};
     use std::collections::hash_map::DefaultHasher;
@@ -530,7 +531,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "syntax-highlighting")]
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn highlights_rust_typescript_and_toml_with_valid_byte_ranges() {
         let rust = "// greet\nfn main() {\n    let msg = \"hi\";\n    let n = 42;\n}";
@@ -554,11 +555,5 @@ mod tests {
         let toml = "[package]\nname = \"margin\"\n";
         let toml_spans = highlight_code("toml", toml);
         assert!(toml_spans.iter().any(|s| toml[s.range.clone()].contains("margin") && s.kind == HighlightKind::String));
-    }
-
-    #[cfg(not(feature = "syntax-highlighting"))]
-    #[test]
-    fn feature_off_returns_no_spans() {
-        assert!(highlight_code("rust", "fn main() {}").is_empty());
     }
 }

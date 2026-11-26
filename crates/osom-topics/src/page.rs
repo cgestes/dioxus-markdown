@@ -1,6 +1,7 @@
 //! Reading a page of the space: its tables, its task items, and the display
 //! text of inline Markdown.
-use margin_editor_core::{preview::{self, Block}, table};
+use margin_editor_core::table;
+use margin_projection::reading::{self, Block};
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::collections::HashMap;
 
@@ -88,7 +89,7 @@ pub fn plain(s: &str) -> String {
 
 /// Task items of a page, as the notebook reads them: (text, checked).
 pub fn tasks(md: &str) -> Vec<(String, bool)> {
-    preview::document(md)
+    reading::read(md)
         .into_iter()
         .filter_map(|block| match block {
             Block::Text { passage } if passage.kind == "item" => {

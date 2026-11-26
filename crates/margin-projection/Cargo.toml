@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# The editor's Markdown model, without Dioxus: `cargo test -p margin-projection`
-# builds no renderer.
+# Markdown as it is shown, for editing and for reading, without Dioxus:
+# `cargo test -p margin-projection` builds no renderer.
 [dependencies]
 margin-editor-core = { path = "../.." }
 pulldown-cmark = { version = "0.13", default-features = false }
 
-# Native builds highlight code blocks. Turned on here, the lowest crate in
-# every editor build, so no build resolves the core differently.
+# Native builds highlight code blocks; a browser build leaves the grammars out
+# (a smaller wasm). The target decides, so there is no feature to keep in step.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-margin-editor-core = { path = "../..", features = ["syntax-highlighting"] }
+two-face = { version = "0.5", default-features = false, features = ["syntect-fancy"] }
