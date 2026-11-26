@@ -6,10 +6,6 @@ publish = false
 
 # The editor's Markdown model, without Dioxus: `cargo test -p margin-projection`
 # builds no renderer.
-[features]
-default = []
-syntax-highlighting = ["margin-editor-core/syntax-highlighting"]
-
 [dependencies]
 margin-editor-core = { path = "../.." }
 pulldown-cmark = { version = "0.13", default-features = false }

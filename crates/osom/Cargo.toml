@@ -12,17 +12,9 @@ path = "src/lib.rs"
 name = "osom"
 path = "src/main.rs"
 
-[features]
-default = ["syntax-highlighting"]
-syntax-highlighting = [
-    "margin-editor/syntax-highlighting",
-    "margin-ui/syntax-highlighting",
-    "margin-editor-core/syntax-highlighting",
-]
-
 [dependencies]
-margin-editor = { path = "../margin-editor", default-features = false }
-margin-ui = { path = "../margin-ui", default-features = false }
+margin-editor = { path = "../margin-editor" }
+margin-ui = { path = "../margin-ui" }
 margin-editor-core = { path = "../.." }
 osom-topics = { path = "../osom-topics" }
 margin-hub = { path = "../margin-hub" }

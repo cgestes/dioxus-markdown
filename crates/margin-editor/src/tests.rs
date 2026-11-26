@@ -2899,7 +2899,7 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
         };
         (class_of(fn_at), class_of(main_at))
     };
-    #[cfg(feature = "syntax-highlighting")]
+    // Native builds always highlight (margin-ui turns it on).
     {
         assert!(
             fn_class.contains("code-block") && fn_class.contains("tok-keyword"),
@@ -2909,14 +2909,6 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
             main_class.contains("code-block") && main_class.contains("tok-function"),
             "expected `main` ink to have code-block + tok-function, got: {main_class:?}"
         );
-    }
-    #[cfg(not(feature = "syntax-highlighting"))]
-    {
-        assert!(
-            fn_class.contains("code-block") && !fn_class.contains("tok-"),
-            "expected plain code-block ink when feature disabled, got: {fn_class:?}"
-        );
-        let _ = main_class;
     }
 
     // 3c. Caret inside a code block keeps a constant width across every character

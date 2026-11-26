@@ -24,7 +24,8 @@ edition = "2024"
 publish = false
 
 [features]
-default = []
+# Code-block highlighting. margin-ui turns it on for every native build; the
+# browser build stays without it (smaller wasm).
 syntax-highlighting = ["dep:two-face"]
 
 [dependencies]
