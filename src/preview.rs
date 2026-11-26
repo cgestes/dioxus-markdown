@@ -1,7 +1,13 @@
 //! A read-only projection for the facing-page editor. Each displayed run
 //! remembers the source bytes that produced it, including escaped punctuation.
-use crate::{checkbox::markdown_markers, table};
-use pulldown_cmark::{Alignment, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use crate::{
+    checkbox::markdown_markers,
+    syntax::{HighlightSpan, highlight_code},
+    table,
+};
+use pulldown_cmark::{
+    Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
+};
 use serde::Serialize;
 use std::ops::Range;
 
@@ -246,6 +252,52 @@ fn split_highlights(line: &mut Passage) {
     }
 }
 
+fn split_code_highlights(
+    line: &mut Passage,
+    md: &str,
+    body_start: usize,
+    spans: &[HighlightSpan],
+) {
+    if spans.is_empty() || line.runs.is_empty() {
+        return;
+    }
+    let old = std::mem::take(&mut line.runs);
+    for run in old {
+        if !run.literal || run.to <= body_start {
+            line.runs.push(run);
+            continue;
+        }
+        let first = spans.partition_point(|s| body_start + s.range.end <= run.from);
+        let mut at = run.from;
+        for span in &spans[first..] {
+            let s_start = (body_start + span.range.start).max(run.from);
+            let s_end = (body_start + span.range.end).min(run.to);
+            if s_start >= run.to {
+                break;
+            }
+            if s_start >= s_end {
+                continue;
+            }
+            if s_start > at {
+                push_run(line, at, s_start, &md[at..s_start], &run.style, true);
+            }
+            let cls = span.kind.css_class();
+            let style = if cls.is_empty() {
+                run.style.clone()
+            } else if run.style.is_empty() {
+                cls.to_owned()
+            } else {
+                format!("{} {cls}", run.style)
+            };
+            push_run(line, s_start, s_end, &md[s_start..s_end], &style, true);
+            at = s_end;
+        }
+        if at < run.to {
+            push_run(line, at, run.to, &md[at..run.to], &run.style, true);
+        }
+    }
+}
+
 pub fn document(md: &str) -> Vec<Block> {
     let mut at = 0;
     let mut lines: Vec<_> = md
@@ -266,6 +318,8 @@ pub fn document(md: &str) -> Vec<Block> {
     let mut tags = Vec::new();
     let mut lists: Vec<Option<u64>> = Vec::new();
     let mut quote = 0;
+    let mut code_blocks: Vec<(String, usize, usize)> = Vec::new();
+    let mut active_code: Option<(String, Option<usize>, usize)> = None;
     let markers = markdown_markers(md);
     for (event, range) in Parser::new_ext(
         md,
@@ -285,6 +339,10 @@ pub fn document(md: &str) -> Vec<Block> {
                     _ => "",
                 });
                 match tag {
+                    Tag::CodeBlock(CodeBlockKind::Fenced(info)) => {
+                        let lang = info.split_whitespace().next().unwrap_or("").to_owned();
+                        active_code = (!lang.is_empty()).then_some((lang, None, 0));
+                    }
                     Tag::Heading { level, .. } => {
                         lines[i].kind = match level {
                             HeadingLevel::H1 => "h1",
@@ -328,6 +386,13 @@ pub fn document(md: &str) -> Vec<Block> {
             Event::End(tag) => {
                 tags.pop();
                 match tag {
+                    TagEnd::CodeBlock => {
+                        if let Some((lang, Some(start), end)) = active_code.take()
+                            && start < end
+                        {
+                            code_blocks.push((lang, start, end));
+                        }
+                    }
                     TagEnd::List(_) => {
                         lists.pop();
                     }
@@ -356,6 +421,10 @@ pub fn document(md: &str) -> Vec<Block> {
                     lines[i].kind = "quote".into();
                 }
                 if tags.contains(&"code") {
+                    if let Some((_, ref mut min_s, ref mut max_e)) = active_code {
+                        *min_s = Some(min_s.map_or(range.start, |s| s.min(range.start)));
+                        *max_e = (*max_e).max(range.end);
+                    }
                     let last = line_of(&lines, range.end.saturating_sub(1));
                     for line in &mut lines[i..=last] {
                         line.kind = "pre".into();
@@ -369,6 +438,16 @@ pub fn document(md: &str) -> Vec<Block> {
     for line in &mut lines {
         split_markers(line, md, &markers);
         split_highlights(line);
+    }
+    for (lang, body_start, body_end) in code_blocks {
+        let spans = highlight_code(&lang, &md[body_start..body_end]);
+        if !spans.is_empty() {
+            let first = line_of(&lines, body_start);
+            let last = line_of(&lines, body_end.saturating_sub(1));
+            for line in &mut lines[first..=last] {
+                split_code_highlights(line, md, body_start, &spans);
+            }
+        }
     }
     for callout in crate::callout::parse_callouts(md) {
         let first = line_of(&lines, callout.range.start);
@@ -525,10 +604,59 @@ mod tests {
         };
         assert_eq!(child.depth, 1);
         assert!(child.runs[0].style.contains("box"));
-        assert!(doc.iter().any(|b|matches!(b,Block::Text{passage:p} if p.kind=="pre" && p.runs.iter().any(|r|r.text.contains("# literal [ ]")))));
+        assert!(doc.iter().any(|b| matches!(
+            b,
+            Block::Text { passage: p }
+                if p.kind == "pre"
+                    && p.runs.iter().all(|r| !r.style.contains("box"))
+                    && p.runs
+                        .iter()
+                        .map(|r| r.text.as_str())
+                        .collect::<String>()
+                        .contains("# literal [ ]")
+        )));
         let Block::Table { rows, .. } = doc.last().unwrap() else {
             panic!()
         };
         assert_eq!(rows[1][1].source_at(0), md.len());
+    }
+
+    #[test]
+    fn fenced_code_blocks_preserve_source_offsets_and_highlight_when_enabled() {
+        let md = "```rust\nfn greet() {\n    let s = \"hello\";\n}\n```";
+        let doc = document(md);
+        let pre: Vec<&Passage> = doc
+            .iter()
+            .filter_map(|b| match b {
+                Block::Text { passage } if passage.kind == "pre" => Some(passage),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(pre.len(), 3);
+        let line0: String = pre[0].runs.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(line0, "fn greet() {");
+        assert_eq!(
+            pre[0].source_at(line0.find("greet").unwrap()),
+            md.find("greet").unwrap()
+        );
+        #[cfg(feature = "syntax-highlighting")]
+        {
+            assert!(pre[0]
+                .runs
+                .iter()
+                .any(|r| r.text == "fn" && r.style.contains("tok-keyword")));
+            assert!(pre[0]
+                .runs
+                .iter()
+                .any(|r| r.text == "greet" && r.style.contains("tok-function")));
+            assert!(pre[1]
+                .runs
+                .iter()
+                .any(|r| r.text.contains("hello") && r.style.contains("tok-string")));
+        }
+        #[cfg(not(feature = "syntax-highlighting"))]
+        {
+            assert!(pre[0].runs.iter().all(|r| !r.style.contains("tok-")));
+        }
     }
 }

@@ -22,12 +22,17 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = []
+syntax-highlighting = ["dep:two-face"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 pulldown-cmark = { version = "0.13", default-features = false }
 # `std::time` natively, the page's clock in a browser.
 web-time = "1"
+two-face = { version = "0.5", default-features = false, features = ["syntect-fancy"], optional = true }
 
 # Dependencies run optimized (layout, text shaping and Loro are slow at -O0)
 # and carry line tables only: backtraces keep file and line, builds and links

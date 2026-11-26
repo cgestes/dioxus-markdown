@@ -76,6 +76,18 @@
   --hue-pine: var(--accent);
   --hue-pine-wash: var(--pale);
 
+  /* Syntax highlighting on --rail (#f3f2ef), harmonized with Margin's paper palette (WCAG AA) */
+  --syn-comment: #6f6a61;
+  --syn-keyword: #5b48c8;
+  --syn-string: #2b7553;
+  --syn-number: #a65518;
+  --syn-type: #235d82;
+  --syn-function: #4342ad;
+  --syn-constant: #88407e;
+  --syn-attribute: #7c581c;
+  --syn-operator: #6b665e;
+  --syn-tag: #9a3e38;
+
   /* Shape and space */
   --radius-s: 4px;
   --radius: 7px;

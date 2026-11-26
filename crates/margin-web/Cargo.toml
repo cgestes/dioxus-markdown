@@ -11,8 +11,8 @@ name = "margin-web"
 path = "src/main.rs"
 
 [dependencies]
-margin-editor = { path = "../margin-editor" }
-margin-ui = { path = "../margin-ui" }
+margin-editor = { path = "../margin-editor", default-features = false }
+margin-ui = { path = "../margin-ui", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dioxus = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", features = ["web"] }

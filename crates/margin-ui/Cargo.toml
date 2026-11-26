@@ -8,6 +8,10 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = ["syntax-highlighting"]
+syntax-highlighting = ["margin-editor-core/syntax-highlighting"]
+
 [dependencies]
 margin-editor-core = { path = "../.." }
 

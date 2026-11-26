@@ -12,9 +12,17 @@ path = "src/lib.rs"
 name = "osom"
 path = "src/main.rs"
 
+[features]
+default = ["syntax-highlighting"]
+syntax-highlighting = [
+    "margin-editor/syntax-highlighting",
+    "margin-ui/syntax-highlighting",
+    "margin-editor-core/syntax-highlighting",
+]
+
 [dependencies]
-margin-editor = { path = "../margin-editor" }
-margin-ui = { path = "../margin-ui" }
+margin-editor = { path = "../margin-editor", default-features = false }
+margin-ui = { path = "../margin-ui", default-features = false }
 margin-editor-core = { path = "../.." }
 margin-hub = { path = "../margin-hub" }
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }

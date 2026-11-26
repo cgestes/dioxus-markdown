@@ -14,8 +14,8 @@ path = "src/lib.rs"
 margin-editor-core = { path = "../.." }
 margin-hub = { path = "../margin-hub" }
 margin-note = { path = "../margin-note" }
-margin-projection = { path = "../margin-projection" }
-margin-ui = { path = "../margin-ui" }
+margin-projection = { path = "../margin-projection", default-features = false }
+margin-ui = { path = "../margin-ui", default-features = false }
 anyhow = "1"
 loro = { version = "1.18.0", default-features = false }
 serde = { version = "1", features = ["derive"] }
@@ -25,6 +25,13 @@ futures-util = { version = "0.3", default-features = false, features = ["std"] }
 futures-channel = "0.3"
 web-time = "1"
 
+[features]
+default = ["syntax-highlighting"]
+syntax-highlighting = [
+    "margin-editor-core/syntax-highlighting",
+    "margin-projection/syntax-highlighting",
+    "margin-ui/syntax-highlighting",
+]
 # Native: Blitz renders the notebook.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
