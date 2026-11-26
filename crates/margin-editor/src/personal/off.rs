@@ -46,6 +46,6 @@ pub(crate) fn use_persistence(_session: Option<Session>, _note: Signal<Note>) ->
 
 /// `margin` without the vault: the Field notes sample, in memory.
 #[component]
-pub(crate) fn Desktop(split: bool) -> Element {
-    rsx! { crate::SampleEditor { split, inspect: false } }
+pub(crate) fn Desktop() -> Element {
+    rsx! { crate::SampleEditor { inspect: false } }
 }

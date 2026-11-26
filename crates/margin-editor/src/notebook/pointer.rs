@@ -1,6 +1,6 @@
 //! Route gestures to Markdown positions. A native input is a view of a source
 //! range. Only a gesture wholly inside one input belongs to that input.
-use super::{Field, Writing};
+use super::{ByteSelection, Field, Writing};
 use crate::platform::text;
 use crate::platform::Document;
 use crate::prelude::*;
@@ -12,6 +12,18 @@ pub(crate) struct Drag {
     last: [usize; 2],
     pub(super) across: bool,
     native: bool,
+    /// The field's own selection before this press moved its caret, to put
+    /// back if the press is taken away (a touch that becomes a scroll).
+    restore: Option<ByteSelection>,
+}
+
+/// The element whose box takes the pointer for a field: a cell's slot fills
+/// its row, while its textarea is only as tall as its text.
+fn pointer_target(field: Field) -> String {
+    match field {
+        Field::Cell(t, r, c) => format!("slot-{t}-{r}-{c}"),
+        other => other.id(),
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -94,7 +106,7 @@ impl Writing {
             }
             target = node.parent?;
         }
-        let rect = |f: Field| doc.get_client_bounding_rect(doc.get_element_by_id(&f.id())?);
+        let rect = |f: Field| doc.get_client_bounding_rect(doc.get_element_by_id(&pointer_target(f))?);
         // Choose a row by y first. The right rail belongs to the edge cells,
         // while clicking below the table's bottom border targets the line underneath.
         let field = if let Some(field) = input {
@@ -291,6 +303,7 @@ impl Writing {
                 last: [anchor, hit.pos],
                 across: false,
                 native: false,
+                restore: None,
             }));
             e.prevent_default();
             return;
@@ -299,26 +312,33 @@ impl Writing {
             && *self.edit_mode.peek() == super::projection::EditMode::Markdown
             && self.projection_peek(hit.field).has_hidden_heading_prefix;
         if hit.input && !e.modifiers().shift() && !will_expand_heading {
-            self.drag.set(Some(Drag {
-                field: hit.field,
-                anchor,
-                last: [anchor, hit.pos],
-                across: false,
-                native: true,
-            }));
-            if self.span.peek().is_some() {
-                self.span.set(None);
-            }
             // Where the caret arrives only after the release, place it now, so the
             // release reads this press and not the caret's previous position.
+            let mut restore = None;
             if !crate::platform::press_places_caret(&e)
                 && let Some(root) = self.root.peek().as_ref()
             {
                 let at = self.projection_peek(hit.field).source_to_display(hit.pos);
                 let mut doc = root.doc_mut();
                 if let Some(id) = doc.get_element_by_id(&hit.field.id()) {
+                    restore = doc
+                        .get_node(id)
+                        .and_then(|n| n.element_data()?.text_input_data())
+                        .map(|input| input.editor.raw_selection())
+                        .map(|s| [s.anchor().index(), s.focus().index()]);
                     doc.with_text_input(id, |mut input| input.select_byte_range(at, at));
                 }
+            }
+            self.drag.set(Some(Drag {
+                field: hit.field,
+                anchor,
+                last: [anchor, hit.pos],
+                across: false,
+                native: true,
+                restore,
+            }));
+            if self.span.peek().is_some() {
+                self.span.set(None);
             }
             return; // Parley handles double clicks, word drags and platform caret affinity.
         }
@@ -330,6 +350,7 @@ impl Writing {
             last: [anchor, hit.pos],
             across: false,
             native: false,
+            restore: None,
         }));
     }
 
@@ -365,6 +386,9 @@ impl Writing {
         let Some(mut drag) = *self.drag.peek() else {
             return;
         };
+        if !crate::platform::move_selects(&e) {
+            return;
+        }
         if !e
             .held_buttons()
             .contains(dioxus_html::input_data::MouseButton::Primary)
@@ -380,12 +404,8 @@ impl Writing {
             && let Some(handle) = self.root.peek().clone()
         {
             let doc = handle.doc();
-            let target_id = match drag.field {
-                Field::Cell(t, r, c) => format!("slot-{t}-{r}-{c}"),
-                other => other.id(),
-            };
             if let Some(rect) = doc
-                .get_element_by_id(&target_id)
+                .get_element_by_id(&pointer_target(drag.field))
                 .and_then(|id| doc.get_client_bounding_rect(id))
                 && p.x >= rect.x
                 && p.x <= rect.x + rect.width
@@ -519,6 +539,20 @@ impl Writing {
             let next = (*self.block_menu.peek() != Some(bd.from)).then_some(bd.from);
             self.show_block_menu(next);
         }
+    }
+
+    /// The pointer was taken away (a touch became a scroll): the press never
+    /// happened, so the caret it placed goes back.
+    pub(super) fn cancel_drag(self) {
+        if let Some(Drag { field, restore: Some([anchor, focus]), .. }) = *self.drag.peek()
+            && let Some(root) = self.root.peek().as_ref()
+        {
+            let mut doc = root.doc_mut();
+            if let Some(id) = doc.get_element_by_id(&field.id()) {
+                doc.with_text_input(id, |mut input| input.select_byte_range(anchor, focus));
+            }
+        }
+        self.end_drag();
     }
 
     pub(super) fn end_drag(mut self) {

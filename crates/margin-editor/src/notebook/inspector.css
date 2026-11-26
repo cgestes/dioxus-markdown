@@ -13,7 +13,6 @@
 .inspecting .blank-editor { background: #f9f1df; outline: 1px dashed #9c814b; }
 .inspecting textarea.body-editor { background: var(--field-paper); outline: 1px solid #8ba59c; }
 .inspecting .grid-scroll { outline: 1px solid #639482; }
-.inspecting .grid-edge, .inspecting .column-action { outline: 1px dashed #9c814b; }
 .inspecting .prose-block .marker-slot, .inspecting .prose-block .md-ink:not(.code), .inspecting .title-row .md-ink { background: var(--field-paper); }
 .inspecting .paper input:focus, .inspecting .paper textarea:focus {
     background: #e1eff1; outline: 2px solid #227388; outline-offset: -2px; caret-color: #ca1458;

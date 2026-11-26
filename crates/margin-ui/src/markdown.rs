@@ -13,17 +13,13 @@ fn callout_badge_icon(style: &str) -> Icon {
     Icon::for_callout(kind)
 }
 
-/// A passage's spans. `ids` adds the checkbox ids the Split preview uses to
-/// toggle them; read-only views leave them out so ids stay unique.
-///
-/// A task box looks like the editor's checkbox. Its glyph stays as hidden
-/// text so the Split preview's text offsets still match the source.
-pub fn runs(p: &Passage, ids: bool) -> Element {
+/// A passage's spans. A task box looks like the editor's checkbox; its glyph
+/// stays as hidden text, so the passage's text still matches its source runs.
+fn runs(p: &Passage) -> Element {
     rsx! {
         for run in &p.runs {
             if run.style == "box" {
                 span { class: "box", class: if run.text.starts_with('☑') { "checked" },
-                    id: ids.then(|| format!("reading-box-{}", run.from)),
                     "{run.text}"
                     if run.text.starts_with('☑') { span { class: "marker-tick" } }
                 }
@@ -52,7 +48,7 @@ pub fn MarkdownView(text: String, #[props(default)] compact: bool) -> Element {
                     Block::Text { passage } => rsx! {
                         div { key: "{i}", class: "read-line {passage.kind}",
                             style: if passage.depth > 0 { format!("padding-left:{}px", passage.depth * 18) },
-                            {runs(passage, false)}
+                            {runs(passage)}
                         }
                     },
                     Block::Table { align, widths, rows, .. } => {
@@ -67,7 +63,7 @@ pub fn MarkdownView(text: String, #[props(default)] compact: bool) -> Element {
                                                     class: if r == 0 { "ledger-head" } else { "ledger-data" },
                                                     text_align: align.get(c).copied().unwrap_or("left"),
                                                     flex_grow: widths.get(c).copied().unwrap_or(1).max(1).to_string(),
-                                                    {runs(p, false)}
+                                                    {runs(p)}
                                                 }
                                             }
                                         }

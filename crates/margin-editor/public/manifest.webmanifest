@@ -1,7 +1,7 @@
 {
   "name": "Margin",
   "short_name": "Margin",
-  "description": "A live Markdown notebook. Notes stay encrypted on this device.",
+  "description": "A live Markdown notebook. The browser version keeps a note until its page closes.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

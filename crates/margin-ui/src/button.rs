@@ -161,7 +161,7 @@ pub struct Segment {
     pub selected: bool,
 }
 
-/// Mutually exclusive modes side by side (Rich · Live · Split · Source).
+/// Mutually exclusive modes side by side (Rich · Live · Source).
 #[component]
 pub fn Segmented(label: &'static str, items: Vec<Segment>, onselect: EventHandler<usize>) -> Element {
     rsx! {

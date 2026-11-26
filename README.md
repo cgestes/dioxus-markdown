@@ -89,9 +89,9 @@ rustup target add wasm32-unknown-unknown
 dx serve --web --package margin-editor
 ```
 
-That is the notebook itself: Live and Rich editing, Split, Source, tables, checkboxes, the slash menu, comments and Loro undo. Only `crates/margin-editor/src/platform/` differs. Natively it re-exports Blitz's document and Parley's text layouts. In a browser it answers the same calls from the DOM, and measures text with a hidden mirror of each field. It is the build without the `vault` feature: the page opens *Field notes*, keeps it in memory and says **Not saved** in the status bar, so a reload starts over. The vault, the relay and the space need an operating system. Comments are answered by the stand-in agent. Pasting a table or a link inserts plain text, because a browser only gives clipboard text asynchronously. Append `?split` to open Split. [Platform layer](crates/margin-editor/src/platform/mod.rs) · [Browser side](crates/margin-editor/src/platform/web.rs)
+That is the notebook itself: Live and Rich editing, Source, tables, checkboxes, the slash menu, comments and Loro undo. Only `crates/margin-editor/src/platform/` differs. Natively it re-exports Blitz's document and Parley's text layouts. In a browser it answers the same calls from the DOM, and measures text with a hidden mirror of each field. It is the build without the `vault` feature: the page opens *Field notes*, keeps it in memory and says **Not saved** in the status bar, so a reload starts over. The vault, the relay and the space need an operating system. Comments are answered by the stand-in agent. The inspector's **Save report** downloads its JSON. [Platform layer](crates/margin-editor/src/platform/mod.rs) · [Browser side](crates/margin-editor/src/platform/web.rs)
 
-`scripts/deploy-web` bundles a release build and publishes it to GitHub Pages from the `gh-pages` branch. `crates/margin-editor/public/` adds the web app manifest, icons and an offline worker, so **Share → Add to Home Screen** in Safari installs it full screen.
+`scripts/deploy-web` bundles a release build and publishes it to GitHub Pages from the `gh-pages` branch. `crates/margin-editor/public/` adds the web app manifest, icons and an offline worker, so **Share → Add to Home Screen** in Safari installs it full screen. One online visit is enough to open it offline afterwards.
 
 On iPhone it is the Dioxus Native app. Install the Dioxus CLI from the commit `dioxus-native` is pinned to, then boot a simulator and serve the `margin` binary:
 
@@ -101,14 +101,6 @@ dx serve --ios --renderer native --package margin-editor
 ```
 
 Add `--features vault` for the personal vault. Edits to `rsx!` reload in the running app. In `crates/margin-editor`, `Dioxus.toml` sets the bundle identifier, and `build.rs` embeds the simulator's Keychain entitlement so the encrypted vault can store its key. For your own phone, add `--device` once Xcode has an Apple Development certificate and a provisioning profile for `dev.margin.native`. Typing, Backspace, checkboxes and the encrypted vault work, and tables render. winit's iOS view only implements `UIKeyInput`. Autocorrect, dictation, input methods, selection handles, and arrow keys from a hardware keyboard are therefore missing. The layout doesn't resize for the on-screen keyboard. Attaching and exporting files needs a native file dialog, so those menu items are hidden on iOS.
-
-## Try the Split design
-
-Choose **Split** in the toolbar. For a new native session, run `cargo run --locked -p margin-editor --bin margin -- --split`. In a browser, append `?split` to the URL. [Native screenshot](mockup/native-split.png)
-
-The left pane contains the full Markdown in one text field. Edit heading hashes directly, move through a blank line, or drag from a heading across table pipes and replace the selection. The right pane renders the same note. Clicking a formatted letter positions the source caret. Shift-click extends the selection. A table’s right and bottom margins target the nearest cell. The small **+** buttons append a column or row, and select the new header or cell. A missing cell in a short Markdown row only acquires pipes when you type into it.
-
-The same Rust parser supplies the reading layout and the source range for each displayed run on every platform. Both panes share the note and undo history. Split leaves Markdown punctuation visible on the writing side and needs space for both panes. [Rust projection](src/preview.rs) · [Native source input](crates/margin-editor/src/notebook/split.rs) · [Native preview](crates/margin-editor/src/notebook/reading.rs)
 
 ## Try the editor
 
@@ -142,9 +134,9 @@ Dioxus Native and Loro can support this editor. The weak point in the first prot
 | Toggle syntax | The drawn checkbox toggles on click. Clicking its visible bracket text places a caret. Space and X toggle inside, and F2 edits the literal characters. Heading and inline punctuation use the same source positions before and after reveal. |
 | Undo | Native undo items capture both selection ends as Loro cursors. Undo after a replacement can restore the original directed selection in Live or Source. Structural edits and rectangular pastes each make one commit. [Loro undo integration](src/note.rs) |
 
-Live uses multiple native text inputs. Split provides a baseline with one native input for the same document. Compare both on dragging beyond the viewport, marked-text composition with a real IME, and selection announcements through VoiceOver before choosing a default. The automated suite covers native IME events, a long 2× viewport, Unicode, CRLF, escaped pipes and backward selections. Native two-window editing and typing latency on large tables remain unverified.
+Live uses multiple native text inputs, and Source one input for the whole note. Dragging beyond the viewport, marked-text composition with a real IME, and selection announcements through VoiceOver remain to be checked by hand in Live. The automated suite covers native IME events, a long 2× viewport, Unicode, CRLF, escaped pipes and backward selections. Native two-window editing and typing latency on large tables remain unverified.
 
-Run `cargo test --locked --workspace --all-features` for the Rust input and storage tests; `--all-features` includes the personal vault. For the browser build, run `npm --prefix mockup ci` once and keep `dx serve --web --package margin-editor --port 8741` running. With Chrome installed, `npm --prefix mockup run test:web` then drives real pointer gestures, touch, selection, typing and undo in the same editor. `npm --prefix mockup test` runs the Loro history recovery study.
+Run `cargo test --locked --workspace --all-features` for the Rust input and storage tests; `--all-features` includes the personal vault. For the browser build, run `npm --prefix mockup ci` once and keep `dx serve --web --package margin-editor --port 8741` running. With Chrome installed, `npm --prefix mockup run test:web` then drives real pointer gestures, touch, paste, selection, typing and undo in the same editor. After `dx bundle --web --release --package margin-editor`, `npm --prefix mockup run test:web:offline` checks that the bundle opens without the network. `npm --prefix mockup test` runs the Loro history recovery study.
 
 ## Native architecture
 

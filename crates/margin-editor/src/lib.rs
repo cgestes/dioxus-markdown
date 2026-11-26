@@ -33,8 +33,6 @@ const SAMPLE: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x]
 const CSS: &str = concat!(
     include_str!("notebook/editor.css"),
     "\n",
-    include_str!("notebook/split.css"),
-    "\n",
     include_str!("notebook/inspector.css"),
     "\n",
     include_str!("comments/comments.css"),
@@ -66,21 +64,19 @@ fn app() -> Element {
             NotebookOptions { inspect: true, ..Default::default() },
         );
     }
-    let split = args.split;
     let inspect = args.test_editor;
     if let Some(path) = args.sync_file.clone() {
-        return rsx! { SyncFileEditor { path, split, inspect } };
+        return rsx! { SyncFileEditor { path, inspect } };
     }
     if inspect || args.demo {
-        return rsx! { SampleEditor { split, inspect } };
+        return rsx! { SampleEditor { inspect } };
     }
-    rsx! { personal::Desktop { split } }
+    rsx! { personal::Desktop {} }
 }
 
 /// The sample note's options: sample comment threads unless inspecting.
-fn sample_options(split: bool, inspect: bool) -> NotebookOptions {
+fn sample_options(inspect: bool) -> NotebookOptions {
     NotebookOptions {
-        view: if split { View::Split } else { View::Live },
         inspect,
         comments: if inspect { Comments::Empty } else { Comments::Sample },
         ..Default::default()
@@ -88,8 +84,8 @@ fn sample_options(split: bool, inspect: bool) -> NotebookOptions {
 }
 
 #[component]
-fn SampleEditor(split: bool, inspect: bool) -> Element {
-    notebook_view(SAMPLE, sample_options(split, inspect))
+fn SampleEditor(inspect: bool) -> Element {
+    notebook_view(SAMPLE, sample_options(inspect))
 }
 
 #[cfg(test)]
@@ -104,7 +100,7 @@ struct SyncFile {
 }
 
 #[component]
-fn SyncFileEditor(path: std::path::PathBuf, split: bool, inspect: bool) -> Element {
+fn SyncFileEditor(path: std::path::PathBuf, inspect: bool) -> Element {
     use margin_note::sync::NoteSync;
     let loaded = use_hook(|| {
         let sync = match NoteSync::load_from_file(&path) {
@@ -119,6 +115,6 @@ fn SyncFileEditor(path: std::path::PathBuf, split: bool, inspect: bool) -> Eleme
         Err(error) => return rsx! { p { role: "alert", "Couldn’t open the sync file. {error}" } },
     };
     use_context_provider(|| file);
-    notebook_view(SAMPLE, sample_options(split, inspect))
+    notebook_view(SAMPLE, sample_options(inspect))
 }
 

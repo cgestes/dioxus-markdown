@@ -305,11 +305,6 @@ fn toolbar_commands_work_by_keyboard() {
     press(&mut doc, Key::Named(NamedKey::Tab), false);
     assert_eq!(
         doc.inner.borrow().get_focussed_node_id(),
-        Some(id(&doc, "split-mode"))
-    );
-    press(&mut doc, Key::Named(NamedKey::Tab), false);
-    assert_eq!(
-        doc.inner.borrow().get_focussed_node_id(),
         Some(id(&doc, "source-mode"))
     );
     press(&mut doc, Key::Named(NamedKey::Enter), false);
@@ -1098,6 +1093,59 @@ fn chord(doc: &mut DioxusDocument, key: Key, modifiers: Modifiers) {
 }
 
 #[test]
+fn a_click_in_the_empty_part_of_a_tall_row_stays_in_that_row() {
+    let mut doc = editor();
+    let long = "Water through the gate, then the weir, then the long reach under the footbridge where the swans keep their distance";
+    let md = format!("# Stops\n\n| Stop | Listen for | Take |\n| --- | --- | ---: |\n| Lock | {long} | 45 s |\n| Bridge | Steps | 30 s |\n\nTail");
+    open_markdown(&mut doc, &md, 2);
+    let row = bounds(&doc, "slot-0-1-0");
+    let cell = bounds(&doc, "cell-0-1-0");
+    assert!(row[3] > cell[3] * 2.0, "the row is taller than its short cell: row={row:?}, cell={cell:?}");
+    // Just inside the row's top and bottom edges, far from its vertically centred text.
+    for dy in [4.0, row[3] as f32 - 4.0] {
+        click_at(&mut doc, "slot-0-1-0", Some((20.0, dy)));
+        assert_eq!(
+            doc.inner.borrow().get_focussed_node_id(),
+            Some(id(&doc, "cell-0-1-0")),
+            "a click {dy}px into the row"
+        );
+    }
+}
+
+#[test]
+fn a_word_wider_than_its_column_breaks_and_its_row_grows() {
+    let mut doc = editor();
+    let word = "a".repeat(200);
+    let md = format!("# Hashes\n\n| Name | Digest | Size |\n| --- | --- | ---: |\n| First | {word} | 4 kB |\n| Second | short | 2 kB |\n\nTail");
+    open_markdown(&mut doc, &md, md.find(&word).unwrap() + word.len());
+    let lines = {
+        let dom = doc.inner.borrow();
+        let cell = dom.get_node(id(&doc, "cell-0-1-1")).unwrap();
+        cell.element_data().unwrap().text_input_data().unwrap().editor.try_layout().unwrap().len()
+    };
+    assert!(lines > 1, "the word breaks inside its column");
+    let (long, short) = (bounds(&doc, "slot-0-1-1"), bounds(&doc, "slot-0-2-1"));
+    assert!(long[3] > short[3] * 1.5, "the row grows with its broken word: {long:?} against {short:?}");
+    // The caret after the word's last letter is drawn inside the cell.
+    let (cell, caret) = (bounds(&doc, "cell-0-1-1"), bounds(&doc, "caret-ink"));
+    assert!(
+        caret[0] >= cell[0] - 0.5 && caret[0] + caret[2] <= cell[0] + cell[2] + 0.5,
+        "caret {caret:?} inside cell {cell:?}"
+    );
+}
+
+#[test]
+fn a_chord_of_enter_in_a_cell_leaves_its_text_alone() {
+    let mut doc = editor();
+    let md = "# Stops\n\n| Stop | Take |\n| --- | --- |\n| North lock | 45 s |";
+    open_markdown(&mut doc, md, md.find("lock").unwrap());
+    for modifiers in [Modifiers::META, Modifiers::CONTROL, Modifiers::ALT] {
+        chord(&mut doc, Key::Named(NamedKey::Enter), modifiers);
+        assert_eq!(markdown(&doc), md, "{modifiers:?}+Enter");
+    }
+}
+
+#[test]
 fn extend_a_selection_from_heading_to_prose_and_replace_then_undo() {
     let mut doc = editor();
     let md = "# Notebook\n\n## Départ\n🌿 au port\n\nFin";
@@ -1351,22 +1399,21 @@ fn backspace_at_the_checklist_label_outdents_then_removes_its_prefix() {
     assert_eq!(markdown(&doc), "# Walk\n\n- Parent\n- [x] Child");
 }
 
-fn split_document(md: &str) -> DioxusDocument {
+/// An editor in Source view holding `md`, with the caret at its start.
+fn source_document(md: &str) -> DioxusDocument {
     let mut doc = editor();
     click(&mut doc, "source-mode");
     select(&doc, "markdown", [0, SAMPLE.len()]);
     commit_text(&mut doc, md);
     select(&doc, "markdown", [0; 2]);
-    click(&mut doc, "split-mode");
     assert_eq!(value(&doc, "markdown"), md);
     doc
 }
 
 #[test]
-fn split_uses_one_input_across_blank_lines_headings_tables_and_mode_changes() {
+fn source_uses_one_input_across_blank_lines_headings_tables_and_mode_changes() {
     let md = "# A\n\n## B\n\n| X | Y |\n| --- | --- |\n| É | Q |\n\nTail";
-    let mut doc = split_document(md);
-    let source = id(&doc, "markdown");
+    let mut doc = source_document(md);
     assert!(doc.inner.borrow().get_element_by_id("note-title").is_none());
     assert!(doc.inner.borrow().get_element_by_id("cell-0-0-0").is_none());
     for line in [4, 5] {
@@ -1377,152 +1424,15 @@ fn split_uses_one_input_across_blank_lines_headings_tables_and_mode_changes() {
     assert_focus(&doc, "markdown", [4; 2]);
     let end = md.find('Q').unwrap() + 1;
     select(&doc, "markdown", [end, 2]);
+    // Leaving for Live and coming back keeps the selection.
+    click(&mut doc, "live-mode");
+    assert!(doc.inner.borrow().get_element_by_id("markdown").is_none());
     click(&mut doc, "source-mode");
-    assert_focus(&doc, "markdown", [end, 2]);
-    click(&mut doc, "split-mode");
-    assert_eq!(id(&doc, "markdown"), source);
     assert_focus(&doc, "markdown", [end, 2]);
     commit_text(&mut doc, "Hi");
     assert_eq!(value(&doc, "markdown"), format!("# Hi{}", &md[end..]));
     click(&mut doc, "undo");
     assert_eq!(value(&doc, "markdown"), md);
-}
-
-#[test]
-fn split_preview_rail_targets_source_and_only_plus_grows_the_clicked_table() {
-    let md = "# H\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n| C | D |\n| --- | --- |\n| x | y |";
-    let mut doc = split_document(md);
-    let tables = table::tables(md);
-    let t = &tables[1];
-    let start = t.range.start;
-    let scroll = format!("reading-scroll-{start}");
-    let first = |doc: &DioxusDocument| {
-        let b = doc.inner.borrow();
-        b.get_client_bounding_rect(id(doc, &scroll)).unwrap()
-    };
-    let frame = first(&doc);
-    click_at(&mut doc, &scroll, Some((frame.width as f32 + 3., 5.)));
-    assert_eq!(value(&doc, "markdown"), md);
-    assert_focus(&doc, "markdown", [t.cell(0, 1).end; 2]);
-    click_at(&mut doc, &scroll, Some((5., frame.height as f32 + 4.)));
-    assert_focus(&doc, "markdown", [t.cell(1, 0).start; 2]);
-    click(&mut doc, &format!("reading-column-{start}"));
-    let grown = value(&doc, "markdown");
-    let two = table::tables(&grown);
-    assert_eq!((two[0].width(), two[1].width()), (2, 3));
-    assert_eq!(&grown[..start], &md[..start]);
-    let header = two[1].cell(0, 2);
-    assert_focus(&doc, "markdown", [header.start, header.end]);
-    commit_text(&mut doc, "Time");
-    click(&mut doc, &format!("reading-row-{start}"));
-    let changed = value(&doc, "markdown");
-    assert_eq!(table::tables(&changed)[1].rows.len(), 3);
-    assert!(changed.contains("Time"));
-    click(&mut doc, "undo");
-    assert_eq!(table::tables(&value(&doc, "markdown"))[1].rows.len(), 2);
-}
-
-#[test]
-fn split_targeted_keys_work_in_the_source_and_short_cells_stay_virtual_until_typed() {
-    let md = "# H\n\n- [ ] Box\n\n| A | B | C |\n| --- | --- | --- |\n| x |";
-    let mut doc = split_document(md);
-    let open = md.find('[').unwrap();
-    click(&mut doc, &format!("reading-box-{open}"));
-    assert_focus(&doc, "markdown", [open + 1; 2]);
-    assert!(value(&doc, "markdown").contains("[x]"));
-    press(&mut doc, Key::Character(" ".into()), false);
-    assert!(value(&doc, "markdown").contains("[ ]"));
-    select(&doc, "markdown", [open + 1; 2]);
-    press(&mut doc, Key::Character("x".into()), false);
-    assert!(value(&doc, "markdown").contains("[x]"));
-    press(&mut doc, Key::Character("q".into()), false);
-    assert!(value(&doc, "markdown").contains("[x]"));
-    press(&mut doc, Key::Named(NamedKey::F2), false);
-    commit_text(&mut doc, "q");
-    assert!(value(&doc, "markdown").contains("[qx]"));
-    let text = value(&doc, "markdown");
-    let end = text.find("Box").unwrap() + 3;
-    select(&doc, "markdown", [end; 2]);
-    press(&mut doc, Key::Named(NamedKey::Enter), false);
-    assert!(value(&doc, "markdown").contains("Box\n- "));
-    let text = value(&doc, "markdown");
-    let t = table::tables(&text).remove(0);
-    let slot = format!("reading-cell-{}-1-2", t.range.start);
-    click(&mut doc, &slot);
-    assert_eq!(value(&doc, "markdown"), text);
-    commit_text(&mut doc, "🌿");
-    let text = value(&doc, "markdown");
-    let t = table::tables(&text).remove(0);
-    assert_eq!(&text[t.cell(1, 2)], "🌿");
-    press(&mut doc, Key::Named(NamedKey::Tab), false);
-    let text = value(&doc, "markdown");
-    let t = table::tables(&text).remove(0);
-    assert_eq!(t.rows.len(), 3);
-    assert_focus(&doc, "markdown", [t.cell(2, 0).start; 2]);
-}
-
-#[test]
-fn split_drag_uses_parley_and_formatted_cell_letters_map_to_markdown_bytes() {
-    let md = "# Étape\n\n## Deux\n\n| Stop | Temps |\n| --- | --- |\n| 🌿 | **Écoute** |";
-    let mut doc = split_document(md);
-    let start = md.find("Deux").unwrap() + 1;
-    let end = md.find("Écoute").unwrap() + "Éc".len();
-    let point = |doc: &DioxusDocument, offset| {
-        let field = id(doc, "markdown");
-        let d = doc.inner.borrow();
-        let n = d.get_node(field).unwrap();
-        let rect = d.get_client_bounding_rect(field).unwrap();
-        let mut pointer = n.synthetic_click_event_data(Modifiers::empty());
-        let (x, y) = glyph_position(doc, "markdown", offset);
-        let l = n.final_layout();
-        pointer.coords.client_x = rect.x as f32 + l.border.left + l.padding.left + x + 0.2;
-        pointer.coords.client_y = rect.y as f32 + l.border.top + l.padding.top + y;
-        pointer.coords.page_x = pointer.coords.client_x;
-        pointer.coords.screen_x = pointer.coords.client_x;
-        pointer.coords.page_y = pointer.coords.client_y;
-        pointer.coords.screen_y = pointer.coords.client_y;
-        pointer
-    };
-    let mut a = point(&doc, start);
-    doc.handle_ui_event(UiEvent::PointerMove(a.clone()));
-    a.buttons = MouseEventButtons::Primary;
-    doc.handle_ui_event(UiEvent::PointerDown(a));
-    render(&mut doc);
-    let mut b = point(&doc, end);
-    b.buttons = MouseEventButtons::Primary;
-    doc.handle_ui_event(UiEvent::PointerMove(b.clone()));
-    b.buttons = MouseEventButtons::None;
-    doc.handle_ui_event(UiEvent::PointerUp(b));
-    render(&mut doc);
-    assert_focus(&doc, "markdown", [start, end]);
-    let table = md.find("| Stop").unwrap();
-    let cell = format!("reading-cell-{table}-1-1");
-    let (x, y) = {
-        let d = doc.inner.borrow();
-        let node = d.get_node(id(&doc, &cell)).unwrap();
-        let inline = node
-            .element_data()
-            .unwrap()
-            .inline_layout_data
-            .as_ref()
-            .unwrap();
-        let layout = &inline.layout;
-        let rect =
-            parley::Cursor::from_byte_index(layout, "Éc".len(), parley::Affinity::Downstream)
-                .geometry(layout, 0.);
-        let l = node.final_layout();
-        (
-            rect.x0 as f32 / layout.scale() + l.border.left + l.padding.left + 0.1,
-            (rect.y0 + rect.y1) as f32 / (2. * layout.scale())
-                + l.border.top
-                + l.padding.top
-                + inline.block_offset,
-        )
-    };
-    click_at(&mut doc, &cell, Some((x, y)));
-    assert_focus(&doc, "markdown", [end; 2]);
-    commit_text(&mut doc, "!");
-    assert!(value(&doc, "markdown").contains("**Éc!oute**"));
 }
 
 /// The actual painted caret, including the text field's own scroll and the window scroll.
@@ -1558,7 +1468,7 @@ fn painted_caret(doc: &DioxusDocument, name: &str) -> (f64, f64, f64, f64) {
 #[test]
 fn return_keeps_the_new_blank_line_visible_before_another_key() {
     let md = "# Note\n\n## Section\nThe last line";
-    for mode in ["live-mode", "split-mode", "source-mode"] {
+    for mode in ["live-mode", "source-mode"] {
         let mut doc = editor();
         open_markdown(&mut doc, md, md.len());
         let name = if mode == "live-mode" {
@@ -1585,72 +1495,42 @@ fn return_keeps_the_new_blank_line_visible_before_another_key() {
 }
 
 #[test]
-fn delete_selected_column_in_live_and_split_is_scoped_undoable_and_keeps_a_caret() {
+fn delete_selected_column_is_scoped_undoable_and_keeps_a_caret() {
     let md = "| Keep | Value |\n| --- | --- |\n| α | 8 |\n\n| A | B | C |\n| :--- | --- | ---: |\n| a\\|b | 🌿 | c |\n| Only |";
     let start = md.find("| A |").unwrap();
-    for split in [false, true] {
-        let mut doc = split_document(md);
-        if !split {
-            click(&mut doc, "live-mode");
-        }
-        let cell = |r, c| {
-            if split {
-                format!("reading-cell-{start}-{r}-{c}")
-            } else {
-                format!("cell-1-{r}-{c}")
-            }
-        };
-        let remove = if split {
-            format!("reading-delete-column-{start}")
-        } else {
-            "col-menu-delete-1-1".to_owned()
-        };
-        assert!(doc.inner.borrow().get_element_by_id(&remove).is_none());
-        click(&mut doc, &cell(1, 1));
-        if !split {
-            // Destructive delete lives in the column menu, not the floating bar.
-            assert!(doc.inner.borrow().get_element_by_id("delete-column-1").is_none());
-            click(&mut doc, "col-menu-btn-1-1");
-        }
-        click(&mut doc, &remove);
-        let expected = md
-            .replace("| A | B | C |", "| A | C |")
-            .replace("| :--- | --- | ---: |", "| :--- | ---: |")
-            .replace("| 🌿 | c |", "| c |");
-        let t = table::tables(&expected).remove(1);
-        if split {
-            let pos = t.cell(1, 1);
-            assert_focus(&doc, "markdown", [pos.start, pos.end]);
-            assert_eq!(value(&doc, "markdown"), expected);
-        } else {
-            assert_focus(&doc, &cell(1, 1), [0, 1]);
-            click(&mut doc, "col-menu-btn-1-1");
-        }
-        click(&mut doc, &remove);
-        if split {
-            assert!(doc.inner.borrow().get_element_by_id(&remove).is_none());
-        } else {
-            click(&mut doc, "col-menu-btn-1-0");
-            assert_eq!(
-                doc.inner
-                    .borrow()
-                    .get_node(id(&doc, "col-menu-delete-1-0"))
-                    .unwrap()
-                    .attr("aria-disabled".into()),
-                Some("true")
-            );
-        }
-        if !split {
-            click(&mut doc, "source-mode");
-        }
-        let last = value(&doc, "markdown");
-        assert_eq!(&last[..start], &md[..start]);
-        assert_eq!(table::tables(&last)[1].width(), 1);
-        click(&mut doc, "undo");
-        assert_eq!(value(&doc, "markdown"), expected);
-        click(&mut doc, "undo");
-        assert_eq!(value(&doc, "markdown"), md);
-    }
+    let mut doc = source_document(md);
+    click(&mut doc, "live-mode");
+    let remove = "col-menu-delete-1-1";
+    assert!(doc.inner.borrow().get_element_by_id(remove).is_none());
+    click(&mut doc, "cell-1-1-1");
+    // Destructive delete lives in the column menu, not the floating bar.
+    assert!(doc.inner.borrow().get_element_by_id("delete-column-1").is_none());
+    click(&mut doc, "col-menu-btn-1-1");
+    click(&mut doc, remove);
+    let expected = md
+        .replace("| A | B | C |", "| A | C |")
+        .replace("| :--- | --- | ---: |", "| :--- | ---: |")
+        .replace("| 🌿 | c |", "| c |");
+    assert_focus(&doc, "cell-1-1-1", [0, 1]);
+    click(&mut doc, "col-menu-btn-1-1");
+    click(&mut doc, remove);
+    click(&mut doc, "col-menu-btn-1-0");
+    assert_eq!(
+        doc.inner
+            .borrow()
+            .get_node(id(&doc, "col-menu-delete-1-0"))
+            .unwrap()
+            .attr("aria-disabled".into()),
+        Some("true")
+    );
+    click(&mut doc, "source-mode");
+    let last = value(&doc, "markdown");
+    assert_eq!(&last[..start], &md[..start]);
+    assert_eq!(table::tables(&last)[1].width(), 1);
+    click(&mut doc, "undo");
+    assert_eq!(value(&doc, "markdown"), expected);
+    click(&mut doc, "undo");
+    assert_eq!(value(&doc, "markdown"), md);
 }
 
 #[test]

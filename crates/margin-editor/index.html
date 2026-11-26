@@ -17,8 +17,14 @@
             if (/iPhone|iPad/.test(navigator.platform) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))
                 document.querySelector('meta[name="viewport"]').content += ", maximum-scale=1";
             // The deployed site keeps an offline copy for the installed web app (public/sw.js).
-            if (location.protocol === "https:" && "serviceWorker" in navigator)
-                navigator.serviceWorker.register("sw.js").catch(() => {});
+            if ("serviceWorker" in navigator) {
+                if (location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+                // The worker takes over after the script, the wasm and the fonts have
+                // loaded: tell it which files those were, as they are loaded.
+                navigator.serviceWorker.ready.then(({ active }) => new PerformanceObserver(list =>
+                    active.postMessage({ type: "loaded", urls: list.getEntries().map(entry => entry.name) })
+                ).observe({ type: "resource", buffered: true }));
+            }
         </script>
     </head>
     <body>

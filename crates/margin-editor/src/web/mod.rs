@@ -3,7 +3,7 @@
 //! notebook itself is the same code as the native app, built without the vault.
 
 /// Launch options. A page has no command line, so they come from the URL's
-/// query: `?split`, `?demo`, `?gallery`, `?test-editor`, `?test-window`.
+/// query: `?demo`, `?gallery`, `?test-editor`, `?test-window`.
 pub(crate) mod cli {
     use std::path::PathBuf;
     use std::sync::OnceLock;
@@ -11,7 +11,6 @@ pub(crate) mod cli {
     /// The fields of the native command line that the notebook reads; a page has no sync file.
     #[derive(Clone, Debug, Default)]
     pub(crate) struct Cli {
-        pub split: bool,
         pub sync_file: Option<PathBuf>,
         pub demo: bool,
         pub test_editor: bool,
@@ -32,7 +31,6 @@ pub(crate) mod cli {
             let query = web_sys::window().and_then(|w| w.location().search().ok()).unwrap_or_default();
             let has = |flag: &str| query.trim_start_matches('?').split('&').any(|part| part.split('=').next() == Some(flag));
             Cli {
-                split: has("split"),
                 demo: has("demo"),
                 gallery: has("gallery"),
                 test_editor: has("test-editor"),

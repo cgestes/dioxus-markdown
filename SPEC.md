@@ -34,8 +34,6 @@ preserves concurrent edits and a recovery window.
    - Contextual UI appears only where and when needed (inline empty-line icons, selection format bar, docked table action bar).
 3. **One Design System**
    - Every window is built from the components in `crates/margin-ui/src/` (buttons, chips, segmented switch, tabs, fields, composer, checkboxes, cards, rows, messages, read-only Markdown, popovers, menus, toolbars, icons and marks), including the editor's own chrome (mode bar, format bar, slash/block/table menus, empty-line tools, status bar). Headings, prose and tables share one type scale (`--font-h*`, `--font-prose*`, `--font-table*`), so a read-only page reads like the page in Rich mode, styled by `crates/margin-ui/assets/ui.css` from the tokens in `crates/margin-ui/assets/theme.css`. Features compose them and add layout only: no per-feature button, card, row, Markdown or checkbox styles. `margin ui` shows every component in every state. See `docs/design-system.md`.
-4. **Out of Scope (for UX polish)**
-   - **Split view** (`View::Split`) is retained only as a regression baseline; do not spend UX effort polishing Split view, but keep existing Split tests passing.
 
 ---
 
@@ -43,12 +41,12 @@ preserves concurrent edits and a recovery window.
 
 - **Top-Anchored Mode Bar (`#mode-bar`):**
   - Slim, sticky top bar (`height: 36px`), borderless `--page` background, centered.
-  - Contains the segmented view/mode switch (`ui::Segmented`: `Rich | Live | Split | Source`), compact icon buttons (`ui::Button` `Icon` variant: `Table`, `Undo`, `Redo`, `Comments`), and the **Debug Display toggle** (`#toggle-debug`, tooltip `Toggle debug display (F8)`). A notebook editing a page of the space ends the bar with the page's path, its state and **Save** (`#save-page`).
+  - Contains the segmented view/mode switch (`ui::Segmented`: `Rich | Live | Source`), compact icon buttons (`ui::Button` `Icon` variant: `Table`, `Undo`, `Redo`, `Comments`), and the **Debug Display toggle** (`#toggle-debug`, tooltip `Toggle debug display (F8)`). A notebook editing a page of the space ends the bar with the page's path, its state and **Save** (`#save-page`).
   - Must fit cleanly on narrow viewports down to `375px` without wrapping or overflowing.
 - **Debug Display / Inspector (`F8` or `#toggle-debug`):**
   - Toggles field outlines, active caret highlight, live status strip, and JSON report export (`F9` / Save button).
   - Positioned fixed directly below `#mode-bar` (`top: 36px`) so toggling it causes **zero layout shift** in the document.
-  - Clicking `#toggle-debug` while in Source/Split switches to Live and enables debug display.
+  - Clicking `#toggle-debug` while in Source switches to Live and enables debug display.
 - **Bottom Status Bar (`.statusbar`):**
   - Quiet footer in normal flex flow (`margin-top: auto`; never `position: fixed` so it never overlaps bottom table controls).
   - Shows word count, contextual hints (`Space or X toggles` / `Edit as text · F2` / `Press Enter or type to edit`), caret `Ln / Col`, and total line count.

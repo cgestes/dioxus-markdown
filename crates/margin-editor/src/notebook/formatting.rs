@@ -135,23 +135,9 @@ impl Writing {
 
 #[component]
 pub(super) fn FormatBar(writing: Writing) -> Element {
-    let tips = if cfg!(target_os = "macos") {
-        [
-            "Bold (⌘B)",
-            "Italic (⌘I)",
-            "Strikethrough (⌘⇧X)",
-            "Inline code (⌘E)",
-            "Link (⌘K)",
-        ]
-    } else {
-        [
-            "Bold (Ctrl+B)",
-            "Italic (Ctrl+I)",
-            "Strikethrough (Ctrl+Shift+X)",
-            "Inline code (Ctrl+E)",
-            "Link (Ctrl+K)",
-        ]
-    };
+    use crate::platform::shortcut;
+    let tips = [("Bold", "B"), ("Italic", "I"), ("Strikethrough", "Shift+X"), ("Inline code", "E"), ("Link", "K")]
+        .map(|(name, keys)| format!("{name} ({})", shortcut(keys)));
     let styles = use_memo(move || {
         let range = (writing.selected_text)()?;
         if writing.cells.read().is_some() || writing.table_menu.read().is_some() {
@@ -160,11 +146,7 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
         let selection = InlineSelection::read(&writing.contents.read(), range)?;
         Some(Style::ALL.map(|style| selection.active(style)))
     });
-    let comment_tip = if cfg!(target_os = "macos") {
-        "Comment on selection (⌘⇧M)"
-    } else {
-        "Comment on selection (Ctrl+Shift+M)"
-    };
+    let comment_tip = format!("Comment on selection ({})", shortcut("Shift+M"));
     let (Some(active), Some([x, y])) = (styles(), (writing.format_position)()) else {
         return rsx! {};
     };
@@ -172,7 +154,7 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
         Toolbar { id: "format-bar", class: "format-bar", label: "Format selection", look: ToolbarLook::Floating, keep_focus: true,
             style: "left:{x}px; top:{y}px;",
             for (i, style) in Style::ALL.into_iter().enumerate() {
-                Button { key: "{i}", id: format!("format-{i}"), variant: Variant::Icon, label: style.label(), tip: tips[i],
+                Button { key: "{i}", id: format!("format-{i}"), variant: Variant::Icon, label: style.label(), tip: tips[i].clone(),
                     icon: [Icon::Bold, Icon::Italic, Icon::Strike, Icon::Code, Icon::Link][i], selected: active[i],
                     onclick: move |_| { writing.format(style); } }
             }

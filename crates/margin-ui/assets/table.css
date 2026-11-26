@@ -17,11 +17,8 @@
   --ledger-pad: 15px;
   --ledger-row: 45px;
   --ledger-head: 37px;
-  --ledger-rail: 0px;
   --ledger-foot: 28px;
   position: relative;
-  padding-right: var(--ledger-rail);
-  margin-right: calc(0px - var(--ledger-rail));
   /* The foot (selection bar, + row) hangs over the blank line that always
      follows a table instead of reserving space: no gap at rest, and nothing
      below moves when the table is engaged. */
@@ -74,7 +71,7 @@
 .ledger .ledger-tools {
   position: absolute;
   left: 0;
-  right: var(--ledger-rail);
+  right: 0;
   bottom: calc(0px - var(--ledger-foot));
   height: var(--ledger-foot);
   display: flex;
@@ -225,7 +222,7 @@
 .ledger .cell-count { color: var(--accent-deep); font: var(--font-mono-ui); }
 .ledger .ledger-bar-group .ui-btn.danger:hover { background: var(--alert-wash); color: var(--alert); }
 @media (max-width: 600px) {
-  .ledger { --ledger-pad: 9px; --ledger-row: 43px; --ledger-rail: 30px; }
+  .ledger { --ledger-pad: 9px; --ledger-row: 43px; }
 }
-/* A table in read-only Markdown: no editing rail or foot. */
-.ledger.read-ledger { --ledger-foot: 0px; --ledger-rail: 0px; }
+/* A table in read-only Markdown: no editing foot. */
+.ledger.read-ledger { --ledger-foot: 0px; }

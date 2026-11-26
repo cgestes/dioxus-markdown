@@ -24,10 +24,10 @@ pub fn Gallery() -> Element {
     let mut tab = use_signal(|| 1usize);
     let mut segment = use_signal(|| 1usize);
     let mut checked = use_signal(|| true);
-    let segments = ["Rich", "Live", "Split", "Source"]
+    let segments = ["Rich", "Live", "Source"]
         .iter()
         .enumerate()
-        .map(|(i, l)| Segment { id: ["g-rich", "g-live", "g-split", "g-source"][i], label: l, tip: None, selected: i == segment() })
+        .map(|(i, l)| Segment { id: ["g-rich", "g-live", "g-source"][i], label: l, tip: None, selected: i == segment() })
         .collect::<Vec<_>>();
     rsx! {
         style { "{CSS}" }

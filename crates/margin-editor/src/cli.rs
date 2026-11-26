@@ -21,10 +21,6 @@ static CLI: OnceLock<Cli> = OnceLock::new();
                           This build has no vault: build with `--features vault` for your personal notebook.")
 )]
 pub(super) struct Cli {
-    /// Start the editor in Split view (Markdown source + reading preview).
-    #[arg(long)]
-    pub split: bool,
-
     #[cfg(feature = "vault")]
     /// Personal vault directory (defaults to Margin's app data directory).
     #[arg(
@@ -138,9 +134,7 @@ mod tests {
     #[test]
     fn parses_editor_and_gallery_options() {
         let default = parse(&["margin"]).unwrap();
-        assert!(!default.split && !default.demo && default.command.is_none());
-
-        assert!(parse(&["margin", "--split"]).unwrap().split);
+        assert!(!default.demo && default.command.is_none());
 
         assert!(parse(&["margin", "ui"]).unwrap().is_gallery());
         assert!(parse(&["margin", "gallery"]).unwrap().is_gallery());
@@ -158,10 +152,9 @@ mod tests {
     #[cfg(feature = "vault")]
     #[test]
     fn parses_vault_options() {
-        let split_vault = parse(&["margin", "--split", "--vault", "/tmp/v", "--note", "r1"]).unwrap();
-        assert!(split_vault.split);
-        assert_eq!(split_vault.vault, Some(PathBuf::from("/tmp/v")));
-        assert_eq!(split_vault.note.as_deref(), Some("r1"));
+        let vault = parse(&["margin", "--vault", "/tmp/v", "--note", "r1"]).unwrap();
+        assert_eq!(vault.vault, Some(PathBuf::from("/tmp/v")));
+        assert_eq!(vault.note.as_deref(), Some("r1"));
         assert!(parse(&["margin", "--sync-file", "a.sync", "--vault", "/tmp/v"]).is_err());
         assert!(parse(&["margin", "--vault", "/tmp/v", "ui"]).is_err());
     }

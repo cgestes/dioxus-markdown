@@ -170,6 +170,21 @@ impl Writing {
                 return true;
             }
         }
+        if primary && matches!(&key, Key::Character(k) if k.eq_ignore_ascii_case("v")) {
+            // Natively the clipboard can be read at the key press. A browser
+            // hands the text over with its paste event instead (`onpaste`).
+            let clipboard = self
+                .root
+                .peek()
+                .as_ref()
+                .and_then(|h| h.doc().shell_provider.get_clipboard_text().ok());
+            if !clipboard.is_some_and(|text| self.paste(field, &text)) {
+                return false;
+            }
+            e.prevent_default();
+            e.stop_propagation();
+            return true;
+        }
         let span = self.span.peek().is_some();
         if !span
             && !primary
@@ -210,53 +225,15 @@ impl Writing {
             );
         } else if primary && matches!(&key,Key::Character(s) if s.eq_ignore_ascii_case("a")) {
             self.open(self.field_at(md.len()), [0, md.len()]);
-        } else if !span
-            && primary
-            && !selected.is_empty()
-            && !matches!(field, Field::TitleGap | Field::Source)
-            && matches!(&key, Key::Character(k) if k.eq_ignore_ascii_case("v"))
-            && let Some(url) = self
-                .root
-                .peek()
-                .as_ref()
-                .and_then(|h| h.doc().shell_provider.get_clipboard_text().ok())
-                .and_then(|clip| smart_paste_url(&clip, &md[selected.clone()]))
-        {
-            let label = &md[selected.clone()];
-            let wrapped = format!("[{label}]({url})");
-            self.edit_range(selected, &wrapped);
-        } else if !span
-            && primary
-            && matches!(field, Field::Title | Field::Heading(_) | Field::TitleGap)
-            && matches!(&key,Key::Character(k) if k.eq_ignore_ascii_case("v"))
-        {
-            // Single-line platform inputs discard line endings. Paste a
-            // Markdown fragment at the document selection before that happens.
-            let Some(text) = self
-                .root
-                .peek()
-                .as_ref()
-                .and_then(|h| h.doc().shell_provider.get_clipboard_text().ok())
-            else {
-                return false;
-            };
-            if !text.contains(['\r', '\n']) {
-                return false;
-            }
-            self.edit_range(selected, &text);
         } else if span
             && primary
-            && matches!(&key,Key::Character(s) if s.eq_ignore_ascii_case("c") || s.eq_ignore_ascii_case("x") || s.eq_ignore_ascii_case("v"))
+            && matches!(&key,Key::Character(s) if s.eq_ignore_ascii_case("c") || s.eq_ignore_ascii_case("x"))
         {
             let Some(handle) = self.root.peek().clone() else {
                 return false;
             };
             let shell = handle.doc().shell_provider.clone();
-            if matches!(&key,Key::Character(s) if s.eq_ignore_ascii_case("v")) {
-                if let Ok(s) = shell.get_clipboard_text() {
-                    self.edit_range(selected, &s);
-                }
-            } else if shell
+            if shell
                 .set_clipboard_text(md[selected.clone()].to_owned())
                 .is_ok()
                 && matches!(&key, Key::Character(s) if s.eq_ignore_ascii_case("x"))
@@ -296,6 +273,58 @@ impl Writing {
         e.prevent_default();
         e.stop_propagation();
         true
+    }
+
+    /// Paste `text` where the notebook decides what a paste means, and say
+    /// whether it did: otherwise the focused field pastes it as plain text.
+    pub(super) fn paste(self, field: Field, text: &str) -> bool {
+        // A selected range of cells takes the values.
+        if let Field::Cell(t, r, c) = field
+            && !*self.cell_editing.peek()
+            && let Some(rect) = self.cell_range(t)
+        {
+            self.clear_or_fill(t, rect, text, r, c);
+            return true;
+        }
+        if let Some([anchor, head]) = self.absolute_selection() {
+            let selected = anchor.min(head)..anchor.max(head);
+            let md = self.contents.read().clone();
+            if self.span.peek().is_some() {
+                // A selection across fields is replaced as one range.
+                self.edit_range(selected, text);
+                return true;
+            }
+            if !selected.is_empty()
+                && !matches!(field, Field::TitleGap | Field::Source)
+                && let Some(url) = smart_paste_url(text, &md[selected.clone()])
+            {
+                let wrapped = format!("[{}]({url})", &md[selected.clone()]);
+                self.edit_range(selected, &wrapped);
+                return true;
+            }
+            // Single-line platform inputs discard line endings. Paste a
+            // Markdown fragment at the document selection before that happens.
+            if matches!(field, Field::Title | Field::Heading(_) | Field::TitleGap) && text.contains(['\r', '\n']) {
+                self.edit_range(selected, text);
+                return true;
+            }
+        }
+        // Rows and columns of values spread over the cells from this one.
+        if let Field::Cell(t, r, c) = field
+            && text.contains(['\t', '\r', '\n'])
+        {
+            self.paste_cells(t, r, c, text);
+            return true;
+        }
+        false
+    }
+
+    /// The notebook field that has the keyboard, if one does.
+    pub(super) fn focused_field(self) -> Option<Field> {
+        let root = self.root.peek();
+        let doc = root.as_ref()?.doc();
+        let node = doc.get_node(doc.get_focussed_node_id()?)?;
+        Field::from_input_id(node.element_data()?.id.as_deref()?)
     }
 
     fn toggle_highlight(mut self) -> bool {

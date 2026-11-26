@@ -26,7 +26,7 @@ These follow the product principles in `SPEC.md` §1.
 | Space | `--space-1` … `--space-5` (4, 8, 12, 16, 24) | Gaps and padding |
 | Type scale | `--text-display` 34, `--text-title` 20, `--text-heading` 15, `--text-control` 12.5, `--text-body` 13, `--text-small` 11.5, `--text-label` 10.5, `--text-mono` 11; families `--sans`, `--display`, `--mono`, `--body` | Page titles; briefs; card headings; buttons; UI text; hints; small caps labels; metadata |
 | Headings | `--font-h1` … `--font-h6` (34 / 24 / 19 / 16.5 / 15 / 13.5, weight 600) with `--track-h1` … `--track-h6` | The editor's title and heading fields **and** every read-only page (`.ui-md`): a page reads the same edited and rendered |
-| Prose | `--font-prose` (Rich and read-only pages, 15.5/26), `--font-prose-mono` (Live, 14/25), `--font-source` (Source, Split, code blocks, 13.5/22), `--text-code` | Body text in each mode |
+| Prose | `--font-prose` (Rich and read-only pages, 15.5/26), `--font-prose-mono` (Live, 14/25), `--font-source` (Source, code blocks, 13.5/22), `--text-code` | Body text in each mode |
 | Interface roles | `--font-ui` (menu items, fields, ghost buttons), `--font-control` (buttons), `--font-hint` (hints, status bar), `--font-label` + `--track-label` (uppercase section labels), `--font-mono-ui` (shortcuts, cell addresses, counts) | Every control and its text |
 | Tables | `--font-table`, `--font-table-head`, `--font-table-label`, `--font-table-number`; `--ledger-*` in `table.css` derive from the accent ramp | A light header (`--wash`, `--muted` 600 labels, a `--line-strong` rule), rows divided by `--line`, accent only for focus and selection |
 | Elevation | `--shadow-pop` (popovers), `--shadow-menu`, `--shadow-bar` (the floating toolbar), `--shadow-side` (the comments drawer on narrow windows) | Anything above the page |
@@ -98,7 +98,7 @@ Each is a Dioxus component (or a function) exported from `ui`. Props not listed 
 | `Menu` / `MenuItem` / `MenuSeparator` / `MenuRow` | Slash menu (listbox), block menu, table column menu (alignment row + actions), table row menu |
 | `Toolbar` / `ToolbarSep` | Format bar (`Floating`), empty-line tools and a table's selection bar (`Inline`) |
 | `Chip` | Topics (Discussions filter, chat quick replies), comments (quick requests) |
-| `Segmented` | Editor mode bar (Rich · Live · Split · Source), comments filter (Open · Resolved · All) |
+| `Segmented` | Editor mode bar (Rich · Live · Source), comments filter (Open · Resolved · All) |
 | `Tabs` | Topic page |
 | `NavItem` | Topics sidebar (Today, Inbox, topics, sub-topics) |
 | `TextField` | Topics search, pairing code; inside every `Composer` |

@@ -62,6 +62,12 @@ pub fn press_places_caret(_press: &PointerData) -> bool {
     true
 }
 
+/// Whether moving this pressed pointer drags a selection. In Blitz every
+/// pointer does.
+pub fn move_selects(_pointer: &PointerData) -> bool {
+    true
+}
+
 /// Whether a click follows this release. Blitz drops the click after a touch
 /// whose press the notebook cancelled (the move it synthesises before a finger
 /// press starts a pan).
@@ -72,6 +78,11 @@ pub fn click_follows_release(release: &PointerData) -> bool {
 /// Whether the window is as narrow as a phone's screen.
 pub fn phone_sized() -> bool {
     cfg!(target_os = "ios")
+}
+
+/// Whether shortcuts use ⌘: an Apple keyboard.
+pub fn apple_keys() -> bool {
+    cfg!(target_vendor = "apple")
 }
 
 /// Open a link in the system browser.
@@ -161,6 +172,102 @@ pub fn use_field_watch(root: Signal<Option<NodeHandle>>, mut on_event: impl FnMu
         }
         _ => {}
     });
+}
+
+/// Report what the user did, for the inspector: each redraw's key presses,
+/// composition, pointer buttons, scrolling and resizing, as short labels.
+pub fn use_input_trace(mut on_inputs: impl FnMut(Vec<String>) + 'static) {
+    use dioxus_native::winit::event::{Ime, WindowEvent};
+    use dioxus_native::winit::keyboard::{Key as WindowKey, NamedKey as WindowNamed};
+    let mut pending = vec!["Opened inspector".to_owned()];
+    let mut modifiers = String::new();
+    dioxus_native::use_window_event(move |event, _| {
+        // AppKit can deliver input to an occluded window between redraws.
+        // Report the preceding input before a key takes its own observation.
+        if let WindowEvent::KeyboardInput { event: key, .. } = event
+            && key.state.is_pressed()
+        {
+            if !pending.is_empty() {
+                on_inputs(std::mem::take(&mut pending));
+            }
+            // The inspector's own keys are not inputs to the note.
+            if matches!(
+                key.logical_key,
+                WindowKey::Named(WindowNamed::F8 | WindowNamed::F9)
+            ) {
+                return;
+            }
+        }
+        let label = match event {
+            WindowEvent::ModifiersChanged(m) => {
+                let m = m.state();
+                modifiers = [
+                    (m.meta_key(), "Meta+"),
+                    (m.control_key(), "Ctrl+"),
+                    (m.alt_key(), "Alt+"),
+                    (m.shift_key(), "Shift+"),
+                ]
+                .into_iter()
+                .filter_map(|(on, name)| on.then_some(name))
+                .collect();
+                return;
+            }
+            WindowEvent::KeyboardInput { event: key, .. } if key.state.is_pressed() => format!(
+                "{modifiers}{:?}{}",
+                key.logical_key,
+                if key.repeat { " (repeat)" } else { "" }
+            ),
+            WindowEvent::Ime(Ime::Commit(s)) => format!("IME commit {s:?}"),
+            WindowEvent::Ime(Ime::Preedit(s, selection)) => {
+                format!("IME preedit {s:?} {selection:?}")
+            }
+            WindowEvent::PointerButton {
+                state,
+                button,
+                position,
+                ..
+            } => format!(
+                "{modifiers}{button:?} {state:?} at {:.0},{:.0} px",
+                position.x, position.y
+            ),
+            WindowEvent::MouseWheel { delta, .. } => format!("Scroll {delta:?}"),
+            WindowEvent::SurfaceResized(size) => {
+                format!("Resize {}×{} px", size.width, size.height)
+            }
+            WindowEvent::Focused(focused) => format!("Window focused {focused}"),
+            WindowEvent::RedrawRequested if !pending.is_empty() => {
+                on_inputs(std::mem::take(&mut pending));
+                return;
+            }
+            _ => return,
+        };
+        if pending.len() < super::TRACE_BATCH {
+            pending.push(label);
+        }
+    });
+}
+
+/// Save an inspection report as a file only its owner can read (it holds the
+/// note's text), in `MARGIN_REPORT_DIR` or the system's temporary directory.
+/// Says where it went.
+pub fn save_report(bytes: &[u8]) -> std::io::Result<String> {
+    use std::io::Write;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let dir = std::env::var_os("MARGIN_REPORT_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("margin-reports"));
+    std::fs::create_dir_all(&dir)?;
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(std::io::Error::other)?
+        .as_nanos();
+    let path = dir.join(format!("margin-{time}-{}.json", std::process::id()));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(&path)?.write_all(bytes)?;
+    Ok(path.display().to_string())
 }
 
 /// Blitz gets its fonts from the font context and needs no page defaults.

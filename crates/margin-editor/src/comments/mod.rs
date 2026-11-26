@@ -901,7 +901,7 @@ pub fn CommentsPane(writing: Writing) -> Element {
                         p { class: "comments-empty-title",
                             if cur_filter == CommentFilter::Resolved { "No resolved comments yet." } else { "No open comments." }
                         }
-                        p { class: "comments-empty-sub", "Select text in the note and click Comment (or ⌘⇧M) to ask the agent for scoped edits." }
+                        p { class: "comments-empty-sub", "Select text in the note and click Comment (or " {crate::platform::shortcut("Shift+M")} ") to ask the agent for scoped edits." }
                     }
                 }
                 for thread in visible {

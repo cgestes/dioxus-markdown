@@ -29,7 +29,7 @@ pub use content::{Avatar, Badge, Banner, Card, CardTitle, DateBox, NavItem, Row,
 pub use field::{CheckItem, Checkbox, Composer, TextField};
 pub use icon::{Icon, icon};
 pub use margin_editor_core::topics::Source;
-pub use markdown::{MarkdownView, runs};
+pub use markdown::MarkdownView;
 pub use menu::{Menu, MenuItem, MenuRow, MenuSection, MenuSeparator, Popover, Toolbar, ToolbarLook, ToolbarSep};
 pub use message::{Message, MessageStyle};
 

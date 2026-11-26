@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "test:web": "node test/web-editor.mjs",
+    "test:web:offline": "node test/web-offline.mjs",
     "experiment:history": "node experiments/loro-history/run.mjs"
   },
   "dependencies": {

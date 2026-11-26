@@ -22,6 +22,19 @@ pub enum FieldEvent {
     Changed,
 }
 
+/// How many inputs `use_input_trace` reports at most between two frames.
+const TRACE_BATCH: usize = 48;
+
+/// A shortcut's label with the primary modifier of the keyboard in use:
+/// `shortcut("Shift+M")` is "⌘⇧M" on an Apple keyboard and "Ctrl+Shift+M" elsewhere.
+pub fn shortcut(keys: &str) -> String {
+    if apple_keys() {
+        format!("⌘{}", keys.replace("Shift+", "⇧"))
+    } else {
+        format!("Ctrl+{keys}")
+    }
+}
+
 /// macOS window integration: the AppKit key bridge and launch.
 #[cfg(target_os = "macos")]
 pub mod macos;

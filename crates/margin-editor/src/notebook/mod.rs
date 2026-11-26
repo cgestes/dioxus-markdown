@@ -15,7 +15,7 @@ pub(crate) mod pointer;
 pub(crate) mod projection;
 pub(crate) mod selection_model;
 pub(crate) mod slash;
-pub(crate) mod split;
+pub(crate) mod source;
 pub(crate) mod writing;
 
 use crate::platform::NodeHandle;
@@ -156,7 +156,6 @@ pub(crate) fn mounted_field(event: MountedEvent, field: Field, request: FocusReq
 pub enum View {
     #[default]
     Live,
-    Split,
     Source,
 }
 
@@ -280,7 +279,6 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let mut bookmark = use_signal(|| [0, 0]);
     let initial_field = match initial_view {
         View::Live if inspect_at_start => Some(Field::Body(0)),
-        View::Split => Some(Field::Source),
         _ => None,
     };
     let mut focus = use_signal(|| initial_field.map(|field| (field, [0; 2])));
@@ -504,16 +502,9 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     } else {
         ("Space or X toggles", "Edit as text · F2", "edit-as-text")
     };
-    let undo_tip = if cfg!(target_os = "macos") {
-        "Undo (⌘Z)"
-    } else {
-        "Undo (Ctrl+Z)"
-    };
-    let redo_tip = if cfg!(target_os = "macos") {
-        "Redo (⌘⇧Z)"
-    } else {
-        "Redo (Ctrl+Y)"
-    };
+    use crate::platform::{apple_keys, shortcut};
+    let undo_tip = format!("Undo ({})", shortcut("Z"));
+    let redo_tip = format!("Redo ({})", shortcut(if apple_keys() { "Shift+Z" } else { "Y" }));
     let mut change_view = move |next| {
         let md = note.peek().markdown();
         let range = if source() {
@@ -569,12 +560,23 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         style { "{ui::CSS}" }
         style { "{CSS}" }
         crate::platform::Head {}
-        main { class: "notebook", class: if embedded { "embedded" }, class: if view()==View::Split { "split-view" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
+        main { class: "notebook", class: if embedded { "embedded" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
             onpointerdown: move |event| { writing.clear_goal(); writing.dismiss_menu_at(event.client_coordinates().x,event.client_coordinates().y); },
             onpointermove: move |e| writing.pointer_move(e),
             onpointerup: move |_| writing.end_drag(),
-            onpointercancel: move |_| writing.end_drag(),
+            onpointercancel: move |_| writing.cancel_drag(),
             oninput: move |_| reveal_input.set(true),
+            // A browser hands pasted text over with this event. Natively the key
+            // handlers read the clipboard (`document_key`) and no event follows.
+            onpaste: move |e| {
+                if !source()
+                    && let Some(text) = e.data_transfer().get_as_text()
+                    && let Some(field) = writing.focused_field()
+                    && writing.paste(field, &text)
+                {
+                    e.prevent_default();
+                }
+            },
             onmounted: move |event| root.set(crate::platform::mounted(&event)),
             onkeydown: move |e| {
                 if !source() && !e.is_composing() && e.modifiers().is_empty() {
@@ -618,13 +620,11 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                         items: vec![
                             ui::Segment { id: "rich-mode", label: "Rich", tip: Some("Rich editing (delimiters stay hidden)"), selected: is_rich },
                             ui::Segment { id: "live-mode", label: "Live", tip: Some("Keyboard-first Markdown live editing"), selected: is_md_live },
-                            ui::Segment { id: "split-mode", label: "Split", tip: None, selected: view() == View::Split },
                             ui::Segment { id: "source-mode", label: "Source", tip: None, selected: view() == View::Source },
                         ],
                         onselect: move |i: usize| match i {
                             0 => set_edit_mode(projection::EditMode::Rich),
                             1 => set_edit_mode(projection::EditMode::Markdown),
-                            2 => change_view(View::Split),
                             _ => change_view(View::Source),
                         },
                     }
@@ -640,11 +640,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                     {
                         let open_comments = writing.comments.read().iter().filter(|t| !t.file.resolved).count();
                         let panel_open = (writing.comments_open)() && !source();
-                        let tip = if cfg!(target_os = "macos") {
-                            "Toggle comments (⌘⇧M to comment on selection)"
-                        } else {
-                            "Toggle comments (Ctrl+Shift+M to comment on selection)"
-                        };
+                        let tip = format!("Toggle comments ({} to comment on selection)", shortcut("Shift+M"));
                         rsx! {
                             span { class: "dock-comments",
                                 ui::Button { id: "toggle-comments", variant: ui::Variant::Icon, label: "Comments", tip, icon: Icon::Comment,
@@ -680,7 +676,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 }
             }
             if source() {
-                split::DocumentEditor { writing, split: view()==View::Split }
+                source::SourceEditor { writing }
             } else {
                 div { class: "editor-shell",
                     div { class: "editor-main",
@@ -765,32 +761,30 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 slash::SlashMenu { writing }
                 if desktop { marker_view::WindowLayout { writing } }
             }
-            if view() != View::Split {
-                footer { class: "statusbar",
-                    if personal.peek().is_some() { span { class: "vault-status", "{vault_status}" } }
-                    if unsaved { span { id: "save-status", class: "vault-status", "{personal::UNSAVED}" } }
-                    span { class: "status-words", {
-                        let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();
-                        format!("{words} {}", if words == 1 { "word" } else { "words" })
+            footer { class: "statusbar",
+                if personal.peek().is_some() { span { class: "vault-status", "{vault_status}" } }
+                if unsaved { span { id: "save-status", class: "vault-status", "{personal::UNSAVED}" } }
+                span { class: "status-words", {
+                    let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();
+                    format!("{words} {}", if words == 1 { "word" } else { "words" })
+                } }
+                if !source() && hint_at.is_some() {
+                    span { id: "marker-hint", "{hint}" }
+                    ui::Button { id: action_id.to_owned(), variant: ui::Variant::Link, label: action, onclick: move |_| {
+                        if raw { writing.keep_literal(); } else { writing.toggle_literal(); }
                     } }
-                    if !source() && hint_at.is_some() {
-                        span { id: "marker-hint", "{hint}" }
-                        ui::Button { id: action_id.to_owned(), variant: ui::Variant::Link, label: action, onclick: move |_| {
-                            if raw { writing.keep_literal(); } else { writing.toggle_literal(); }
-                        } }
-                    } else if !source() && writing.parked_selection.read().is_some() {
-                        span { class: "parked-hint", "Press Enter or type to edit" }
+                } else if !source() && writing.parked_selection.read().is_some() {
+                    span { class: "parked-hint", "Press Enter or type to edit" }
+                }
+                span { class: "status-right",
+                    if let Some([ln, col]) = (writing.caret_line_col)() {
+                        span { class: "status-pos", "Ln {ln}, Col {col}" }
+                        span { class: "status-sep", aria_hidden: "true" }
                     }
-                    span { class: "status-right",
-                        if let Some([ln, col]) = (writing.caret_line_col)() {
-                            span { class: "status-pos", "Ln {ln}, Col {col}" }
-                            span { class: "status-sep", aria_hidden: "true" }
-                        }
-                        span { class: "status-lines", {
-                            let count = markdown.bytes().filter(|c| *c == b'\n').count() + 1;
-                            format!("{count} {}", if count == 1 { "line" } else { "lines" })
-                        } }
-                    }
+                    span { class: "status-lines", {
+                        let count = markdown.bytes().filter(|c| *c == b'\n').count() + 1;
+                        format!("{count} {}", if count == 1 { "line" } else { "lines" })
+                    } }
                 }
             }
             if !message.read().is_empty() { p { class: "error", "{message}" } }

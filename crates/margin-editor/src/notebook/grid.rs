@@ -256,7 +256,7 @@ impl Writing {
         self.focus_cell(t, r, c);
     }
 
-    fn clear_or_fill(mut self, t: usize, rect: table::CellRect, value: &str, r: usize, c: usize) {
+    pub(super) fn clear_or_fill(mut self, t: usize, rect: table::CellRect, value: &str, r: usize, c: usize) {
         let md = self.contents.read().clone();
         let edits = self.tables.read()[t].paste_rect(&md, rect, value);
         if let Some(range) = self.absolute_selection() {
@@ -305,19 +305,25 @@ impl Writing {
         report(result, self.message);
     }
 
-    fn range_key(mut self, t: usize, r: usize, c: usize, event: &KeyboardEvent) -> bool {
+    /// The selected range of cells in table `t`, while it still fits the table.
+    pub(super) fn cell_range(self, t: usize) -> Option<table::CellRect> {
         let grid = self.tables.read();
-        let height = grid[t].rows.len();
-        let width = grid[t].width();
-        drop(grid);
-        let rect = self
-            .cells
+        let (height, width) = (grid[t].rows.len(), grid[t].width());
+        self.cells
             .peek()
             .as_ref()
             .filter(|(index, rect)| {
                 *index == t && rect.rows().end <= height && rect.cols().end <= width
             })
-            .map(|(_, rect)| *rect);
+            .map(|(_, rect)| *rect)
+    }
+
+    fn range_key(mut self, t: usize, r: usize, c: usize, event: &KeyboardEvent) -> bool {
+        let grid = self.tables.read();
+        let height = grid[t].rows.len();
+        let width = grid[t].width();
+        drop(grid);
+        let rect = self.cell_range(t);
         let mods = event.modifiers();
         let key = event.key();
         if mods.shift()
@@ -365,22 +371,16 @@ impl Writing {
                         && mods.intersects(Modifiers::META | Modifiers::CONTROL)
                         && !mods.shift()
                         && !mods.alt()
-                        && matches!(k.to_ascii_lowercase().as_str(), "c" | "v" | "x") =>
+                        && matches!(k.to_ascii_lowercase().as_str(), "c" | "x") =>
                 {
                     let Some(handle) = self.root.peek().clone() else {
                         return false;
                     };
                     let shell = handle.doc().shell_provider.clone();
-                    if k.eq_ignore_ascii_case("v") {
-                        if let Ok(text) = shell.get_clipboard_text() {
-                            self.clear_or_fill(t, rect, &text, r, c);
-                        }
-                    } else {
-                        let md = self.contents.read().clone();
-                        let text = self.tables.read()[t].copy_rect(&md, rect);
-                        if shell.set_clipboard_text(text).is_ok() && k.eq_ignore_ascii_case("x") {
-                            self.clear_or_fill(t, rect, "", r, c);
-                        }
+                    let md = self.contents.read().clone();
+                    let text = self.tables.read()[t].copy_rect(&md, rect);
+                    if shell.set_clipboard_text(text).is_ok() && k.eq_ignore_ascii_case("x") {
+                        self.clear_or_fill(t, rect, "", r, c);
                     }
                 }
                 Key::Named(
@@ -421,25 +421,14 @@ impl Writing {
         if self.range_key(t, r, c, &event) || self.document_key(field, &event) {
             return;
         }
-        if event
-            .modifiers()
-            .intersects(Modifiers::CONTROL | Modifiers::META)
-            && matches!(event.key(), Key::Character(k) if k.eq_ignore_ascii_case("v"))
-        {
-            let clipboard = self
-                .root
-                .peek()
-                .as_ref()
-                .and_then(|h| h.doc().shell_provider.get_clipboard_text().ok());
-            if let Some(text) = clipboard
-                && text.contains(['\t', '\r', '\n'])
-            {
-                event.prevent_default();
-                self.paste_cells(t, r, c, &text);
-                return;
-            }
-        }
         let key = event.key();
+        // A cell is one line: no chord of Enter may put a line break in it.
+        if key == Key::Named(NamedKey::Enter)
+            && event.modifiers().intersects(Modifiers::CONTROL | Modifiers::META | Modifiers::ALT)
+        {
+            event.prevent_default();
+            return;
+        }
         let grid = self.tables.read();
         let width = grid[t].width();
         let height = grid[t].rows.len();
@@ -517,7 +506,7 @@ impl Writing {
         }
     }
 
-    fn paste_cells(mut self, t: usize, r: usize, c: usize, value: &str) {
+    pub(super) fn paste_cells(mut self, t: usize, r: usize, c: usize, value: &str) {
         let md = self.contents.read().clone();
         let edits = self.tables.read()[t].paste(&md, r, c, value);
         report(self.note.write().splice(&edits), self.message);
@@ -800,6 +789,7 @@ pub fn EmptyLineBar(writing: Writing, field: Field) -> Element {
     if target != field {
         return rsx! {};
     }
+    use crate::platform::shortcut;
     rsx! {
         Toolbar {
             id: "empty-line-tools",
@@ -809,16 +799,16 @@ pub fn EmptyLineBar(writing: Writing, field: Field) -> Element {
             keep_focus: true,
             contain: true,
             style: "left:{x}px; top:{y}px;",
-            Button { id: "empty-h1", class: "empty-tool", variant: Variant::Icon, label: "Heading 1", text: "H1", tip: "Heading 1 (⌘1)",
+            Button { id: "empty-h1", class: "empty-tool", variant: Variant::Icon, label: "Heading 1", text: "H1", tip: format!("Heading 1 ({})", shortcut("1")),
                 onclick: move |_| { writing.set_heading_level(field, 1); } }
-            Button { id: "empty-h2", class: "empty-tool", variant: Variant::Icon, label: "Heading 2", text: "H2", tip: "Heading 2 (⌘2)",
+            Button { id: "empty-h2", class: "empty-tool", variant: Variant::Icon, label: "Heading 2", text: "H2", tip: format!("Heading 2 ({})", shortcut("2")),
                 onclick: move |_| { writing.set_heading_level(field, 2); } }
-            Button { id: "empty-h3", class: "empty-tool", variant: Variant::Icon, label: "Heading 3", text: "H3", tip: "Heading 3 (⌘3)",
+            Button { id: "empty-h3", class: "empty-tool", variant: Variant::Icon, label: "Heading 3", text: "H3", tip: format!("Heading 3 ({})", shortcut("3")),
                 onclick: move |_| { writing.set_heading_level(field, 3); } }
             ToolbarSep {}
             Button { id: "empty-bullet", class: "empty-tool", variant: Variant::Icon, label: "Bullet list", icon: crate::Icon::List,
                 onclick: move |_| { writing.toggle_line_prefix("- "); } }
-            Button { id: "empty-task", class: "empty-tool", variant: Variant::Icon, label: "Checklist", tip: "Checklist (⌘Enter)", icon: crate::Icon::Task,
+            Button { id: "empty-task", class: "empty-tool", variant: Variant::Icon, label: "Checklist", tip: format!("Checklist ({})", shortcut("Enter")), icon: crate::Icon::Task,
                 onclick: move |_| { writing.toggle_line_task(field); } }
             Button { id: "empty-quote", class: "empty-tool", variant: Variant::Icon, label: "Quote", tip: "Blockquote", icon: crate::Icon::Quote,
                 onclick: move |_| { writing.toggle_line_prefix("> "); } }

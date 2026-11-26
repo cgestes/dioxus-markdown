@@ -472,7 +472,6 @@ fn compact_toolbar_and_table_stay_in_place_while_editing() {
     run("compact-live", MD, (375, 540), 1, |s| {
         let toolbar = [
             "live-mode",
-            "split-mode",
             "source-mode",
             "insert-table",
             "undo",
@@ -504,6 +503,15 @@ fn compact_toolbar_and_table_stay_in_place_while_editing() {
             "the longer description gets more room"
         );
         s.click_at_text(columns[1], 0);
+        // The table stays inside the window, and a column's handle sits over its column.
+        let [x, _, width, _] = bounds(&s.doc, "grid-0");
+        assert!(x + width <= 375., "the table reaches past the window: {x}+{width}");
+        let centre = |id: &str| {
+            let [x, _, width, _] = bounds(&s.doc, id);
+            x + width * 0.5
+        };
+        let (handle, column) = (centre("col-menu-btn-0-1"), centre("slot-0-0-1"));
+        assert!((handle - column).abs() < 2., "handle at {handle} over a column centred at {column}");
         s.commit("Rushing along the edge of the path. ");
         assert!(
             s.markdown()

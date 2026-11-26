@@ -1,6 +1,6 @@
 //! The personal notebook on the encrypted vault. Editor signals are updated on
 //! the Dioxus thread.
-use crate::{CSS, View, notebook_view};
+use crate::{CSS, notebook_view};
 use anyhow::{Result, ensure};
 use crate::prelude::*;
 use futures_util::StreamExt;
@@ -86,7 +86,7 @@ impl Session {
 }
 
 #[component]
-pub(crate) fn Desktop(split: bool) -> Element {
+pub(crate) fn Desktop() -> Element {
     let mut demo = use_signal(|| false);
     let mut opening = use_resource(|| async {
         if DEVICE.get().is_some() {
@@ -95,10 +95,10 @@ pub(crate) fn Desktop(split: bool) -> Element {
         vault_task(initialize).await.map_err(|e| e.to_string())
     });
     if demo() {
-        return rsx! { crate::SampleEditor { split, inspect: false } };
+        return rsx! { crate::SampleEditor { inspect: false } };
     }
     let error = match opening() {
-        Some(Ok(())) => return rsx! { Home { split } },
+        Some(Ok(())) => return rsx! { Home {} },
         Some(Err(error)) => Some(error),
         None => None,
     };
@@ -126,7 +126,7 @@ pub(crate) fn Desktop(split: bool) -> Element {
 }
 
 #[component]
-fn Home(split: bool) -> Element {
+fn Home() -> Element {
     let (v, initial) = DEVICE.get().expect("vault was initialized");
     let mut room = use_signal(|| initial.clone());
     let mut menu = use_signal(|| false);
@@ -260,7 +260,7 @@ fn Home(split: bool) -> Element {
             }
         }
         for selected in std::iter::once(selected) {
-            PrivateEditor { key: "{selected}", room: selected, split }
+            PrivateEditor { key: "{selected}", room: selected }
         }
     }
 }
@@ -274,7 +274,7 @@ async fn vault_task(work: impl FnOnce() -> Result<()> + Send + 'static) -> Resul
 }
 
 #[component]
-fn PrivateEditor(room: String, split: bool) -> Element {
+fn PrivateEditor(room: String) -> Element {
     let boot = use_hook(|| -> Result<Session, String> {
         let vault = DEVICE.get().unwrap().0.clone();
         let (doc, seq) = vault.load(&room).map_err(|e| e.to_string())?;
@@ -307,7 +307,6 @@ fn PrivateEditor(room: String, split: bool) -> Element {
     notebook_view(
         "",
         crate::NotebookOptions {
-            view: if split { View::Split } else { View::Live },
             comments: if show_discussion { crate::Comments::Sample } else { crate::Comments::Empty },
             ..Default::default()
         },

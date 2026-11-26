@@ -196,10 +196,8 @@ textarea.body-editor {
     background: var(--accent-deep); pointer-events: none; user-select: none;
 }
 .ledger-head .caret-ink { background: var(--accent-deep); }
-.marker-slot, .grid-edge { display: flex; align-items: center; justify-content: center; }
+.marker-slot { display: flex; align-items: center; justify-content: center; }
 
-/* Split uses its own reading grid. Live shares its surface and controls with the browser. */
-.read-table { position: relative; margin-right: -30px; padding-right: 30px; padding-bottom: 27px; }
 /* Rows keep their resting height and grow when a cell's text wraps. */
 .cell-slot {
     position: relative; display: flex; align-items: center;
@@ -210,6 +208,8 @@ textarea.body-editor {
 .cell-slot.align-right { justify-content: flex-end; }
 .cell-field { position: relative; min-width: 0; flex: 1 1 0; overflow: hidden; }
 .align-center .cell-field, .align-right .cell-field { flex: 0 1 auto; min-width: 2px; max-width: 100%; }
+/* A word wider than its column breaks instead of being clipped. */
+.cell-measure, .paper .grid-cell { overflow-wrap: anywhere; }
 .cell-measure {
     display: block; visibility: hidden; pointer-events: none; user-select: none;
     white-space: pre-wrap; font: inherit; padding-right: 2px;
@@ -224,16 +224,8 @@ textarea.body-editor {
     white-space: pre-wrap; overflow: hidden; resize: none;
 }
 .cell-field .md-ink { background: var(--cell-paper); }
-.grid-edge { position: absolute; pointer-events: none; }
-.grid-edge.col { right: 0; top: 0; bottom: 27px; width: 30px; }
-.grid-edge.row { left: 0; right: 30px; bottom: 0; height: 27px; }
-.ledger .grid-edge.col { width: var(--ledger-rail); bottom: 0; }
-.ledger .grid-edge.row { right: var(--ledger-rail); bottom: calc(0px - var(--ledger-foot)); height: var(--ledger-foot); }
-.read-table .grid-edge .ui-btn.icon { width: 23px; height: 22px; border: 1px solid var(--line-strong); background: var(--wash); color: var(--accent-deep); }
-.grid-edge button, .ledger .ledger-tools, .ledger .ledger-tools button,
+.ledger .ledger-tools, .ledger .ledger-tools button,
 .ledger .ledger-col-strip, .ledger .ledger-row-strip, .ledger .ledger-axis-btn { opacity: 0; pointer-events: none; }
-.grid-edge button { pointer-events: none; }
-.grid-block.engaged .grid-edge button, .grid-block:hover .grid-edge button, .grid-edge button:focus,
 .ledger.engaged .ledger-tools, .ledger:hover .ledger-tools, .ledger .ledger-tools:focus-within {
     opacity: 1; pointer-events: auto;
 }
@@ -268,7 +260,6 @@ textarea.body-editor {
 .ledger.engaged .ledger-row-btn:hover {
     opacity: 1;
 }
-.grid-block.engaged .grid-edge button, .grid-block:hover .grid-edge button, .grid-edge button:focus,
 .ledger.engaged .ledger-tools button, .ledger:hover .ledger-tools button, .ledger .ledger-tools button:focus {
     opacity: 1; pointer-events: auto;
 }
@@ -326,7 +317,6 @@ textarea.body-editor {
 .notebook.embedded .mode-pill-bar { flex: 1 1 auto; min-width: 0; }
 .notebook.embedded .page-path { display: none; }
 .notebook.embedded .paper, .notebook.embedded .source-layout { max-width: 760px; margin: var(--space-5) 0 0; padding: 0 0 64px; }
-.notebook.embedded.split-view { max-width: none; padding: 0; }
 .notebook.embedded .block-handle-anchor { left: -26px; width: 26px; padding-right: 6px; }
 .notebook.embedded .block-drop-line { left: 0; right: 0; }
 .notebook.embedded .statusbar { padding-left: 0; padding-right: 0; }

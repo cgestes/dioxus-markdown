@@ -3,11 +3,8 @@ use super::{ByteSelection, Field, Writing};
 use crate::prelude::*;
 use serde::Serialize;
 use std::collections::VecDeque;
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::io;
 
-// Observations come from the native window's events; a browser build records none.
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 const HISTORY_LIMIT: usize = 48;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize)]
@@ -112,7 +109,6 @@ struct Observation {
     state: State,
 }
 
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(super) struct Trace {
     initial: String,
     started: web_time::Instant,
@@ -132,7 +128,6 @@ impl Trace {
         }
     }
 
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fn observe(&mut self, inputs: Vec<String>, state: State) {
         if self.frames.len() == HISTORY_LIMIT {
             self.frames.pop_front();
@@ -167,39 +162,24 @@ impl Trace {
         });
         Ok(serde_json::to_vec_pretty(&report)?)
     }
-    pub(super) fn report(&self, writing: Writing, dir: &Path) -> io::Result<PathBuf> {
-        use web_time::{SystemTime, UNIX_EPOCH};
+    /// Save the report and say where it went: into the vault with a personal
+    /// session, otherwise wherever the platform keeps a file.
+    fn save(&self, writing: Writing) -> io::Result<String> {
         let bytes = self.report_bytes(writing)?;
         if let Some(session) = writing.personal.peek().as_ref() {
             let blob = session
                 .attach_report("Editor report.json", bytes.as_slice())
                 .map_err(io::Error::other)?;
-            return Ok(PathBuf::from(format!("encrypted inbox attachment {blob}")));
+            return Ok(format!("encrypted inbox attachment {blob}"));
         }
-        std::fs::create_dir_all(dir)?;
-        let time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(io::Error::other)?
-            .as_nanos();
-        let path = dir.join(format!("margin-{time}-{}.json", std::process::id()));
-        // The report holds the note's text: readable by its owner only.
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        let mut file = options.open(&path)?;
-        file.write_all(&bytes)?;
-        Ok(path)
+        crate::platform::save_report(&bytes)
     }
 }
 
 pub(super) fn save(writing: Writing, mut trace: Signal<Trace>) {
-    let dir = std::env::var_os("MARGIN_REPORT_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("margin-reports"));
-    let result = trace.peek().report(writing, &dir);
+    let result = trace.peek().save(writing);
     let message = match result {
-        Ok(path) => format!("Saved {}", path.display()),
+        Ok(place) => format!("Saved {place}"),
         Err(error) => format!("Could not save report: {error}"),
     };
     eprintln!("{message}");
@@ -253,86 +233,9 @@ pub(super) fn Inspector(mut writing: Writing, trace: Signal<Trace>, desktop: boo
     }
 }
 
-/// Key and IME tracing reads the native window's events; a browser has none to offer.
-#[cfg(target_arch = "wasm32")]
-#[component]
-fn WindowTrace(writing: Writing, trace: Signal<Trace>) -> Element {
-    let _ = (writing, trace);
-    rsx! {}
-}
-
-#[cfg(not(target_arch = "wasm32"))]
+/// Records what the user does while the inspector is open, with the state each input left.
 #[component]
 fn WindowTrace(writing: Writing, mut trace: Signal<Trace>) -> Element {
-    use dioxus_native::winit::event::{Ime, WindowEvent};
-    use dioxus_native::winit::keyboard::{Key as WindowKey, NamedKey as WindowNamed};
-    let mut pending = vec!["Opened inspector".to_owned()];
-    let mut modifiers = String::new();
-    dioxus_native::use_window_event(move |event, _| {
-        // AppKit can deliver input to an occluded window between redraws.
-        // Flush the preceding input before F9 takes its observation.
-        if let WindowEvent::KeyboardInput { event: key, .. } = event
-            && key.state.is_pressed()
-        {
-            if !pending.is_empty() {
-                trace
-                    .write()
-                    .observe(std::mem::take(&mut pending), snapshot(writing));
-            }
-            if matches!(
-                key.logical_key,
-                WindowKey::Named(WindowNamed::F8 | WindowNamed::F9)
-            ) {
-                return;
-            }
-        }
-        let label = match event {
-            WindowEvent::ModifiersChanged(m) => {
-                let m = m.state();
-                modifiers = [
-                    (m.meta_key(), "Meta+"),
-                    (m.control_key(), "Ctrl+"),
-                    (m.alt_key(), "Alt+"),
-                    (m.shift_key(), "Shift+"),
-                ]
-                .into_iter()
-                .filter_map(|(on, name)| on.then_some(name))
-                .collect();
-                return;
-            }
-            WindowEvent::KeyboardInput { event: key, .. } if key.state.is_pressed() => format!(
-                "{modifiers}{:?}{}",
-                key.logical_key,
-                if key.repeat { " (repeat)" } else { "" }
-            ),
-            WindowEvent::Ime(Ime::Commit(s)) => format!("IME commit {s:?}"),
-            WindowEvent::Ime(Ime::Preedit(s, selection)) => {
-                format!("IME preedit {s:?} {selection:?}")
-            }
-            WindowEvent::PointerButton {
-                state,
-                button,
-                position,
-                ..
-            } => format!(
-                "{modifiers}{button:?} {state:?} at {:.0},{:.0} px",
-                position.x, position.y
-            ),
-            WindowEvent::MouseWheel { delta, .. } => format!("Scroll {delta:?}"),
-            WindowEvent::SurfaceResized(size) => {
-                format!("Resize {}×{} px", size.width, size.height)
-            }
-            WindowEvent::Focused(focused) => format!("Window focused {focused}"),
-            WindowEvent::RedrawRequested if !pending.is_empty() => {
-                let inputs = std::mem::take(&mut pending);
-                trace.write().observe(inputs, snapshot(writing));
-                return;
-            }
-            _ => return,
-        };
-        if pending.len() < HISTORY_LIMIT {
-            pending.push(label);
-        }
-    });
+    crate::platform::use_input_trace(move |inputs| trace.write().observe(inputs, snapshot(writing)));
     rsx! {}
 }

@@ -9,7 +9,9 @@ use super::FieldEvent;
 use crate::prelude::*;
 use dioxus::web::WebEventExt;
 use std::cell::{Cell, OnceCell, RefCell};
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{Element, HtmlElement, HtmlInputElement, HtmlTextAreaElement};
 
@@ -27,13 +29,69 @@ fn page() -> web_sys::Document {
 #[derive(Clone, PartialEq)]
 pub struct NodeHandle;
 
+thread_local! {
+    /// Whether a pass is running (`shared_pass`), and the view of the page its readers share.
+    static PASS: Cell<bool> = const { Cell::new(false) };
+    static SHARED: RefCell<Option<Rc<Document>>> = const { RefCell::new(None) };
+}
+
+/// Run one burst of reads against a single view of the page, so that each
+/// `doc()` in it finds what the previous one already read from the DOM. Any
+/// `doc_mut()` ends the sharing: what was read is stale once the page changes.
+fn shared_pass(pass: impl FnOnce()) {
+    let nested = PASS.replace(true);
+    pass();
+    PASS.set(nested);
+    if !nested {
+        SHARED.take();
+    }
+}
+
 impl NodeHandle {
-    pub fn doc(&self) -> Document {
-        Document::default()
+    pub fn doc(&self) -> DocRef {
+        if !PASS.get() {
+            return DocRef(Rc::default());
+        }
+        DocRef(SHARED.with_borrow_mut(|shared| shared.get_or_insert_with(Rc::default).clone()))
     }
 
-    pub fn doc_mut(&self) -> Document {
-        Document::default()
+    pub fn doc_mut(&self) -> DocMut {
+        SHARED.take();
+        DocMut(Document::default())
+    }
+}
+
+/// A view of the page to read from, as `NodeHandle::doc` lends it.
+pub struct DocRef(Rc<Document>);
+
+impl Deref for DocRef {
+    type Target = Document;
+
+    fn deref(&self) -> &Document {
+        &self.0
+    }
+}
+
+/// A view of the page that can also change it, as `NodeHandle::doc_mut` lends it.
+pub struct DocMut(Document);
+
+impl Deref for DocMut {
+    type Target = Document;
+
+    fn deref(&self) -> &Document {
+        &self.0
+    }
+}
+
+impl DerefMut for DocMut {
+    fn deref_mut(&mut self) -> &mut Document {
+        &mut self.0
+    }
+}
+
+impl Drop for DocMut {
+    fn drop(&mut self) {
+        SHARED.take();
     }
 }
 
@@ -90,7 +148,8 @@ pub struct Scrollbar {
 }
 
 /// The system clipboard. Reading it is asynchronous in a browser, so a
-/// synchronous read reports nothing and paste stays the browser's own.
+/// synchronous read reports nothing: pasted text arrives with the page's
+/// paste event instead, which the notebook handles (`onpaste`).
 #[derive(Clone, Default)]
 pub struct Shell;
 
@@ -147,16 +206,27 @@ impl Document {
         (active.tag_name() != "BODY").then(|| self.intern(active))
     }
 
+    /// Forget what was read from the page: it is about to differ.
+    fn forget(&mut self) {
+        for node in self.nodes.as_mut() {
+            node.data.take();
+            node.layout.take();
+        }
+    }
+
     pub fn set_focus_to(&mut self, id: NodeId) -> bool {
         let Some(el) = self.get_node(id).and_then(|n| n.element.dyn_ref::<HtmlElement>()) else {
             return false;
         };
-        el.focus().is_ok()
+        let focused = el.focus().is_ok();
+        self.forget();
+        focused
     }
 
     pub fn with_text_input(&mut self, id: NodeId, edit: impl FnOnce(TextDriver)) {
         if let Some(node) = self.get_node(id) {
             edit(TextDriver { element: node.element.clone() });
+            self.forget();
         }
     }
 
@@ -201,8 +271,11 @@ impl Document {
         }
     }
 
-    /// The browser lays out before it answers a geometry query.
-    pub fn resolve(&mut self, _time: f64) {}
+    /// The browser lays out before it answers a geometry query, so the next
+    /// reads only have to be fresh ones.
+    pub fn resolve(&mut self, _time: f64) {
+        self.forget();
+    }
 
     pub fn hovered_scrollbar(&self) -> Option<Scrollbar> {
         None
@@ -328,35 +401,6 @@ impl Node {
 
     pub fn scroll_offset(&self) -> Point {
         Point { x: f64::from(self.element.scroll_left()), y: f64::from(self.element.scroll_top()) }
-    }
-
-    /// The byte of this element's text under a point given from its content box.
-    pub fn text_offset_at_point(&self, x: f32, y: f32) -> Option<usize> {
-        let rect = self.element.get_bounding_client_rect();
-        let l = self.final_layout();
-        let (cx, cy) = (rect.x() as f32 + l.padding.left + l.border.left + x, rect.y() as f32 + l.padding.top + l.border.top + y);
-        // WebKit and Blink answer `caretRangeFromPoint`; the standard is `caretPositionFromPoint`.
-        let doc: JsValue = page().into();
-        let call = |name: &str| -> Option<JsValue> {
-            let f: js_sys::Function = js_sys::Reflect::get(&doc, &name.into()).ok()?.dyn_into().ok()?;
-            f.call2(&doc, &cx.into(), &cy.into()).ok().filter(|v| !v.is_null() && !v.is_undefined())
-        };
-        let (container, offset) = if let Some(range) = call("caretRangeFromPoint") {
-            (js_sys::Reflect::get(&range, &"startContainer".into()).ok()?, js_sys::Reflect::get(&range, &"startOffset".into()).ok()?)
-        } else {
-            let position = call("caretPositionFromPoint")?;
-            (js_sys::Reflect::get(&position, &"offsetNode".into()).ok()?, js_sys::Reflect::get(&position, &"offset".into()).ok()?)
-        };
-        let container: web_sys::Node = container.dyn_into().ok()?;
-        if !self.element.contains(Some(&container)) {
-            return None;
-        }
-        // The text before the point, from the element's start.
-        let before = page().create_range().ok()?;
-        before.set_start(&self.element, 0).ok()?;
-        before.set_end(&container, offset.as_f64()? as u32).ok()?;
-        let prefix: String = before.to_string().into();
-        Some(prefix.len())
     }
 
     pub fn is_focussed(&self) -> bool {
@@ -575,6 +619,8 @@ pub mod text {
         metrics: LineMetrics,
         /// Where an empty line's caret sits (text alignment).
         start_x: f32,
+        /// The line ends with a line break; its glyph is the line's last.
+        hard_break: bool,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
@@ -592,9 +638,15 @@ pub mod text {
 
     thread_local! {
         static MIRROR: RefCell<Option<HtmlElement>> = const { RefCell::new(None) };
-        /// Layouts by a hash of text, font and width: a keystroke re-measures one
-        /// field, not the note, and an unchanged field's layout is shared, not copied.
-        static CACHE: RefCell<HashMap<u64, Rc<Layout>>> = RefCell::new(HashMap::new());
+        /// Each field's latest layout, by element id, with a hash of the text, font
+        /// and width it was measured from: a keystroke re-measures one field, not
+        /// the note, and the memory held is one layout per field.
+        static CACHE: RefCell<HashMap<String, (u64, Rc<Layout>)>> = RefCell::new(HashMap::new());
+    }
+
+    /// Measure every field again: the fonts they were measured with have changed.
+    pub(super) fn forget_layouts() {
+        CACHE.with_borrow_mut(HashMap::clear);
     }
 
     /// Text properties that decide where glyphs and line breaks fall.
@@ -628,7 +680,8 @@ pub mod text {
                 (text, &css, if multiline { width.to_bits() } else { 0 }).hash(&mut hasher);
                 hasher.finish()
             };
-            if let Some(hit) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
+            let id = field.id();
+            if let Some(hit) = CACHE.with_borrow(|c| c.get(&id).filter(|(of, _)| *of == key).map(|(_, layout)| layout.clone())) {
                 return Some(hit);
             }
             if multiline {
@@ -664,13 +717,14 @@ pub mod text {
             let mut lines: Vec<LineData> = Vec::new();
             let mut glyphs: Vec<Glyph> = Vec::new();
             let (mut line_start, mut line_top, mut units) = (0usize, None::<f32>, 0u32);
-            let finish = |lines: &mut Vec<LineData>, glyphs: &mut Vec<Glyph>, range: Range<usize>| {
+            let finish = |lines: &mut Vec<LineData>, glyphs: &mut Vec<Glyph>, range: Range<usize>, hard_break: bool| {
                 let top = lines.len() as f32 * line_height;
                 lines.push(LineData {
                     range,
                     glyphs: std::mem::take(glyphs),
                     metrics: LineMetrics { block_min_coord: top, block_max_coord: top + line_height },
                     start_x,
+                    hard_break,
                 });
             };
             for (byte, ch) in text.char_indices() {
@@ -678,7 +732,7 @@ pub mod text {
                 if ch == '\n' {
                     let x = glyphs.last().map_or(start_x, |g| g.x + g.advance);
                     glyphs.push(Glyph { byte, len: 1, x, advance: 0.0 });
-                    finish(&mut lines, &mut glyphs, line_start..byte + 1);
+                    finish(&mut lines, &mut glyphs, line_start..byte + 1, true);
                     (line_start, line_top) = (byte + 1, None);
                     units += len16;
                     continue;
@@ -690,22 +744,16 @@ pub mod text {
                 let top = (r.top() - origin.top()) as f32;
                 // A character that lands lower than its line started a wrapped line.
                 if line_top.is_some_and(|t| top > t + line_height * 0.5) {
-                    finish(&mut lines, &mut glyphs, line_start..byte);
+                    finish(&mut lines, &mut glyphs, line_start..byte, false);
                     (line_start, line_top) = (byte, None);
                 }
                 line_top.get_or_insert(top);
                 let x = (r.left() - origin.left()) as f32;
                 glyphs.push(Glyph { byte, len: ch.len_utf8(), x, advance: r.width() as f32 });
             }
-            finish(&mut lines, &mut glyphs, line_start..text.len());
+            finish(&mut lines, &mut glyphs, line_start..text.len(), false);
             let layout = Rc::new(Layout { lines, len: text.len(), font_size });
-            CACHE.with(|c| {
-                let mut cache = c.borrow_mut();
-                if cache.len() > 512 {
-                    cache.clear();
-                }
-                cache.insert(key, layout.clone());
-            });
+            CACHE.with_borrow_mut(|c| c.insert(id, (key, layout.clone())));
             Some(layout)
         }
 
@@ -847,11 +895,12 @@ pub mod text {
                 return Self { index: 0 };
             };
             let l = &layout.lines[line];
-            let index = l
-                .glyphs
-                .iter()
-                .find(|g| g.advance == 0.0 || x < g.x + g.advance * 0.5)
-                .map_or(l.range.end, |g| g.byte);
+            // Past the line's text the caret sits before its line break, if it has one.
+            let (text, end) = match l.glyphs.split_last() {
+                Some((line_break, text)) if l.hard_break => (text, line_break.byte),
+                _ => (&l.glyphs[..], l.range.end),
+            };
+            let index = text.iter().find(|g| x < g.x + g.advance * 0.5).map_or(end, |g| g.byte);
             Self { index }
         }
 
@@ -951,6 +1000,12 @@ pub fn press_places_caret(press: &PointerData) -> bool {
     press.pointer_type() != "touch"
 }
 
+/// Whether moving this pressed pointer drags a selection. In a browser a
+/// moving finger scrolls the page, and the press is then taken away.
+pub fn move_selects(pointer: &PointerData) -> bool {
+    pointer.pointer_type() != "touch"
+}
+
 /// Whether a click follows this release. A browser always sends one.
 pub fn click_follows_release(_release: &PointerData) -> bool {
     true
@@ -963,6 +1018,11 @@ const PHONE_WIDTH: f64 = 720.0;
 /// Whether the window is as narrow as a phone's screen.
 pub fn phone_sized() -> bool {
     window().inner_width().ok().and_then(|w| w.as_f64()).is_some_and(|w| w <= PHONE_WIDTH)
+}
+
+/// Whether shortcuts use ⌘: the page is open on a Mac, an iPhone or an iPad.
+pub fn apple_keys() -> bool {
+    window().navigator().platform().is_ok_and(|p| p.starts_with("Mac") || p.starts_with("iP"))
 }
 
 /// Open a link in a new tab.
@@ -984,40 +1044,206 @@ pub fn use_window() -> Option<Window> {
     Some(Window)
 }
 
+type Handler = Closure<dyn FnMut(web_sys::Event)>;
+
+/// DOM listeners that last as long as this value: dropping it removes them.
+#[derive(Default)]
+struct Listeners(Vec<(web_sys::EventTarget, &'static str, bool, Handler)>);
+
+impl Listeners {
+    fn add(&mut self, target: &web_sys::EventTarget, name: &'static str, capture: bool, handler: impl FnMut(web_sys::Event) + 'static) {
+        let handler = Handler::new(handler);
+        let _ = target.add_event_listener_with_callback_and_bool(name, handler.as_ref().unchecked_ref(), capture);
+        self.0.push((target.clone(), name, capture, handler));
+    }
+}
+
+impl Drop for Listeners {
+    fn drop(&mut self) {
+        for (target, name, capture, handler) in &self.0 {
+            let _ = target.remove_event_listener_with_callback_and_bool(name, handler.as_ref().unchecked_ref(), *capture);
+        }
+    }
+}
+
+/// A task that runs once on the next animation frame, however often it is asked for.
+struct NextFrame {
+    task: Closure<dyn FnMut()>,
+    request: Rc<Cell<Option<i32>>>,
+}
+
+impl NextFrame {
+    fn new(mut task: impl FnMut() + 'static) -> Self {
+        let request = Rc::new(Cell::new(None));
+        let asked = request.clone();
+        let task = Closure::<dyn FnMut()>::new(move || {
+            asked.set(None);
+            task();
+        });
+        Self { task, request }
+    }
+
+    fn request(&self) {
+        if self.request.get().is_none() {
+            self.request.set(window().request_animation_frame(self.task.as_ref().unchecked_ref()).ok());
+        }
+    }
+}
+
+impl Drop for NextFrame {
+    fn drop(&mut self) {
+        if let Some(request) = self.request.take() {
+            let _ = window().cancel_animation_frame(request);
+        }
+    }
+}
+
 /// Tell the notebook when the focused field's caret or geometry moves, so its
-/// overlays follow: selection changes, composition, scrolling and resizing.
+/// overlays follow: selection changes, composition, scrolling, resizing, and
+/// fonts arriving. One change sends several of these events, so they are
+/// reported once, on the next frame, and the notebook's reads in that report
+/// share one view of the page. The listeners go when the component does.
 pub fn use_field_watch(_root: Signal<Option<NodeHandle>>, on_event: impl FnMut(FieldEvent) + 'static) {
-    use wasm_bindgen::closure::Closure;
     use_hook(move || {
-        let on_event = std::rc::Rc::new(RefCell::new(on_event));
-        let listen = |target: &web_sys::EventTarget, name: &'static str, capture: bool| {
+        let on_event = Rc::new(RefCell::new(on_event));
+        let changed = Rc::new(NextFrame::new({
             let on_event = on_event.clone();
-            let handler = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
-                match name {
-                    "compositionstart" => {
-                        set_composing(true);
-                        (on_event.borrow_mut())(FieldEvent::Composing);
-                    }
-                    "compositionend" => set_composing(false),
-                    _ => {}
+            move || shared_pass(|| (on_event.borrow_mut())(FieldEvent::Changed))
+        }));
+        let notify = |before: fn()| {
+            let changed = changed.clone();
+            move |_: web_sys::Event| {
+                before();
+                changed.request();
+            }
+        };
+        let mut listeners = Listeners::default();
+        let doc: web_sys::EventTarget = page().into();
+        listeners.add(&doc, "selectionchange", false, notify(|| {}));
+        listeners.add(&doc, "compositionstart", false, {
+            let changed = changed.clone();
+            move |_| {
+                set_composing(true);
+                (on_event.borrow_mut())(FieldEvent::Composing);
+                changed.request();
+            }
+        });
+        listeners.add(&doc, "compositionend", false, notify(|| set_composing(false)));
+        listeners.add(&doc, "scroll", true, notify(|| {}));
+        listeners.add(&window().into(), "resize", false, notify(|| {}));
+        // A face that arrives after its text was measured moves every glyph.
+        listeners.add(&page().fonts().into(), "loadingdone", false, notify(text::forget_layouts));
+        Rc::new(listeners)
+    });
+}
+
+/// Inputs waiting for the next frame's report.
+#[derive(Clone)]
+struct InputTrace {
+    pending: Rc<RefCell<Vec<String>>>,
+    report: Rc<NextFrame>,
+}
+
+impl InputTrace {
+    fn push(&self, label: String) {
+        let mut pending = self.pending.borrow_mut();
+        if pending.len() < super::TRACE_BATCH {
+            pending.push(label);
+            self.report.request();
+        }
+    }
+}
+
+fn event_field(event: &web_sys::Event, name: &str) -> JsValue {
+    js_sys::Reflect::get(event, &name.into()).unwrap_or(JsValue::UNDEFINED)
+}
+
+/// The modifiers held during a key or pointer event, as the inspector labels them.
+fn held(event: &web_sys::Event) -> String {
+    [("metaKey", "Meta+"), ("ctrlKey", "Ctrl+"), ("altKey", "Alt+"), ("shiftKey", "Shift+")]
+        .into_iter()
+        .filter_map(|(key, name)| event_field(event, key).is_truthy().then_some(name))
+        .collect()
+}
+
+/// Report what the user did, for the inspector: each frame's key presses,
+/// composition, pointer buttons, scrolling and resizing, as short labels.
+pub fn use_input_trace(on_inputs: impl FnMut(Vec<String>) + 'static) {
+    use_hook(move || {
+        let on_inputs = RefCell::new(on_inputs);
+        let pending = Rc::new(RefCell::new(vec!["Opened inspector".to_owned()]));
+        let report = Rc::new(NextFrame::new({
+            let pending = pending.clone();
+            move || {
+                let inputs = std::mem::take(&mut *pending.borrow_mut());
+                if !inputs.is_empty() {
+                    (on_inputs.borrow_mut())(inputs);
                 }
-                // A handler that edits the note re-enters through `selectionchange`.
-                if let Ok(mut notify) = on_event.try_borrow_mut() {
-                    notify(FieldEvent::Changed);
+            }
+        }));
+        report.request();
+        let trace = InputTrace { pending, report };
+        let mut listeners = Listeners::default();
+        let mut record = |target: &web_sys::EventTarget, name: &'static str, label: Box<dyn Fn(&web_sys::Event) -> Option<String>>| {
+            let trace = trace.clone();
+            listeners.add(target, name, true, move |event| {
+                if let Some(label) = label(&event) {
+                    trace.push(label);
                 }
             });
-            let _ = target.add_event_listener_with_callback_and_bool(name, handler.as_ref().unchecked_ref(), capture);
-            // The notebook lives as long as the page.
-            handler.forget();
         };
         let doc: web_sys::EventTarget = page().into();
-        let win: web_sys::EventTarget = window().into();
-        for name in ["selectionchange", "compositionstart", "compositionend"] {
-            listen(&doc, name, false);
+        record(&doc, "keydown", Box::new(|e| {
+            let key = event_field(e, "key").as_string()?;
+            // The inspector's own keys and bare modifiers are not inputs to the note.
+            if matches!(key.as_str(), "F8" | "F9" | "Meta" | "Control" | "Alt" | "Shift") {
+                return None;
+            }
+            let repeat = if event_field(e, "repeat").is_truthy() { " (repeat)" } else { "" };
+            Some(format!("{}{key:?}{repeat}", held(e)))
+        }));
+        record(&doc, "compositionupdate", Box::new(|e| Some(format!("IME preedit {:?}", event_field(e, "data").as_string()?))));
+        record(&doc, "compositionend", Box::new(|e| Some(format!("IME commit {:?}", event_field(e, "data").as_string()?))));
+        for (name, state) in [("pointerdown", "pressed"), ("pointerup", "released")] {
+            record(&doc, name, Box::new(move |e| {
+                let at = |axis: &str| event_field(e, axis).as_f64().unwrap_or(0.0);
+                let pointer = event_field(e, "pointerType").as_string().unwrap_or_default();
+                Some(format!("{}{pointer} {state} at {:.0},{:.0} px", held(e), at("clientX"), at("clientY")))
+            }));
         }
-        listen(&doc, "scroll", true);
-        listen(&win, "resize", false);
+        record(&doc, "wheel", Box::new(|e| {
+            Some(format!("Scroll {:.0},{:.0}", event_field(e, "deltaX").as_f64()?, event_field(e, "deltaY").as_f64()?))
+        }));
+        let win: web_sys::EventTarget = window().into();
+        record(&win, "resize", Box::new(|_| {
+            let size = |v: Result<JsValue, JsValue>| v.ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+            Some(format!("Resize {:.0}×{:.0} px", size(window().inner_width()), size(window().inner_height())))
+        }));
+        // A field's focus passes through the window on its way down: only the window's own counts.
+        for (name, focused) in [("focus", true), ("blur", false)] {
+            record(&win, name, Box::new(move |e| {
+                (e.target() == Some(window().into())).then(|| format!("Window focused {focused}"))
+            }));
+        }
+        Rc::new(listeners)
     });
+}
+
+/// Save an inspection report: the browser downloads it. Says where it went.
+pub fn save_report(bytes: &[u8]) -> std::io::Result<String> {
+    let refused = |_| std::io::Error::other("the browser refused the download");
+    let name = format!("margin-report-{}.json", js_sys::Date::now() as u64);
+    let options = web_sys::BlobPropertyBag::new();
+    options.set_type("application/json");
+    let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes));
+    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &options).map_err(refused)?;
+    // The URL is left for the page to release: revoking it here can cancel the download.
+    let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(refused)?;
+    let link: HtmlElement = page().create_element("a").map_err(refused)?.unchecked_into();
+    link.set_attribute("href", &url).map_err(refused)?;
+    link.set_attribute("download", &name).map_err(refused)?;
+    link.click();
+    Ok(format!("{name} to your downloads"))
 }
 
 /// The page's fonts, and the browser defaults the notebook's styles assume away.
