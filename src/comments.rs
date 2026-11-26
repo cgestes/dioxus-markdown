@@ -264,7 +264,7 @@ pub fn place(md: &str, at: usize) -> Place {
             Some((t.cell_text(md, row, 0)?, t.cell_text(md, 0, col)?))
         });
     Place {
-        section: table::heading_above(md, at).map(String::from),
+        section: crate::heading::above(md, at).map(String::from),
         cell,
     }
 }

@@ -304,7 +304,7 @@ pub fn md_tables(md: &str) -> Vec<MdTable> {
         .map(|t| {
             let mut rows = t.texts(md).into_iter();
             MdTable {
-                heading: table::heading_above(md, t.range.start).map(String::from),
+                heading: margin_editor_core::heading::above(md, t.range.start).map(String::from),
                 headers: rows.next().unwrap_or_default(),
                 rows: rows.collect(),
             }

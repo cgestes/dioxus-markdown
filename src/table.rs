@@ -159,17 +159,6 @@ pub fn cell_value(value: &str) -> String {
     encoded(&value.replace(['\r', '\n'], " "))
 }
 
-/// The text of the nearest heading line above byte `at`, without its hashes.
-pub fn heading_above(md: &str, at: usize) -> Option<&str> {
-    let at = md.floor_char_boundary(at.min(md.len()));
-    md[..at]
-        .lines()
-        .rev()
-        .find(|l| l.starts_with('#'))
-        .map(|l| l.trim_start_matches('#').trim())
-        .filter(|h| !h.is_empty())
-}
-
 pub fn cell_to_source(raw: &str, byte: usize) -> usize {
     let mut display = 0;
     let mut at = 0;

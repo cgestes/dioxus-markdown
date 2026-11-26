@@ -1,4 +1,5 @@
-//! A page's first heading and the title in it.
+//! A page's headings: the first one and the title in it, and the one above
+//! a place in the text.
 
 /// The text of the first `# ` heading.
 pub fn h1(md: &str) -> Option<&str> {
@@ -23,4 +24,15 @@ pub fn split_heading(heading: &str) -> (&str, &str) {
         Some((at, sep)) => (heading[..at].trim(), heading[at + sep.len()..].trim()),
         None => (heading.trim(), ""),
     }
+}
+
+/// The text of the nearest heading line above byte `at`, without its hashes.
+pub fn above(md: &str, at: usize) -> Option<&str> {
+    let at = md.floor_char_boundary(at.min(md.len()));
+    md[..at]
+        .lines()
+        .rev()
+        .find(|l| l.starts_with('#'))
+        .map(|l| l.trim_start_matches('#').trim())
+        .filter(|h| !h.is_empty())
 }
