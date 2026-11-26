@@ -10,6 +10,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use keys::Identity;
 use loro::{ExportMode, LoroDoc};
+use margin_note::note::Note;
 use record::{DOCUMENT, Packet};
 use rusqlite::{Connection, OptionalExtension, params};
 use std::{
@@ -325,9 +326,10 @@ impl Vault {
 
     pub fn new_note(&self, markdown: &str, shared: bool) -> Result<String> {
         let room = hex::encode(keys::random::<16>());
-        let d = LoroDoc::new();
+        // `Note` lays out the document; the marker is the vault's own.
+        let note = Note::new(markdown);
+        let d = note.document();
         d.get_map("margin").insert("format", 1)?;
-        d.get_text("markdown").insert(0, markdown)?;
         let data = self.encrypted_delta(&room, shared, &d.export(ExportMode::all_updates())?)?;
         let mut c = self.conn()?;
         let tx = c.transaction()?;
@@ -339,7 +341,7 @@ impl Vault {
     }
 
     pub fn publish(&self, room: &str) -> Result<String> {
-        let note = margin_note::note::Note::from_doc(self.load(room)?.0);
+        let note = Note::from_doc(self.load(room)?.0);
         self.new_note(&note.markdown(), true)
     }
 

@@ -234,13 +234,13 @@ async fn main() -> Result<()> {
             println!("{}", v.new_note(std::str::from_utf8(&md)?, synced)?);
         }
         Command::Append { note, input: path } => {
-            let (d, _) = v.load(&note)?;
-            let text = d.get_text("markdown");
+            let text = Note::from_doc(v.load(&note)?.0);
             let bytes = input(&path)?;
             if !bytes.is_empty() {
-                let before = d.oplog_vv();
-                text.insert(text.len_unicode(), std::str::from_utf8(&bytes)?)?;
-                v.append_update(&note, &d.export(loro::ExportMode::updates(&before))?)?;
+                let before = text.document().oplog_vv();
+                let end = text.markdown().len();
+                text.replace(end..end, std::str::from_utf8(&bytes)?)?;
+                v.append_update(&note, &text.document().export(loro::ExportMode::updates(&before))?)?;
             }
         }
         Command::Read { note } => print!("{}", Note::from_doc(v.load(&note)?.0).markdown()),
