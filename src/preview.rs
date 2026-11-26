@@ -1,5 +1,6 @@
-//! A read-only projection for the facing-page editor. Each displayed run
-//! remembers the source bytes that produced it, including escaped punctuation.
+//! The reading projection: Markdown as lines of styled runs, and tables, for
+//! the read-only views. Each displayed run remembers the source bytes that
+//! produced it, including escaped punctuation.
 use crate::{
     checkbox::markdown_markers,
     syntax::{HighlightSpan, highlight_code},
@@ -38,24 +39,6 @@ impl Passage {
             depth: 0,
             runs: Vec::new(),
         }
-    }
-
-    /// Offset in Parley's shaped, visible text, relative to this passage.
-    pub fn source_at(&self, offset: usize) -> usize {
-        let mut seen = 0;
-        for run in &self.runs {
-            if offset < seen + run.text.len() {
-                return if run.literal {
-                    run.from + run.text.floor_char_boundary(offset - seen)
-                } else if offset == seen {
-                    run.from
-                } else {
-                    run.to
-                };
-            }
-            seen += run.text.len();
-        }
-        self.runs.last().map_or(self.from, |r| r.to)
     }
 }
 
@@ -557,6 +540,26 @@ pub fn document(md: &str) -> Vec<Block> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    impl Passage {
+        /// The source byte behind an offset in this passage's displayed text.
+        fn source_at(&self, offset: usize) -> usize {
+            let mut seen = 0;
+            for run in &self.runs {
+                if offset < seen + run.text.len() {
+                    return if run.literal {
+                        run.from + run.text.floor_char_boundary(offset - seen)
+                    } else if offset == seen {
+                        run.from
+                    } else {
+                        run.to
+                    };
+                }
+                seen += run.text.len();
+            }
+            self.runs.last().map_or(self.from, |r| r.to)
+        }
+    }
 
     #[test]
     fn visible_letters_keep_their_utf8_source_positions() {
