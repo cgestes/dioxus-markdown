@@ -49,9 +49,12 @@ pub fn run() {
 
 /// Open a window titled `title` whose content is `root`.
 pub fn launch(title: &str, size: (f64, f64), root: fn() -> Element) {
-    let window = dioxus_native::WindowAttributes::default()
-        .with_title(title)
-        .with_surface_size(dioxus_native::LogicalSize::new(size.0, size.1));
+    let window = dioxus_native::WindowAttributes::default().with_title(title);
+    // On iPhone and iPad the window is the screen; a requested size would crop it.
+    #[cfg(not(target_os = "ios"))]
+    let window = window.with_surface_size(dioxus_native::LogicalSize::new(size.0, size.1));
+    #[cfg(target_os = "ios")]
+    let _ = size;
     #[cfg(target_os = "macos")]
     macos::launch(window, root);
     #[cfg(not(target_os = "macos"))]

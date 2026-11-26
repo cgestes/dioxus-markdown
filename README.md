@@ -83,6 +83,22 @@ The inspector colors headings, blank lines and prose, outlines table controls an
 
 The runner writes a self-contained [HTML report](target/editor-tests/index.html) with the failed checks first. Expand **Passed checks** to inspect the other screenshots or **Inputs and Markdown** to see how a checkpoint was reached. Each run also has its own directory. A mismatch or an unavailable requested window check returns a nonzero exit status. The native window checks use the observed state before each key as their starting point, so an earlier failure does not change the expected behavior of the next gesture. Interactive F9 reports are observations. Seeded workflows can be replayed by seed.
 
+## Use it on iPhone and the web
+
+The Dioxus Native app runs on iPhone. Install the Dioxus CLI from the commit `dioxus-native` is pinned to, then boot a simulator and serve the `margin` binary:
+
+```sh
+cargo install --git https://github.com/DioxusLabs/dioxus --rev 0a7242a2a72b08975584bf8ecb05076a5ee0b9c7 dioxus-cli --locked
+dx serve --ios --renderer native --package margin-editor
+```
+
+Edits to `rsx!` reload in the running app. In `crates/margin-editor`, `Dioxus.toml` sets the bundle identifier, and `build.rs` embeds the simulator's Keychain entitlement so the encrypted vault can store its key. For your own phone, add `--device` once Xcode has an Apple Development certificate and a provisioning profile for `dev.margin.native`. Typing, Backspace, checkboxes and the encrypted vault work, and tables render. winit's iOS view only implements `UIKeyInput`. Autocorrect, dictation, input methods, selection handles, and arrow keys from a hardware keyboard are therefore missing. The layout doesn't resize for the on-screen keyboard. Attaching and exporting files needs a native file dialog, so those menu items are hidden on iOS.
+
+The browser notebook also ships as an iPhone app and as a static site. Both use the page that `npm --prefix mockup run build` writes to `mockup/index.html`. They keep its encrypted storage, pairing and attachments.
+
+- **iPhone web app.** Open `ios/Margin.xcodeproj` in Xcode and run the *Margin* scheme on a simulator. For your own phone, choose your team under **Signing & Capabilities** first. The app bundles `mockup/index.html` and serves it from `margin://notebook/`. Notes, keys and pairing survive restarts and updates because that origin never changes. Links in notes open in Safari. **Export .md** and attachments open the share sheet. **Open second editor** opens a sheet on the same notebook. Rebuild the page before the app to pick up browser changes. [App shell](ios/Margin/NotebookViewController.swift)
+- **Web.** `scripts/deploy-web` builds `mockup/dist/` and publishes it to GitHub Pages from the `gh-pages` branch. The site adds a web app manifest, icons and an offline service worker to the page. In Safari on iPhone, **Share → Add to Home Screen** installs it full screen. Each browser keeps its own notes. Safari may clear a site's storage after seven days of use without a visit. Home Screen apps and the iOS app keep theirs. Pair the device with a relay for notes you need elsewhere. [Live notebook](https://cgestes.github.io/dioxus-markdown/)
+
 ## Try the Split design
 
 Choose **Split** in either toolbar. For a new native session, run `cargo run --locked -p margin-editor --bin margin -- --split`. For the browser, open the standalone HTML and click **Split**, or append `?view=split#walk` to the served URL. [Browser preview](mockup/index.html) · [Browser screenshot](mockup/split-edit.png) · [Native screenshot](mockup/native-split.png)

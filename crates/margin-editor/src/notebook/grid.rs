@@ -537,6 +537,10 @@ impl Writing {
     }
 
     fn cell_input(mut self, t: usize, r: usize, c: usize, value: &str) {
+        // A Markdown cell is one line. Enter moves between rows, so a line break can
+        // only arrive inside inserted text.
+        let value = value.replace(['\r', '\n'], " ");
+        let value = value.as_str();
         let field = Field::Cell(t, r, c);
         if self.replace_span_input(field, value) {
             return;
@@ -1009,10 +1013,16 @@ fn RowStrip(
     } else {
         open_row.or(hover_r).or(single_active_row)
     };
+    // Rows grow with wrapped text; until they are measured the stylesheet's fixed heights apply.
+    let heights = writing.row_heights.read().get(index).cloned().unwrap_or_default();
+    let px = |r: usize, property: &str| {
+        heights.get(r).filter(|h| **h > 0.0).map(|h| format!("{property}: {h}px;"))
+    };
     rsx! {
         div {
             id: format!("row-strip-{index}"),
             class: "ledger-row-strip",
+            style: px(0, "top"),
             for r in 1..row_count {
                 {
                     let row_open = open_row == Some(r);
@@ -1027,6 +1037,7 @@ fn RowStrip(
                         div {
                             key: "{r}",
                             class: "ledger-row-slot",
+                            style: px(r, "height"),
                             class: if is_target_row || row_open { "active" },
                             if is_target_row {
                                 div {
@@ -1119,14 +1130,15 @@ fn GridRow(
                                 }
                             },
                             div { class: "cell-field",
-                                // A Blitz single-line input has an unconstrained Parley layout. Size its
-                                // frame to the shaped text for alignment; let long values scroll normally.
-                                if alignment != "left" || whole_cell {
-                                    span { class: "cell-measure", class: if whole_cell { "range-value" }, aria_hidden: "true", "{value}" }
+                                // Long values wrap. A Blitz textarea doesn't grow with its text, so this hidden
+                                // copy wraps the same way and gives the cell, and so the row, its height. Its
+                                // shaped width also sizes centred and right-aligned frames.
+                                span { class: "cell-measure", class: if whole_cell { "range-value" }, aria_hidden: "true",
+                                    if value.is_empty() { "\u{a0}" } else { "{value}" }
                                 }
-                                input {
+                                textarea {
                                     id: field.id(), "data-range-keys": if selected && !*writing.cell_editing.read() { "true" }, class: "grid-cell",
-                                    aria_label: format!("Row {}, column {}", row + 1, col + 1), value,
+                                    aria_label: format!("Row {}, column {}", row + 1, col + 1), value: "{value}",
                                     onmounted: move |e| {
                                         mounted_field(e, field, writing.focus);
                                         writing.refresh_link_card();
@@ -1139,6 +1151,7 @@ fn GridRow(
                                         writing.track_field(field);
                                     },
                                     oninput: move |e| writing.cell_input(index, row, col, &e.value()),
+                                    "{value}"
                                 }
                                 {(writing.ink)().into_iter().filter(|ink| ink.field == field).map(|ink| ink.draw())}
                                 crate::comments::CommentInk { writing, field }

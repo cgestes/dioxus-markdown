@@ -32,20 +32,21 @@ const symbols = await Promise.all(icons.map(async name => {
   const svg = await readFile(`node_modules/lucide-static/icons/${name}.svg`, "utf8");
   return `<symbol id="i-${name}" viewBox="0 0 24 24">${svg.match(/<svg\b[^>]*>([\s\S]*?)<\/svg>/)[1]}</symbol>`;
 }));
+// The typefaces assets/theme.css names (--sans, --mono), shared with the desktop app.
 const fonts = [
-  ["DM Sans", "dm-sans", 400, "normal"], ["DM Sans", "dm-sans", 600, "normal"],
-  ["Instrument Serif", "instrument-serif", 400, "normal"],
-  ["STIX Two Text", "stix-two-text", 400, "normal"], ["STIX Two Text", "stix-two-text", 400, "italic"],
-  ["STIX Two Text", "stix-two-text", 600, "normal"], ["IBM Plex Mono", "ibm-plex-mono", 400, "normal"],
-  ["IBM Plex Mono", "ibm-plex-mono", 600, "normal"], ["IBM Plex Mono", "ibm-plex-mono", 400, "italic"]
+  ["Geist", "geist", 400, "normal"], ["Geist", "geist", 400, "italic"],
+  ["Geist", "geist", 500, "normal"], ["Geist", "geist", 600, "normal"],
+  ["JetBrains Mono", "jetbrains-mono", 400, "normal"], ["JetBrains Mono", "jetbrains-mono", 400, "italic"],
+  ["JetBrains Mono", "jetbrains-mono", 500, "normal"], ["JetBrains Mono", "jetbrains-mono", 600, "normal"]
 ];
 const faces = await Promise.all(fonts.map(async ([family, slug, weight, style]) => {
-  const directory = slug === "stix-two-text" ? `node_modules/@fontsource/${slug}/files` : "../crates/margin-ui/assets/fonts";
-  const bytes = await readFile(`${directory}/${slug}-latin-${weight}-${style}.woff2`);
+  const bytes = await readFile(`../crates/margin-ui/assets/fonts/${slug}-latin-${weight}-${style}.woff2`);
   return `@font-face{font-family:"${family}";font-weight:${weight};font-style:${style};font-display:swap;src:url(data:font/woff2;base64,${bytes.toString("base64")}) format("woff2")}`;
 }));
+const fontNotices = await Promise.all([...new Set(fonts.map(f => f[1]))].map(async slug =>
+  slug + "\n" + await readFile(`../crates/margin-ui/assets/fonts/${slug}-LICENSE.txt`, "utf8")));
 // Keep redistribution notices inside the standalone copy as well as in npm packages.
-const packages = new Set(["lucide-static", ...fonts.map(f => "@fontsource/" + f[1])]);
+const packages = new Set(["lucide-static"]);
 for (const input of Object.keys(bundle.metafile.inputs)) {
   const match = input.match(/^node_modules\/((?:@[^/]+\/)?[^/]+)/);
   if (match) packages.add(match[1]);
@@ -64,6 +65,6 @@ const css = (await Promise.all(["../crates/margin-ui/assets/theme.css", "../crat
 for (const [key, value] of Object.entries({
   FONTS: faces.join("\n"), CSS: css, ICONS: symbols.join("\n"),
   BUNDLE: bundle.outputFiles[0].text.replace(/<\/script/gi, "<\\/script"),
-  LICENSES: [...licenses, ...checkboxNotices()].join("\n\n").replace(/<\/script/gi, "<\\/script")
+  LICENSES: [...licenses, ...fontNotices, ...checkboxNotices()].join("\n\n").replace(/<\/script/gi, "<\\/script")
 })) html = html.replace("<!--" + key + "-->", () => value);
 await writeFile("index.html", html);

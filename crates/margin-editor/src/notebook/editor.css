@@ -200,25 +200,28 @@ textarea.body-editor {
 
 /* Split uses its own reading grid. Live shares its surface and controls with the browser. */
 .read-table { position: relative; margin-right: -30px; padding-right: 30px; padding-bottom: 27px; }
+/* Rows keep their resting height and grow when a cell's text wraps. */
 .cell-slot {
-    position: relative; display: flex; align-items: stretch;
-    flex: 1 1 0; min-width: 88px; height: var(--ledger-row); padding: 0 var(--ledger-pad);
+    position: relative; display: flex; align-items: center;
+    flex: 1 1 0; min-width: 88px; min-height: var(--ledger-row); padding: 8px var(--ledger-pad);
 }
-.cell-slot.ledger-head { height: var(--ledger-head); }
+.cell-slot.ledger-head { min-height: var(--ledger-head); }
 .cell-slot.align-center { justify-content: center; }
 .cell-slot.align-right { justify-content: flex-end; }
 .cell-field { position: relative; min-width: 0; flex: 1 1 0; overflow: hidden; }
 .align-center .cell-field, .align-right .cell-field { flex: 0 1 auto; min-width: 2px; max-width: 100%; }
 .cell-measure {
     display: block; visibility: hidden; pointer-events: none; user-select: none;
-    white-space: pre; font: inherit; padding-right: 2px;
+    white-space: pre-wrap; font: inherit; padding-right: 2px;
 }
 .cell-measure.range-value { display: flex; align-items: center; height: 100%; visibility: visible; }
 .range-target .grid-cell { opacity: 0; }
+/* The textarea covers the measure and wraps at the same width: same font, same right padding. */
 .paper .grid-cell {
     position: absolute; left: 0; top: 0; width: 100%; height: 100%;
-    margin: 0; padding: 0; border: 0; border-radius: 0; outline: 0;
+    margin: 0; padding: 0 2px 0 0; border: 0; border-radius: 0; outline: 0;
     color: inherit; caret-color: currentColor; background: transparent; font: inherit;
+    white-space: pre-wrap; overflow: hidden; resize: none;
 }
 .cell-field .md-ink { background: var(--cell-paper); }
 .grid-edge { position: absolute; pointer-events: none; }

@@ -237,7 +237,9 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
             Vec::new()
         }
     });
-    let mut comments_open = use_signal(move || seed_comments && initial_view == View::Live);
+    // On a phone the pane would cover the note, so it waits for the comments button.
+    let mut comments_open =
+        use_signal(move || seed_comments && initial_view == View::Live && !cfg!(target_os = "ios"));
     let active_comment = use_signal(move || {
         if seed_comments {
             comments.peek().iter().find(|t| !t.file.resolved).map(|t| t.id)
@@ -345,6 +347,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         block_drag: use_signal(|| None),
         heights: use_signal(Vec::new),
         heading_heights: use_signal(Vec::new),
+        row_heights: use_signal(Vec::new),
         caret_line_col: use_signal(|| None),
         ink: use_signal(Vec::new),
         callout_boxes: use_signal(Vec::new),

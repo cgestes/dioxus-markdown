@@ -509,12 +509,27 @@ fn compact_toolbar_and_table_stay_in_place_while_editing() {
             s.markdown()
                 .contains("Rushing along the edge of the path. Water through the gate")
         );
-        assert_eq!(before, columns.map(|id| bounds(&s.doc, id)));
+        // Columns hold still while typing. The edited row grows to fit its wrapped text,
+        // and the row's other cells stay vertically centred in it.
+        let steady = |s: &Session| {
+            let after = columns.map(|id| bounds(&s.doc, id));
+            for (b, a) in before.iter().zip(&after) {
+                assert_eq!([b[0], b[2]], [a[0], a[2]], "a column moved while typing");
+            }
+            assert!(
+                after[1][3] > before[1][3],
+                "the longer description wraps onto more lines"
+            );
+            let row = bounds(&s.doc, "slot-0-1-0")[3];
+            let strip = s.writing(|w| w.row_heights.peek()[0][1]);
+            assert_eq!(strip, row, "the row menu strip follows the grown row");
+        };
+        steady(s);
         s.named(NamedKey::F8);
         let [x, y, width, height] = bounds(&s.doc, "save-inspection");
         assert!(x >= 0. && x + width <= 375.);
         assert!(y + height <= bounds(&s.doc, "note-title")[1]);
-        assert_eq!(before, columns.map(|id| bounds(&s.doc, id)));
+        steady(s);
         s.capture("compact-table");
     });
 }

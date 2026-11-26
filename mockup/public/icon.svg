@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28">
+  <!-- The sidebar brandmark (assets/theme.css .brandmark), full-bleed so iOS and Android can mask it. -->
+  <rect width="28" height="28" fill="#4342ad"/>
+  <rect x="6" y="9" width="2" height="14" rx=".5" fill="#9e9df0" transform="translate(7 16) skewY(-13) translate(-7 -16)"/>
+  <rect x="10" y="7.5" width="2" height="14" rx=".5" fill="#d3d3f7" transform="translate(11 14.5) skewY(-13) translate(-11 -14.5)"/>
+  <rect x="14" y="6" width="8" height="14" rx="1.5" fill="#f7f6de" transform="translate(18 13) skewY(-13) translate(-18 -13)"/>
+</svg>

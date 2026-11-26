@@ -2532,7 +2532,7 @@ fn comment_files_round_trip_and_reattach_after_outside_edits() {
 }
 
 #[test]
-fn long_table_cell_keeps_caret_visible_while_scrolling_and_craft_handles_sit_on_edges() {
+fn long_table_cell_wraps_around_its_caret_and_craft_handles_sit_on_edges() {
     use blitz_traits::events::{BlitzWheelDelta, BlitzWheelEvent};
 
     for scale in [1.0_f32, 2.0_f32] {
@@ -2588,38 +2588,48 @@ fn long_table_cell_keeps_caret_visible_while_scrolling_and_craft_handles_sit_on_
             "row pill must be vertically centered on row 1: btn_cy={row_btn_cy}, row_cy={row1_cy}"
         );
 
-        // 2. Typing and moving to the end of a long left-aligned cell scrolls horizontally and keeps #caret-ink inside the cell box!
+        // 2. A long left-aligned cell wraps instead of scrolling: its row grows, the field never
+        // scrolls sideways, and #caret-ink stays inside the cell box wherever the caret goes.
         let cell_rect = bounds(&doc, "cell-0-1-1");
-        let assert_caret_inside = |d: &DioxusDocument, cell_id: &str, label: &str| {
-            let crect = bounds(d, cell_id);
-            let krect = bounds(d, "caret-ink");
-            assert!(
-                krect[0] >= crect[0] - 0.5 && krect[0] + krect[2] <= crect[0] + crect[2] + 0.5,
-                "scale={scale} {label}: caret-ink {krect:?} escaped cell {cell_id} {crect:?}"
-            );
-        };
-        assert_caret_inside(&doc, "cell-0-1-1", "start of long left cell");
-        // Move to end of the long cell.
-        let end_pos = md.find(long_left).unwrap() + long_left.len();
-        open_markdown(&mut doc, &md, end_pos);
-        {
-            let dom = doc.inner.borrow();
-            let input = dom
-                .get_node(id(&doc, "cell-0-1-1"))
+        let short_cell = bounds(&doc, "cell-0-2-1");
+        assert!(
+            cell_rect[3] > short_cell[3] * 1.5,
+            "scale={scale} long left cell must wrap onto more lines: long={cell_rect:?}, short={short_cell:?}"
+        );
+        let scroll_offset = |d: &DioxusDocument, cell_id: &str| {
+            let dom = d.inner.borrow();
+            dom.get_node(id(d, cell_id))
                 .unwrap()
                 .element_data()
                 .unwrap()
                 .text_input_data()
-                .unwrap();
+                .unwrap()
+                .scroll_offset
+        };
+        let assert_caret_inside = |d: &DioxusDocument, cell_id: &str, label: &str| {
+            let crect = bounds(d, cell_id);
+            let krect = bounds(d, "caret-ink");
             assert!(
-                input.scroll_offset > 20.0,
-                "long left cell must scroll horizontally at end (offset={})",
-                input.scroll_offset
+                krect[0] >= crect[0] - 0.5
+                    && krect[0] + krect[2] <= crect[0] + crect[2] + 0.5
+                    && krect[1] >= crect[1] - 0.5
+                    && krect[1] + krect[3] <= crect[1] + crect[3] + 0.5,
+                "scale={scale} {label}: caret-ink {krect:?} escaped cell {cell_id} {crect:?}"
             );
-        }
+            assert_eq!(scroll_offset(d, cell_id), 0.0, "scale={scale} {label}: a wrapped cell never scrolls");
+        };
+        assert_caret_inside(&doc, "cell-0-1-1", "start of long left cell");
+        // Move to end of the long cell: the caret is on its last wrapped line.
+        let end_pos = md.find(long_left).unwrap() + long_left.len();
+        open_markdown(&mut doc, &md, end_pos);
         assert_caret_inside(&doc, "cell-0-1-1", "end of long left cell");
+        let first_line_caret = cell_rect[1];
+        assert!(
+            bounds(&doc, "caret-ink")[1] > first_line_caret + short_cell[3] * 0.5,
+            "scale={scale} the caret at the end of a wrapped cell sits below its first line"
+        );
 
-        // Type extra characters at the end — caret must stay visible and never get lost off the right edge!
+        // Type extra characters at the end: the caret stays visible inside the growing cell.
         for ch in " XYZ!".chars() {
             press(&mut doc, Key::Character(ch.to_string()), false);
             send_key(&mut doc, Key::Character(ch.to_string()), KeyState::Released, false);
@@ -2632,8 +2642,7 @@ fn long_table_cell_keeps_caret_visible_while_scrolling_and_craft_handles_sit_on_
             assert_caret_inside(&doc, "cell-0-1-1", "arrowing left in long left cell");
         }
 
-        // 3. Wheel-scrolling the long cell far to the left hides the off-screen caret cleanly,
-        // and the next arrow key brings both scroll_offset and #caret-ink right back into view.
+        // 3. A sideways wheel over the cell has nothing to scroll: the caret stays put, in view.
         let cx = (cell_rect[0] + cell_rect[2] * 0.5) as f32;
         let cy = (cell_rect[1] + cell_rect[3] * 0.5) as f32;
         let mut hover_ptr = doc
@@ -2668,16 +2677,12 @@ fn long_table_cell_keeps_caret_visible_while_scrolling_and_craft_handles_sit_on_
         doc.vdom
             .in_scope(ScopeId::APP, || consume_context::<Writing>().refresh_boxes());
         render(&mut doc);
-        assert!(
-            doc.inner.borrow().get_element_by_id("caret-ink").is_none(),
-            "caret scrolled completely off-screen by wheel must not dangle outside cell"
-        );
-        // Pressing ArrowRight snaps scroll_offset back so caret is immediately visible again.
+        assert_caret_inside(&doc, "cell-0-1-1", "after a sideways wheel");
         press(&mut doc, Key::Named(NamedKey::ArrowRight), false);
         send_key(&mut doc, Key::Named(NamedKey::ArrowRight), KeyState::Released, false);
-        assert_caret_inside(&doc, "cell-0-1-1", "after recovering from wheel scroll");
+        assert_caret_inside(&doc, "cell-0-1-1", "arrowing after a sideways wheel");
 
-        // 4. Right-aligned long cell must stay constrained inside its slot and keep its caret visible!
+        // 4. A long right-aligned cell wraps inside its slot too and keeps its caret visible.
         let right_end = markdown(&doc).find(long_right).unwrap() + long_right.len();
         let current_md = markdown(&doc);
         open_markdown(&mut doc, &current_md, right_end);

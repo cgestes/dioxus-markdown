@@ -76,6 +76,9 @@ pub(crate) struct Writing {
     pub draft_table: Signal<Option<usize>>,
     pub heights: Signal<Vec<usize>>,
     pub heading_heights: Signal<Vec<usize>>,
+    /// Laid-out height of each table row, header first, so the row strip
+    /// beside a table follows rows that grow with wrapped cell text.
+    pub row_heights: Signal<Vec<Vec<f64>>>,
     pub caret_line_col: Signal<Option<[usize; 2]>>,
     pub ink: Signal<Vec<super::markdown::Ink>>,
     pub callout_boxes: Signal<Vec<super::markdown::CalloutBox>>,

@@ -17,7 +17,14 @@ import { checkboxKernel } from "./checkbox-kernel.js";
 import { button, el, icon } from "./ui.js";
 
 const $ = id => document.getElementById(id);
+// The deployed site keeps an offline copy for the installed web app (public/sw.js).
+if (location.protocol === "https:" && "serviceWorker" in navigator)
+  navigator.serviceWorker.register("sw.js").catch(() => {});
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+// iOS zooms into any focused field under 16px and stays zoomed. maximum-scale stops that;
+// Safari still allows pinch zoom. Other browsers keep their default viewport.
+if (/iPhone|iPad/.test(navigator.platform) || (isMac && navigator.maxTouchPoints > 1))
+  document.querySelector('meta[name="viewport"]').content += ", maximum-scale=1";
 for (const key of document.querySelectorAll("[data-key]")) key.textContent = (isMac ? "⌘ " : "Ctrl ") + key.dataset.key;
 
 async function start() {

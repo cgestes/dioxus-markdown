@@ -1,0 +1,26 @@
+#!/bin/sh
+# Builds the browser notebook and publishes it to GitHub Pages from the gh-pages branch.
+# The branch holds only the latest site: each deploy replaces it with one commit.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+remote=${MARGIN_DEPLOY_REMOTE:-origin}
+
+npm --prefix "$root/mockup" run build:web
+source=$(git -C "$root" rev-parse --short HEAD)
+[ -z "$(git -C "$root" status --porcelain)" ] || source="$source-dirty"
+
+site=$(mktemp -d)
+trap 'rm -rf "$site"' EXIT
+cp -R "$root/mockup/dist/." "$site"
+git -C "$site" init -q -b gh-pages
+git -C "$site" add -A
+git -C "$site" commit -q -m "Deploy web notebook from $source"
+git -C "$site" push -q -f "$(git -C "$root" remote get-url "$remote")" gh-pages
+
+# GitHub usually serves a new gh-pages branch by itself; otherwise turn Pages on (needs the GitHub CLI).
+if command -v gh >/dev/null; then
+  cd "$root"
+  gh api "repos/{owner}/{repo}/pages" >/dev/null 2>&1 ||
+    gh api -X POST "repos/{owner}/{repo}/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null 2>&1 || true
+  echo "Deployed $source to $(gh api "repos/{owner}/{repo}/pages" --jq .html_url)"
+fi

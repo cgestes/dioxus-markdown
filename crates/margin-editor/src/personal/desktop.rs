@@ -219,9 +219,9 @@ fn Home(split: bool) -> Element {
                 }
                 button { id: "vault-new", onclick: move |_| pick(v.new_note("", false)), "New private note" }
                 button { id: "vault-publish", onclick: move |_| pick(v.publish(&room.peek())), "Sync a copy of current text" }
-                button {
+                if FILE_DIALOGS { button {
                     onclick: move |_| {
-                        let Some(path) = rfd::FileDialog::new().pick_file() else { return };
+                        let Some(path) = pick_file() else { return };
                         let room = room();
                         spawn(async move {
                             let result = vault_task(move || v.attach_path(&room, &path).map(|_| ())).await;
@@ -229,9 +229,9 @@ fn Home(split: bool) -> Element {
                         });
                     },
                     "Attach a file…"
-                }
+                } }
                 match attachments {
-                    Ok(ref rows) => rsx! {
+                    Ok(ref rows) if FILE_DIALOGS => rsx! {
                         for (file, name) in rows {
                             button {
                                 key: "{file}",
@@ -241,7 +241,7 @@ fn Home(split: bool) -> Element {
                                     move |_| {
                                         let suggested = std::path::Path::new(&name).file_name()
                                             .and_then(|n| n.to_str()).unwrap_or("attachment");
-                                        let Some(path) = rfd::FileDialog::new().set_file_name(suggested).save_file() else { return };
+                                        let Some(path) = save_file(suggested) else { return };
                                         let room = room();
                                         let file = file.clone();
                                         spawn(async move {
@@ -253,6 +253,7 @@ fn Home(split: bool) -> Element {
                             }
                         }
                     },
+                    Ok(_) => rsx! {},
                     Err(ref error) => rsx! { p { role: "alert", "{error}" } }
                 }
                 if !error.read().is_empty() { p { role: "alert", "{error}" } }
@@ -415,4 +416,27 @@ pub(crate) fn use_persistence(session: Option<Session>, mut note: Signal<Note>) 
 pub fn save_discussion(v: &Vault, room: &str, previous: &[u8], current: &[u8]) -> Result<()> {
     ensure!(!current.is_empty(), "empty discussion record");
     v.set_private_value(room, previous, current)
+}
+
+/// iOS has no native file dialog backend yet, so attachments can't be added or exported there.
+const FILE_DIALOGS: bool = cfg!(not(target_os = "ios"));
+
+#[cfg(not(target_os = "ios"))]
+fn pick_file() -> Option<std::path::PathBuf> {
+    rfd::FileDialog::new().pick_file()
+}
+
+#[cfg(not(target_os = "ios"))]
+fn save_file(suggested: &str) -> Option<std::path::PathBuf> {
+    rfd::FileDialog::new().set_file_name(suggested).save_file()
+}
+
+#[cfg(target_os = "ios")]
+fn pick_file() -> Option<std::path::PathBuf> {
+    None
+}
+
+#[cfg(target_os = "ios")]
+fn save_file(_suggested: &str) -> Option<std::path::PathBuf> {
+    None
 }

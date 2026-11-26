@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
+    "build:web": "node build.mjs && node build-web.mjs",
+    "icons": "node build-icons.mjs",
     "test": "node --test test/*.test.mjs",
     "test:browser": "node test/browser-interactions.mjs",
     "test:vault": "node test/vault-browser.mjs",

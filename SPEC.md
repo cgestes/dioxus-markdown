@@ -113,7 +113,7 @@ preserves concurrent edits and a recovery window.
 
 - **Always-Visible Caret (`.caret-ink`):**
   - Styled runs painted as `.md-ink` overlays sit above `<textarea>` with opaque backgrounds. A dedicated `.caret-ink` overlay (`z-index: 3`, exact Parley `cursor_geometry(1.5)`) paints **above** `.md-ink` so the cursor is always sharp and visible inside bold, italic, strikethrough, completed tasks, inline code, links, quotes, headings, and table cells (including light caret on dark table headers).
-  - Long single-line table cells maintain horizontal scroll margin (`keep_caret_in_view`) and scroll-aware caret tracking (`TrackedKey` includes `scroll_offset`) so typing, arrowing, or wheel-scrolling inside a long cell never loses or clips the caret on 1× or 2× Retina displays.
+  - Table cells wrap (§7), so a long cell grows instead of scrolling sideways: typing, arrowing, or wheel-scrolling inside it never loses or clips the caret on 1× or 2× Retina displays. Single-line inputs keep a horizontal scroll margin (`keep_caret_in_view`) and scroll-aware caret tracking (`TrackedKey` includes `scroll_offset`).
 - **Consistent Selection Color:**
   - Single-field selection uses Blitz's native highlight (`rgb(180, 213, 255)`).
   - Cross-block/multiline `.selection-ink` uses `rgba(81, 161, 255, 0.42)` (and `.marker-face.selected` uses `#7ab3fa`) so single-field and cross-block selections match seamlessly with no color shift.
@@ -151,6 +151,7 @@ preserves concurrent edits and a recovery window.
 
 - **Visual Design:**
   - Light header (`--wash` background, small `--muted` 600 labels, a 1px `--line-strong` rule under it) with `6px` rounded corners, rows divided by `--line` hairlines; the accent appears only for focus and selection (cell ring, range cells, current cell), no stray bottom line on the last row (with matching `6px` rounded bottom corners), steady column widths while typing (no jitter), aligned cell hit areas (`left`, `center`, `right`).
+  - Long cell text wraps at the column width; the row grows to fit, its other cells stay vertically centred, and the row menu follows the row's height.
   - No floating column/row toolbars, no edge `+` column/row buttons, and no `"Cell xx"` single-cell footer clutter.
 - **Craft-Inspired Edge Pill Controls (Hovered/Active Column & Row Only):**
   - Controls appear **only for the currently hovered (or focused/menu-open) column and row** — keeping all other columns and rows completely clean, and never stealing width from header or cell text.

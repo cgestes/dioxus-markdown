@@ -45,7 +45,17 @@ impl MarkerBox {
                 style: "left:{left}px; top:{top}px; width:{width}px; height:{height}px;",
                 onclick: move |e| {
                     e.stop_propagation();
-                    writing.click_checkbox(field, open, e);
+                    writing.click_checkbox(field, open, e.modifiers());
+                },
+                // Blitz drops the click after a touch whose press the editor cancelled
+                // (the move it synthesises before a finger press starts a pan), so a
+                // finger toggles on release. click_checkbox consumes the press, so a
+                // click that does arrive afterwards is ignored.
+                onpointerup: move |e| {
+                    if e.pointer_type() == "touch" {
+                        writing.end_drag();
+                        writing.click_checkbox(field, open, e.modifiers());
+                    }
                 },
                 span { class: "marker-face", class: if checked { "checked" }, class: if selected { "selected" } }
                 if checked { span { class: "marker-tick" } }
@@ -227,6 +237,20 @@ impl Writing {
             if *self.heading_heights.peek() != heading_heights {
                 self.heading_heights.set(heading_heights);
             }
+            let row_heights = (self.tables.peek().iter().enumerate())
+                .map(|(t, grid)| {
+                    (0..grid.rows.len())
+                        .map(|r| {
+                            doc.get_element_by_id(&format!("slot-{t}-{r}-0"))
+                                .and_then(|id| doc.get_client_bounding_rect(id))
+                                .map_or(0.0, |rect| rect.height)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            if *self.row_heights.peek() != row_heights {
+                self.row_heights.set(row_heights);
+            }
         }
         if *self.boxes.peek() != next {
             self.boxes.set(next);
@@ -237,11 +261,8 @@ impl Writing {
         }
     }
 
-    pub fn click_checkbox(mut self, field: Field, open: usize, event: MouseEvent) {
-        if event
-            .modifiers()
-            .intersects(Modifiers::SHIFT | Modifiers::META | Modifiers::CONTROL)
-        {
+    pub fn click_checkbox(mut self, field: Field, open: usize, modifiers: Modifiers) {
+        if modifiers.intersects(Modifiers::SHIFT | Modifiers::META | Modifiers::CONTROL) {
             self.pressed_box.set(None);
             self.track_field(field);
             return;
@@ -255,7 +276,7 @@ impl Writing {
             return;
         }
         let inside = open + 1;
-        if event.modifiers().contains(Modifiers::ALT) {
+        if modifiers.contains(Modifiers::ALT) {
             // Alt+click reveals the Markdown brackets for direct editing.
             self.mouse_box.set(None);
             self.open(field, [inside; 2]);

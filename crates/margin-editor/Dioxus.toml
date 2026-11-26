@@ -1,0 +1,12 @@
+# Dioxus CLI settings for the native app (the `margin` binary).
+# iOS: `dx serve --ios --renderer native --package margin-editor` — see the README.
+[application]
+name = "Margin"
+
+[bundle]
+# build.rs embeds the same identifier for simulator builds; keep them in sync.
+identifier = "dev.margin.native"
+publisher = "Margin"
+
+[ios]
+deployment_target = "17.0"
