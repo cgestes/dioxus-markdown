@@ -24,17 +24,19 @@ pub enum Variant {
     Bare,
 }
 
+const BTN_BASE: &str = "ui-btn flex items-center justify-center gap-1.5 flex-none m-0 rounded-md whitespace-nowrap text-center cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 disabled:opacity-45 disabled:cursor-default";
+
 impl Variant {
-    fn class(self) -> &'static str {
+    fn classes(self) -> (&'static str, &'static str) {
         match self {
-            Self::Default => "ui-btn flex items-center justify-center gap-1.5 flex-none h-[30px] m-0 px-[11px] border border-solid border-line rounded-md bg-surface text-ink type-control whitespace-nowrap text-center cursor-pointer select-none hover:border-line-strong hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 disabled:opacity-45 disabled:cursor-default",
-            Self::Primary => "ui-btn primary flex items-center justify-center gap-1.5 flex-none h-[30px] m-0 px-[11px] border border-solid border-accent rounded-md bg-accent text-on-accent type-control whitespace-nowrap text-center cursor-pointer select-none hover:border-accent-deep hover:bg-accent-deep hover:text-on-accent focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 disabled:opacity-45 disabled:cursor-default",
-            Self::Ghost => "ui-btn ghost flex items-center justify-center gap-1.5 flex-none h-[30px] m-0 px-[11px] border border-solid border-transparent rounded-md bg-transparent text-muted type-ui whitespace-nowrap text-center cursor-pointer select-none hover:bg-pale hover:text-accent-deep [&.selected]:bg-pale [&.selected]:text-accent-deep focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 disabled:opacity-45 disabled:cursor-default",
-            Self::Icon => "ui-btn icon flex items-center justify-center gap-1.5 flex-none w-7 h-7 m-0 p-0 border border-solid border-transparent rounded-md bg-transparent text-muted type-control whitespace-nowrap text-center cursor-pointer select-none hover:border-transparent hover:bg-pale hover:text-accent-deep [&.selected]:border-transparent [&.selected]:bg-pale [&.selected]:text-accent-deep focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 disabled:opacity-45 disabled:cursor-default",
-            Self::Link => "ui-btn link flex items-center justify-center gap-1.5 flex-none h-auto m-0 p-0 border-0 rounded-md bg-transparent text-accent font-sans text-[11.5px] font-semibold tracking-normal normal-case whitespace-nowrap text-center cursor-pointer select-none hover:bg-transparent hover:text-accent-deep focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 disabled:opacity-45 disabled:cursor-default",
-            Self::Chip => "ui-chip flex items-center justify-center gap-[5px] flex-none h-[26px] m-0 px-2.5 border border-solid border-line rounded-full bg-surface text-muted type-ui whitespace-nowrap cursor-pointer hover:border-line-strong hover:bg-surface hover:text-ink [&.selected]:border-ink [&.selected]:bg-ink [&.selected]:text-page [&.selected:hover]:border-ink [&.selected:hover]:bg-ink [&.selected:hover]:text-page focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 [&_.tool-icon]:w-[13px] [&_.tool-icon]:h-[13px] [&_.tool-icon_svg]:w-[13px] [&_.tool-icon_svg]:h-[13px]",
-            Self::Segment => "ui-segment flex items-center justify-center h-[22px] min-w-10 m-0 px-[7px] border border-solid border-transparent rounded-[5px] bg-transparent text-muted type-hint cursor-pointer select-none hover:bg-pale hover:text-accent-deep [&.selected]:border-line [&.selected]:bg-surface [&.selected]:text-accent-deep [&.selected]:font-semibold [&.selected:hover]:border-line [&.selected:hover]:bg-surface [&.selected:hover]:text-accent-deep focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1",
-            Self::Bare => "",
+            Self::Default => (BTN_BASE, "h-[30px] px-[11px] border border-solid border-line bg-surface text-ink type-control hover:border-line-strong hover:bg-surface hover:text-ink"),
+            Self::Primary => (BTN_BASE, "primary h-[30px] px-[11px] border border-solid border-accent bg-accent text-on-accent type-control hover:border-accent-deep hover:bg-accent-deep hover:text-on-accent"),
+            Self::Ghost => (BTN_BASE, "ghost h-[30px] px-[11px] border border-solid border-transparent bg-transparent text-muted type-ui hover:bg-pale hover:text-accent-deep [&.selected]:bg-pale [&.selected]:text-accent-deep"),
+            Self::Icon => (BTN_BASE, "icon w-7 h-7 p-0 border border-solid border-transparent bg-transparent text-muted type-control hover:border-transparent hover:bg-pale hover:text-accent-deep [&.selected]:border-transparent [&.selected]:bg-pale [&.selected]:text-accent-deep"),
+            Self::Link => (BTN_BASE, "link h-auto p-0 border-0 bg-transparent text-accent font-sans text-[11.5px] font-semibold tracking-normal normal-case hover:bg-transparent hover:text-accent-deep"),
+            Self::Chip => ("ui-chip flex items-center justify-center gap-[5px] flex-none h-[26px] m-0 px-2.5 border border-solid border-line rounded-full bg-surface text-muted type-ui whitespace-nowrap cursor-pointer hover:border-line-strong hover:bg-surface hover:text-ink [&.selected]:border-ink [&.selected]:bg-ink [&.selected]:text-page [&.selected:hover]:border-ink [&.selected:hover]:bg-ink [&.selected:hover]:text-page focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 [&_.tool-icon]:w-[13px] [&_.tool-icon]:h-[13px] [&_.tool-icon_svg]:w-[13px] [&_.tool-icon_svg]:h-[13px]", ""),
+            Self::Segment => ("ui-segment flex items-center justify-center h-[22px] min-w-10 m-0 px-[7px] border border-solid border-transparent rounded-[5px] bg-transparent text-muted type-hint cursor-pointer select-none hover:bg-pale hover:text-accent-deep [&.selected]:border-line [&.selected]:bg-surface [&.selected]:text-accent-deep [&.selected]:font-semibold [&.selected:hover]:border-line [&.selected:hover]:bg-surface [&.selected:hover]:text-accent-deep focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1", ""),
+            Self::Bare => ("", ""),
         }
     }
 }
@@ -77,10 +79,11 @@ pub fn Button(
     let caption = text.or_else(|| (icon.is_none() && badge.is_none()).then(|| label.clone()));
     let title = tip.unwrap_or_else(|| label.clone());
     let option = role.as_deref() == Some("option");
+    let (base_cls, variant_cls) = variant.classes();
     rsx! {
         button {
             id, disabled, aria_disabled: disabled.then_some("true"), aria_label: "{label}", title: "{title}", role,
-            class: "{variant.class()} {class}",
+            class: "{base_cls} {variant_cls} {class}",
             class: if selected == Some(true) { "selected" },
             class: if danger { "danger hover:border-transparent hover:bg-alert-wash hover:text-alert focus-visible:border-transparent focus-visible:bg-alert-wash focus-visible:text-alert" },
             aria_expanded: expanded.map(|s| if s { "true" } else { "false" }),

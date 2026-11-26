@@ -429,6 +429,9 @@ fn maybe_fetch_space_page(
     });
 }
 
+const EDIT_FIELD: &str = "flex items-center px-[9px] h-[30px] border border-solid border-line-strong rounded-md bg-surface type-ui focus-within:border-accent [&_.ui-field_input]:h-7 [&_.ui-field_input]:leading-7 [&_.ui-field-ph]:leading-7";
+const META_ITEM: &str = "flex items-center gap-[5px] whitespace-nowrap [&_.i]:w-[12.5px] [&_.i]:h-[12.5px] [&_.i]:text-faint";
+
 #[component]
 fn LinkEditForm(
     writing: Writing,
@@ -449,7 +452,7 @@ fn LinkEditForm(
         div { class: "flex flex-col gap-[9px] pt-[11px] px-[13px] pb-3",
             div { class: "flex flex-col gap-1",
                 span { class: "text-faint type-label uppercase", "Text" }
-                div { class: "flex items-center px-[9px] h-[30px] border border-solid border-line-strong rounded-md bg-surface type-ui focus-within:border-accent [&_.ui-field_input]:h-7 [&_.ui-field_input]:leading-7 [&_.ui-field-ph]:leading-7",
+                div { class: EDIT_FIELD,
                     TextField {
                         id: "link-edit-label",
                         value: edit_label,
@@ -461,7 +464,7 @@ fn LinkEditForm(
             }
             div { class: "flex flex-col gap-1",
                 span { class: "text-faint type-label uppercase", "Target" }
-                div { class: "flex items-center px-[9px] h-[30px] border border-solid border-line-strong rounded-md bg-surface type-ui focus-within:border-accent [&_.ui-field_input]:h-7 [&_.ui-field_input]:leading-7 [&_.ui-field-ph]:leading-7",
+                div { class: EDIT_FIELD,
                     TextField {
                         id: "link-edit-url",
                         value: edit_url,
@@ -579,13 +582,13 @@ fn LinkPreviewBody(
             if preview.meta_left.is_some() || preview.meta_right.is_some() {
                 div { class: "flex items-center flex-wrap gap-y-1.5 gap-x-[14px] mt-1.5 text-faint type-hint",
                     if let Some(left) = &preview.meta_left {
-                        span { class: "flex items-center gap-[5px] whitespace-nowrap [&_.i]:w-[12.5px] [&_.i]:h-[12.5px] [&_.i]:text-faint",
+                        span { class: META_ITEM,
                             {icon(if preview.is_internal { Icon::Clock } else { Icon::Link })}
                             span { "{left}" }
                         }
                     }
                     if let Some(right) = &preview.meta_right {
-                        span { class: "flex items-center gap-[5px] whitespace-nowrap [&_.i]:w-[12.5px] [&_.i]:h-[12.5px] [&_.i]:text-faint",
+                        span { class: META_ITEM,
                             {icon(if preview.is_internal { Icon::Link } else { Icon::Open })}
                             span { "{right}" }
                         }

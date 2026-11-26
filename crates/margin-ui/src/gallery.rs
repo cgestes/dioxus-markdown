@@ -4,6 +4,9 @@
 use super::*;
 use crate::prelude::*;
 
+const ROW: &str = "flex flex-wrap items-center gap-2";
+const GRID: &str = "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0";
+
 /// One titled group of samples.
 pub fn section(title: &str, children: Element) -> Element {
     rsx! {
@@ -47,7 +50,7 @@ pub fn Gallery(children: Element) -> Element {
             h1 { class: "m-0 type-h1", "Margin design system" }
             p { class: "m-0 text-muted", "Tokens from assets/theme.css and Tailwind v4 utilities compiled into margin_ui::CSS. Features compose these components; they add layout only." }
             {section("Buttons", rsx! {
-                div { class: "flex flex-wrap items-center gap-2",
+                div { class: ROW,
                     for (v, name) in [(Variant::Default, "Default"), (Variant::Primary, "Primary"), (Variant::Ghost, "Ghost"), (Variant::Link, "Link →")] {
                         Button { label: name.to_string(), variant: v, onclick: noop }
                     }
@@ -60,13 +63,13 @@ pub fn Gallery(children: Element) -> Element {
                 }
             })}
             {section("Chips, segmented switch, tabs", rsx! {
-                div { class: "flex flex-wrap items-center gap-2",
+                div { class: ROW,
                     Chip { label: "All", selected: true, onclick: noop }
                     Chip { label: "Telegram", icon: Icon::Telegram, onclick: noop }
                     Chip { label: "Slack", icon: Icon::Slack, onclick: noop }
                     Chip { label: "Summarize this week", onclick: noop }
                 }
-                div { class: "flex flex-wrap items-center gap-2",
+                div { class: ROW,
                     Segmented { label: "Markdown view", items: segments, onselect: move |i| segment.set(i) }
                 }
                 Tabs { items: vec![
@@ -77,13 +80,13 @@ pub fn Gallery(children: Element) -> Element {
                     ], selected: tab(), onselect: move |i| tab.set(i) }
             })}
             {section("Text entry and checkboxes", rsx! {
-                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
+                div { class: GRID,
                     TextField { value: text, placeholder: "Search topics" }
                     TextField { value: filled, placeholder: "Quote" }
                     Composer { placeholder: "Ask about Car…", onsend: move |_| {} }
                     Composer { placeholder: "Comment or ask the agent to edit…", send_label: "Post".to_string(), onsend: move |_| {} }
                 }
-                div { class: "flex flex-wrap items-center gap-2",
+                div { class: ROW,
                     Checkbox { checked: false }
                     Checkbox { checked: true }
                     CheckItem { text: "Ripe mangoes", checked: checked(), onclick: move |_| checked.toggle() }
@@ -91,7 +94,7 @@ pub fn Gallery(children: Element) -> Element {
                 }
             })}
             {section("Cards and rows", rsx! {
-                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
+                div { class: GRID,
                     div { class: "flex flex-col gap-0.5 !flex-[0_0_220px] p-2.5 rounded-lg bg-rail",
                         NavItem { label: "Today", leading: icon(Icon::Calendar), count: (4, Tone::Accent), selected: true, onclick: noop }
                         NavItem { label: "Unfiled", leading: icon(Icon::Inbox), count: (3, Tone::Alert), onclick: noop }
@@ -121,7 +124,7 @@ pub fn Gallery(children: Element) -> Element {
                 }
             })}
             {section("Marks", rsx! {
-                div { class: "flex flex-wrap items-center gap-2",
+                div { class: ROW,
                     for hue in Hue::ALL { Tile { icon: Icon::Car, hue } }
                     Tile { icon: Icon::Home, hue: Hue::Clay, size: TileSize::Large }
                     Tile { icon: Icon::Heart, hue: Hue::Plum, size: TileSize::Small }
@@ -132,18 +135,18 @@ pub fn Gallery(children: Element) -> Element {
                     Avatar { initial: "Y" }
                     DateBox { top: "THU", day: "26" }
                 }
-                div { class: "flex flex-wrap items-center gap-2",
+                div { class: ROW,
                     for tone in Tone::ALL { Badge { text: tone.class().to_string(), tone } }
                     Badge { text: "Q1", tone: Tone::Accent }
                     Badge { text: "PDF", tone: Tone::Alert }
                 }
-                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
+                div { class: GRID,
                     Banner { text: "SilverBullet: HTTP 502", tone: Tone::Alert }
                     Banner { text: "Comment file saved with the page.", tone: Tone::Info }
                 }
             })}
             {section("Messages", rsx! {
-                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
+                div { class: GRID,
                     div { class: "flex flex-col gap-3 p-3 border border-solid border-line rounded-lg bg-surface",
                         Message { author: "you", body: "Is 60 °C the right setpoint?" }
                         Message { author: "luc", ai: true, body: "Yes, keep it at 60 °C or above; see house/systems.md.", tools: vec!["file_read".to_string()] }
@@ -197,7 +200,7 @@ pub fn Gallery(children: Element) -> Element {
                         },
                     }
                 }
-                div { class: "flex flex-wrap items-center gap-2",
+                div { class: ROW,
                     Toolbar { label: "Dock", look: ToolbarLook::Dock,
                         Button { label: "Insert table", icon: Icon::Table, variant: Variant::Icon, onclick: noop }
                         ToolbarSep {}

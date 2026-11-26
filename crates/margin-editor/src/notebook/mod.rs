@@ -544,21 +544,14 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         });
         inspecting.set(next);
     };
-    let dock_cls = if embedded {
-        "sticky top-0 z-[6] flex items-center justify-start gap-2 h-auto min-h-10 m-0 pb-2 bg-page border-0 border-b border-solid border-line [&_.ui-btn.icon]:w-[26px] [&_.ui-btn.icon]:h-6 [&_.ui-btn.icon]:rounded-[5px] max-[485px]:[&_.ui-segment]:min-w-[34px] max-[485px]:[&_.ui-segment]:px-[5px] max-[485px]:[&_.ui-btn.icon]:w-6"
+    const DOCK_TOOLS: &str = "sticky top-0 z-[6] flex items-center bg-page [&_.ui-btn.icon]:w-[26px] [&_.ui-btn.icon]:h-6 [&_.ui-btn.icon]:rounded-[5px] max-[485px]:[&_.ui-segment]:min-w-[34px] max-[485px]:[&_.ui-segment]:px-[5px] max-[485px]:[&_.ui-btn.icon]:w-6";
+    let dock_layout = if embedded {
+        "justify-start gap-2 h-auto min-h-10 m-0 pb-2 border-0 border-b border-solid border-line"
     } else {
-        "sticky top-0 z-[6] flex-none flex items-center justify-center h-9 py-1 px-3 bg-page max-[485px]:px-1.5 [&_.ui-btn.icon]:w-[26px] [&_.ui-btn.icon]:h-6 [&_.ui-btn.icon]:rounded-[5px] max-[485px]:[&_.ui-segment]:min-w-[34px] max-[485px]:[&_.ui-segment]:px-[5px] max-[485px]:[&_.ui-btn.icon]:w-6"
+        "flex-none justify-center h-9 py-1 px-3 max-[485px]:px-1.5"
     };
-    let pill_bar_cls = if embedded {
-        "flex items-center gap-[5px] flex-auto min-w-0 max-[485px]:gap-[3px]"
-    } else {
-        "flex items-center gap-[5px] max-[485px]:gap-[3px]"
-    };
-    let statusbar_cls = if embedded {
-        "flex items-center gap-2 min-h-8 mt-auto py-[3px] px-0 border-0 border-t border-solid border-line text-muted type-hint max-[650px]:gap-[5px]"
-    } else {
-        "flex items-center gap-2 min-h-8 mt-auto py-[3px] px-5 border-0 border-t border-solid border-line text-muted type-hint max-[650px]:px-3 max-[650px]:gap-[5px]"
-    };
+    let pill_bar_extra = if embedded { "flex-auto min-w-0" } else { "" };
+    let statusbar_pad = if embedded { "px-0" } else { "px-5 max-[650px]:px-3" };
     let notebook_min_h = if embedded { "min-h-0" } else { "min-h-screen" };
     rsx! {
         style { "{ui::CSS}" }
@@ -608,8 +601,8 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                     writing.history(source(), e.modifiers().shift() || k.eq_ignore_ascii_case("y"));
                 }
             },
-            div { id: "mode-bar", class: "{dock_cls}",
-                nav { class: "{pill_bar_cls}", aria_label: "Editor tools",
+            div { id: "mode-bar", class: "{DOCK_TOOLS} {dock_layout}",
+                nav { class: "flex items-center gap-[5px] max-[485px]:gap-[3px] {pill_bar_extra}", aria_label: "Editor tools",
                     if let Some(mut open) = store.peek().as_ref().and_then(|s| s.menu()) {
                         ui::Button { id: "notes-menu", label: "Notes", text: "Notes", expanded: open(), onclick: move |_| { let visible = open(); open.set(!visible); } }
                     }
@@ -765,7 +758,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 slash::SlashMenu { writing }
                 if desktop { marker_view::WindowLayout { writing } }
             }
-            footer { class: "{statusbar_cls}",
+            footer { class: "flex items-center gap-2 min-h-8 mt-auto py-[3px] border-0 border-t border-solid border-line text-muted type-hint max-[650px]:gap-[5px] {statusbar_pad}",
                 if !store_status.read().is_empty() { span { id: "save-status", class: "text-muted font-sans text-[11px] leading-[normal]", "{store_status}" } }
                 span { class: "text-muted", {
                     let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();

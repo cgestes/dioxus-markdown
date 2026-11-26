@@ -14,7 +14,7 @@ if command -v tailwindcss >/dev/null 2>&1; then
   exec tailwindcss -i "$in" -o "$out" --minify
 fi
 
-exec npx -y -p tailwindcss -p @tailwindcss/cli sh -c '
+exec npx -y -p tailwindcss@4 -p @tailwindcss/cli@4 sh -c '
   tw="$(dirname "$(command -v tailwindcss)")/../tailwindcss"
   cd "$(dirname "$1")"
   sed "s|@import \"tailwindcss/|@import \"$tw/|g" "$1" \

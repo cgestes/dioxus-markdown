@@ -1,10 +1,11 @@
 //! Margin's design system: the components every surface is built from.
 //!
-//! Tokens (colours, type, radii, spacing) live in `assets/theme.css`; the
-//! component styles in `assets/ui.css`, scoped by `ui-*` classes. Features
-//! compose these components and add only layout: no button, card, row,
-//! Markdown or checkbox styles of their own. `margin ui` shows every
-//! component in every state (see `docs/design-system.md`).
+//! Tokens (colours, type, radii, spacing) live in `assets/theme.css` and
+//! `assets/tailwind.in.css`; components are styled with Tailwind v4 utilities
+//! compiled into `assets/tailwind.css` (with shared base/prose rules in
+//! `assets/ui.css`). Features compose these components and add only layout:
+//! no button, card, row, Markdown or checkbox styles of their own. `margin ui`
+//! shows every component in every state (see `docs/design-system.md`).
 //!
 //! This crate depends on no other workspace crate: it knows no Markdown and
 //! no app. The editor crate draws Markdown (`margin_editor::MarkdownView`) in
