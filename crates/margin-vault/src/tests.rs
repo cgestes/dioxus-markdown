@@ -36,7 +36,7 @@ fn desktop_first_launch_is_atomic_and_keeps_a_cleared_starter_empty() -> Result<
     let ready = std::sync::Barrier::new(2);
     let launch = |v: &Vault| {
         ready.wait();
-        v.open_desktop_note(None, || {
+        v.resume_note(None, || {
             let doc = LoroDoc::new();
             doc.get_text("markdown").insert(0, "first note")?;
             Ok((doc, b"private starter discussion".to_vec()))
@@ -58,7 +58,7 @@ fn desktop_first_launch_is_atomic_and_keeps_a_cleared_starter_empty() -> Result<
     text.delete(0, text.len_unicode())?;
     a.append_update(&room, &doc.export(ExportMode::updates(&vv))?)?;
     a.set_private_value(&room, b"private starter discussion", b"[]")?;
-    assert_eq!(b.open_desktop_note(None, || panic!("reseeded"))?, room);
+    assert_eq!(b.resume_note(None, || panic!("reseeded"))?, room);
     assert!(b.load(&room)?.0.get_text("markdown").is_empty());
     assert_eq!(b.private_value(&room)?.unwrap(), b"[]");
     Ok(())
@@ -71,7 +71,7 @@ fn desktop_upgrade_preserves_the_inbox_and_existing_notes() -> Result<()> {
     let inbox = v.inbox();
     append(&v, &inbox, "my old inbox");
     let existing_only = || panic!("replaced an existing note");
-    assert_eq!(v.open_desktop_note(None, existing_only)?, inbox);
+    assert_eq!(v.resume_note(None, existing_only)?, inbox);
     assert_eq!(v.rooms()?.len(), 1);
     assert_eq!(
         v.load(&inbox)?.0.get_text("markdown").to_string(),
@@ -81,11 +81,11 @@ fn desktop_upgrade_preserves_the_inbox_and_existing_notes() -> Result<()> {
     let empty = v.new_note("", false)?;
     v.conn()?
         .execute("DELETE FROM settings WHERE k='desktop-note'", [])?;
-    assert_eq!(v.open_desktop_note(None, existing_only)?, empty);
-    assert!(v.open_desktop_note(Some("missing"), existing_only).is_err());
-    assert_eq!(v.open_desktop_note(None, existing_only)?, empty);
-    assert_eq!(v.open_desktop_note(Some(&inbox), existing_only)?, inbox);
-    assert_eq!(v.open_desktop_note(None, existing_only)?, inbox);
+    assert_eq!(v.resume_note(None, existing_only)?, empty);
+    assert!(v.resume_note(Some("missing"), existing_only).is_err());
+    assert_eq!(v.resume_note(None, existing_only)?, empty);
+    assert_eq!(v.resume_note(Some(&inbox), existing_only)?, inbox);
+    assert_eq!(v.resume_note(None, existing_only)?, inbox);
     assert_eq!(v.rooms()?.len(), 2);
     Ok(())
 }

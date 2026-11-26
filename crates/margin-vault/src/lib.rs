@@ -118,12 +118,16 @@ impl Vault {
         hex::encode(&keys::derive(&self.id.local, b"device inbox")[..16])
     }
 
-    pub fn field_notes_room(&self) -> String {
+    /// The room of this device's first note: the one `resume_note` writes on
+    /// a pristine device. (The label it is derived from is stored data.)
+    pub fn first_note_room(&self) -> String {
         hex::encode(&keys::derive(&self.id.local, b"desktop field notes")[..16])
     }
 
-    /// Resume the desktop selection, or initialize a pristine device with its first note.
-    pub fn open_desktop_note(
+    /// The note to open, remembered for next time: `requested`, else the one
+    /// opened last, else the latest note. A pristine device gets its first
+    /// note, which `starter` writes (the document and its private value).
+    pub fn resume_note(
         &self,
         requested: Option<&str>,
         starter: impl FnOnce() -> Result<(LoroDoc, Vec<u8>)>,
@@ -155,7 +159,7 @@ impl Vault {
             if let Some(room) = existing {
                 room
             } else {
-                let room = self.field_notes_room();
+                let room = self.first_note_room();
                 let (doc, discussion) = starter()?;
                 let bytes =
                     self.encrypted_delta(&room, false, &doc.export(ExportMode::all_updates())?)?;

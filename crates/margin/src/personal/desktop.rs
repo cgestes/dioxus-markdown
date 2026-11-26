@@ -41,7 +41,7 @@ fn initialize() -> Result<()> {
 }
 
 pub(crate) fn open_note(vault: &Vault, requested: Option<&str>) -> Result<String> {
-    vault.open_desktop_note(requested, || {
+    vault.resume_note(requested, || {
         let note = Note::new(margin_editor::SAMPLE);
         let threads = margin_editor::seed_sample_comments(&note);
         Ok((note.document().clone(), serde_json::to_vec(&threads)?))
@@ -320,7 +320,7 @@ fn PrivateEditor(room: String) -> Element {
         Ok(session) => session,
         Err(error) => return rsx! {p{role:"alert","Could not open private note. {error}"}},
     };
-    let show_discussion = session.room == session.vault.field_notes_room()
+    let show_discussion = session.room == session.vault.first_note_room()
         && session.threads.iter().any(|thread| !thread.file.resolved);
     let menu = try_consume_context::<Menu>().map(|Menu(open)| open);
     let store = use_hook(|| margin_editor::Store::new(VaultStore { session, menu }));
