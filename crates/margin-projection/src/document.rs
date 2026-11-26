@@ -85,8 +85,11 @@ impl Sections {
     }
 }
 
+/// What splits a note's body into fields: a heading after the first, or a
+/// table. Each gets a field of its own, and prose fills the gaps between them
+/// (`gap`). The blocks the handles move are another thing: see `blocks`.
 #[derive(Clone, PartialEq)]
-pub enum BlockKind {
+pub enum LandmarkKind {
     Heading {
         hashes: Range<usize>,
         title: Range<usize>,
@@ -95,19 +98,20 @@ pub enum BlockKind {
 }
 
 #[derive(Clone, PartialEq)]
-pub struct Block {
+pub struct Landmark {
     pub line: Range<usize>,
-    pub kind: BlockKind,
+    pub kind: LandmarkKind,
 }
 
-pub fn blocks(md: &str, tables: &[margin_editor_core::table::Table]) -> Vec<Block> {
+/// The landmarks of a note, in source order.
+pub fn landmarks(md: &str, tables: &[margin_editor_core::table::Table]) -> Vec<Landmark> {
     use pulldown_cmark::{Event, Options, Parser, Tag};
-    let mut result: Vec<Block> = tables
+    let mut result: Vec<Landmark> = tables
         .iter()
         .enumerate()
-        .map(|(i, t)| Block {
+        .map(|(i, t)| Landmark {
             line: t.range.clone(),
-            kind: BlockKind::Table(i),
+            kind: LandmarkKind::Table(i),
         })
         .collect();
     for (event, span) in Parser::new_ext(md, Options::ENABLE_TABLES).into_offset_iter() {
@@ -127,24 +131,24 @@ pub fn blocks(md: &str, tables: &[margin_editor_core::table::Table]) -> Vec<Bloc
                 .len();
         let p = Sections::read(&md[start..end]);
         if let (Some(h), Some(title)) = (p.hashes, p.title) {
-            result.push(Block {
+            result.push(Landmark {
                 line: start..end,
-                kind: BlockKind::Heading {
+                kind: LandmarkKind::Heading {
                     hashes: start + h.start..start + h.end,
                     title: start + title.start..start + title.end,
                 },
             });
         }
     }
-    result.sort_by_key(|block| block.line.start);
+    result.sort_by_key(|landmark| landmark.line.start);
     result
 }
 
 /// Keep every intervening source line, including empty ones. Only the newline
 /// terminating a neighboring block is outside the prose field.
-pub fn gap(md: &str, body: usize, blocks: &[Block], i: usize) -> Option<Range<usize>> {
-    let left = i.checked_sub(1).and_then(|i| blocks.get(i));
-    let right = blocks.get(i);
+pub fn gap(md: &str, body: usize, landmarks: &[Landmark], i: usize) -> Option<Range<usize>> {
+    let left = i.checked_sub(1).and_then(|i| landmarks.get(i));
+    let right = landmarks.get(i);
     let mut start = left.map_or(body, |b| b.line.end);
     if left.is_some() {
         start += newline_len(&md[start..]);

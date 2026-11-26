@@ -179,7 +179,7 @@ impl Writing {
     }
 
     pub fn refresh_boxes(mut self) {
-        let count = self.blocks.read().len();
+        let count = self.landmarks.read().len();
         let ink = (0..=count)
             .map(Field::Body)
             .chain(self.inline_fields())

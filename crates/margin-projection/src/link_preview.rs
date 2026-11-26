@@ -15,7 +15,8 @@ pub struct CachedPage {
 pub enum OpenTarget {
     ExternalUrl(String),
     HeadingOffset(usize),
-    SpacePage(String),
+    /// A page on the server the note is kept on.
+    Page(String),
     None,
 }
 
@@ -56,7 +57,7 @@ fn normalize_internal_path(url: &str) -> String {
     base.strip_suffix(".md").unwrap_or(base).to_owned()
 }
 
-pub fn space_md_path(url: &str) -> Option<String> {
+pub fn page_path(url: &str) -> Option<String> {
     let norm = normalize_internal_path(url);
     if norm.is_empty() || norm.contains("..") {
         return None;
@@ -64,8 +65,8 @@ pub fn space_md_path(url: &str) -> Option<String> {
     Some(format!("{norm}.md"))
 }
 
-pub fn space_cache_key(space_root: &str, path: &str) -> String {
-    format!("{space_root}\0{path}")
+pub fn page_cache_key(page_root: &str, path: &str) -> String {
+    format!("{page_root}\0{path}")
 }
 
 fn display_target(url: &str, is_internal: bool) -> String {
@@ -383,16 +384,16 @@ fn internal_preview(
     url: &str,
     raw_label: &str,
     title_attr: Option<String>,
-    space_root: Option<&str>,
-    space_cache: &HashMap<String, CachedPage>,
+    page_root: Option<&str>,
+    page_cache: &HashMap<String, CachedPage>,
 ) -> LinkPreview {
     let disp = display_target(url, true);
     let folder = extract_folder(&disp);
     let backlinks = format_backlinks(count_doc_backlinks(all_links, url));
-    let space_path = space_md_path(url);
-    let cached = space_root
-        .zip(space_path.as_deref())
-        .and_then(|(root, path)| space_cache.get(&space_cache_key(root, path)));
+    let linked_page = page_path(url);
+    let cached = page_root
+        .zip(linked_page.as_deref())
+        .and_then(|(root, path)| page_cache.get(&page_cache_key(root, path)));
 
     let (title, excerpt, meta_left) = match cached {
         Some(page) if page.found => (
@@ -406,7 +407,7 @@ fn internal_preview(
         None => (
             fallback_title(raw_label, &disp),
             title_attr,
-            if space_root.is_some() {
+            if page_root.is_some() {
                 "Space page"
             } else {
                 "Linked page"
@@ -414,8 +415,8 @@ fn internal_preview(
         ),
     };
 
-    let open_target = match space_path {
-        Some(path) if space_root.is_some() => OpenTarget::SpacePage(path),
+    let open_target = match linked_page {
+        Some(path) if page_root.is_some() => OpenTarget::Page(path),
         _ => OpenTarget::None,
     };
 
@@ -435,8 +436,8 @@ pub fn build_preview(
     md: &str,
     all_links: &[ParsedLink],
     link: &ParsedLink,
-    space_root: Option<&str>,
-    space_cache: &HashMap<String, CachedPage>,
+    page_root: Option<&str>,
+    page_cache: &HashMap<String, CachedPage>,
 ) -> LinkPreview {
     let raw_label = md
         .get(link.label_range.clone())
@@ -450,7 +451,7 @@ pub fn build_preview(
     } else if is_external_url(url) {
         external_preview(url, raw_label, title_attr)
     } else {
-        internal_preview(all_links, url, raw_label, title_attr, space_root, space_cache)
+        internal_preview(all_links, url, raw_label, title_attr, page_root, page_cache)
     }
 }
 
@@ -486,9 +487,9 @@ mod tests {
         assert_eq!(display_target("https://example.com/guide/", false), "example.com/guide");
         assert_eq!(display_target("./brain/log.md#today", true), "brain/log#today");
         assert_eq!(display_target("#listening-stops", true), "#listening-stops");
-        assert_eq!(space_md_path("./brain/log.md#top"), Some("brain/log.md".into()));
-        assert_eq!(space_md_path("../secrets/keys"), None);
-        assert_eq!(space_md_path("#only-anchor"), None);
+        assert_eq!(page_path("./brain/log.md#top"), Some("brain/log.md".into()));
+        assert_eq!(page_path("../secrets/keys"), None);
+        assert_eq!(page_path("#only-anchor"), None);
     }
 
     #[test]

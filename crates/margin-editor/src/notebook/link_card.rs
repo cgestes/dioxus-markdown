@@ -2,7 +2,7 @@
 //! Markdown link (`[label](target)` or `<url>`).
 use super::link_preview::{
     CachedPage, LinkPreview, OpenTarget, build_preview, extract_markdown_summary,
-    format_markdown_link, is_external_url, space_cache_key, space_md_path,
+    format_markdown_link, is_external_url, page_cache_key, page_path,
 };
 use super::projection::ParsedLink;
 use crate::platform::text;
@@ -293,7 +293,7 @@ impl Writing {
             OpenTarget::ExternalUrl(url) => {
                 crate::platform::open_url(&url);
             }
-            OpenTarget::SpacePage(path) => {
+            OpenTarget::Page(path) => {
                 if let Some(page) = self.page.peek().as_ref() {
                     crate::platform::open_url(&page.files.web_url(&path));
                 }
@@ -373,21 +373,21 @@ impl Writing {
     }
 }
 
-fn maybe_fetch_space_page(
+fn maybe_fetch_page(
     writing: Writing,
-    space_root: &str,
+    page_root: &str,
     url: &str,
-    mut space_cache: Signal<HashMap<String, CachedPage>>,
+    mut page_cache: Signal<HashMap<String, CachedPage>>,
     mut fetching: Signal<Option<String>>,
 ) {
     if is_external_url(url) || url.trim().starts_with('#') {
         return;
     }
-    let Some(path) = space_md_path(url) else {
+    let Some(path) = page_path(url) else {
         return;
     };
-    let key = space_cache_key(space_root, &path);
-    if space_cache.peek().contains_key(&key) || fetching.peek().as_deref() == Some(key.as_str()) {
+    let key = page_cache_key(page_root, &path);
+    if page_cache.peek().contains_key(&key) || fetching.peek().as_deref() == Some(key.as_str()) {
         return;
     }
     let Some(page_src) = writing.page.peek().clone() else {
@@ -401,7 +401,7 @@ fn maybe_fetch_space_page(
         match fetched {
             Ok(Some(page)) => {
                 let (title, excerpt) = extract_markdown_summary(&page.text);
-                space_cache.write().insert(
+                page_cache.write().insert(
                     key.clone(),
                     CachedPage {
                         title,
@@ -411,7 +411,7 @@ fn maybe_fetch_space_page(
                 );
             }
             Ok(None) => {
-                space_cache.write().insert(
+                page_cache.write().insert(
                     key.clone(),
                     CachedPage {
                         title: None,
@@ -604,7 +604,7 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
     let edit_label = use_signal(String::new);
     let edit_url = use_signal(String::new);
     let copied_url = use_signal(|| None::<String>);
-    let space_cache = use_signal(HashMap::<String, CachedPage>::new);
+    let page_cache = use_signal(HashMap::<String, CachedPage>::new);
     let fetching = use_signal(|| None::<String>);
 
     use_effect(move || {
@@ -628,18 +628,18 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
     let editing = (writing.links.editing)();
     let md = writing.contents.read();
     let parsed = writing.parsed.read();
-    let space_root = writing.page.read().as_ref().map(|p| p.files.web_url(""));
+    let page_root = writing.page.read().as_ref().map(|p| p.files.web_url(""));
 
-    if let Some(root) = space_root.as_deref() {
-        maybe_fetch_space_page(writing, root, &card.link.url, space_cache, fetching);
+    if let Some(root) = page_root.as_deref() {
+        maybe_fetch_page(writing, root, &card.link.url, page_cache, fetching);
     }
 
     let preview = build_preview(
         &md,
         &parsed.links,
         &card.link,
-        space_root.as_deref(),
-        &space_cache.read(),
+        page_root.as_deref(),
+        &page_cache.read(),
     );
     let current_label = md
         .get(card.link.label_range.clone())

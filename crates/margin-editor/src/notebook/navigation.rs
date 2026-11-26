@@ -1,4 +1,4 @@
-use super::document::{self, BlockKind, BodyStart};
+use super::document::{self, LandmarkKind, BodyStart};
 use crate::platform::text;
 use super::{Field, Writing};
 use crate::prelude::*;
@@ -9,20 +9,20 @@ impl Writing {
     pub(super) fn stops(self) -> Vec<Field> {
         let md = self.contents.read();
         let parts = self.sections(&md);
-        let blocks = self.blocks.read();
+        let landmarks = self.landmarks.read();
         let tables = self.tables.read();
         let mut result = vec![Field::Title];
         if parts.origin == BodyStart::AfterBlankLine {
             result.push(Field::TitleGap);
         }
-        for i in 0..=blocks.len() {
-            if document::gap(&md, parts.body, &blocks, i).is_some() {
+        for i in 0..=landmarks.len() {
+            if document::gap(&md, parts.body, &landmarks, i).is_some() {
                 result.push(Field::Body(i));
             }
-            if let Some(block) = blocks.get(i) {
-                match block.kind {
-                    BlockKind::Heading { .. } => result.push(Field::Heading(i)),
-                    BlockKind::Table(t) => {
+            if let Some(landmark) = landmarks.get(i) {
+                match landmark.kind {
+                    LandmarkKind::Heading { .. } => result.push(Field::Heading(i)),
+                    LandmarkKind::Table(t) => {
                         result.extend((0..tables[t].rows.len()).map(|r| Field::Cell(t, r, 0)))
                     }
                 }

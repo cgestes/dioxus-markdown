@@ -23,7 +23,7 @@ use margin_note::note::Note;
 use margin_editor_core::table;
 use margin_ui::Icon;
 pub(crate) use writing::Writing;
-pub(crate) use document::{BlockKind, Sections};
+pub(crate) use document::{LandmarkKind, Sections};
 use margin_ui as ui;
 use crate::support::{page, restart};
 use crate::CSS;
@@ -302,7 +302,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         markers: index,
         draft_table,
         tables,
-        blocks: use_memo(move || document::blocks(&contents.read(), &tables.read())),
+        landmarks: use_memo(move || document::landmarks(&contents.read(), &tables.read())),
         logical_blocks: use_memo(move || blocks::split_blocks(&contents.read())),
         goal_x: use_signal(|| None),
         span: use_signal(|| None),
@@ -430,7 +430,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let markdown = contents();
     let sections = writing.sections(&markdown);
     let body_start = sections.body;
-    let block_list = writing.blocks.read().clone();
+    let landmarks = writing.landmarks.read().clone();
     let title_gap = sections.origin == document::BodyStart::AfterBlankLine;
     let hint_at = (writing.marker)();
     let raw = (writing.literal)().is_some();
@@ -737,14 +737,14 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                             _ => {}
                         }
                     },
-                    for i in 0..=block_list.len() {
-                        if document::gap(&markdown, body_start, &block_list, i).is_some() {
-                            grid::Prose { key: "prose-{i}", writing, index: i, segmented: !block_list.is_empty() }
+                    for i in 0..=landmarks.len() {
+                        if document::gap(&markdown, body_start, &landmarks, i).is_some() {
+                            grid::Prose { key: "prose-{i}", writing, index: i, segmented: !landmarks.is_empty() }
                         }
-                        if let Some(block) = block_list.get(i) {
-                            match block.kind {
-                                BlockKind::Heading { .. } => rsx! { grid::Heading { key: "heading-{i}", writing, field: Field::Heading(i) } },
-                                BlockKind::Table(t) => rsx! { grid::Grid { key: "table-{t}", writing, index: t } },
+                        if let Some(landmark) = landmarks.get(i) {
+                            match landmark.kind {
+                                LandmarkKind::Heading { .. } => rsx! { grid::Heading { key: "heading-{i}", writing, field: Field::Heading(i) } },
+                                LandmarkKind::Table(t) => rsx! { grid::Grid { key: "table-{t}", writing, index: t } },
                             }
                         }
                     }

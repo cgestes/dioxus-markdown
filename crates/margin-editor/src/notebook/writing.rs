@@ -1,4 +1,4 @@
-use super::document::{self, Block, BlockKind, BodyStart};
+use super::document::{self, BodyStart, Landmark, LandmarkKind};
 use super::marker_view::MarkerBox;
 use crate::table::{self, Table};
 use super::{ByteSelection, Field, FocusRequest, Sections, report, selection};
@@ -52,7 +52,7 @@ pub(crate) struct Writing {
     pub doc_rev: Memo<u64>,
     pub markers: Memo<Vec<Marker>>,
     pub tables: Memo<Vec<Table>>,
-    pub blocks: Memo<Vec<Block>>,
+    pub landmarks: Memo<Vec<Landmark>>,
     pub logical_blocks: Memo<Vec<Range<usize>>>,
     pub goal_x: Signal<Option<f64>>,
     // A selection that extends beyond the focused input, in Markdown byte offsets.
@@ -117,16 +117,16 @@ impl Writing {
                 start..start
             }
             Field::Heading(i) => self
-                .blocks
+                .landmarks
                 .read()
                 .get(i)
                 .and_then(|b| match &b.kind {
-                    BlockKind::Heading { hashes, title } => Some(hashes.start..title.end),
+                    LandmarkKind::Heading { hashes, title } => Some(hashes.start..title.end),
                     _ => None,
                 })
                 .unwrap_or(md.len()..md.len()),
             Field::Body(i) => {
-                document::gap(md, parts.body, &self.blocks.read(), i).unwrap_or(md.len()..md.len())
+                document::gap(md, parts.body, &self.landmarks.read(), i).unwrap_or(md.len()..md.len())
             }
             Field::Cell(t, r, c) => self
                 .tables
@@ -144,8 +144,8 @@ impl Writing {
                 let parts = self.sections(md);
                 Some((parts.hashes?, parts.title?))
             }
-            Field::Heading(i) => match &self.blocks.read().get(i)?.kind {
-                BlockKind::Heading { hashes, title } => Some((hashes.clone(), title.clone())),
+            Field::Heading(i) => match &self.landmarks.read().get(i)?.kind {
+                LandmarkKind::Heading { hashes, title } => Some((hashes.clone(), title.clone())),
                 _ => None,
             },
             _ => None,
@@ -162,14 +162,14 @@ impl Writing {
             return Field::TitleGap;
         }
         self.tables.read();
-        let blocks = self.blocks.read();
-        let i = blocks.partition_point(|b| b.line.end < pos);
-        if let Some(b) = blocks.get(i)
+        let landmarks = self.landmarks.read();
+        let i = landmarks.partition_point(|b| b.line.end < pos);
+        if let Some(b) = landmarks.get(i)
             && b.line.start <= pos
         {
             match b.kind {
-                BlockKind::Heading { .. } => Field::Heading(i),
-                BlockKind::Table(t) => {
+                LandmarkKind::Heading { .. } => Field::Heading(i),
+                LandmarkKind::Table(t) => {
                     let (r, c) = self.tables.read()[t].position(pos);
                     Field::Cell(t, r, c)
                 }
@@ -1310,10 +1310,10 @@ impl Writing {
                 && let Some(first) = splices.first_mut()
             {
                 let eol = table::eol(&md);
-                let blocks = self.blocks.read();
-                let previous = blocks.get(i - 1);
+                let landmarks = self.landmarks.read();
+                let previous = landmarks.get(i - 1);
                 let gap = previous.map_or("", |b| &md[b.line.end..first.range.start]);
-                let prefix = if previous.is_some_and(|b| matches!(b.kind, BlockKind::Table(_)))
+                let prefix = if previous.is_some_and(|b| matches!(b.kind, LandmarkKind::Table(_)))
                     && !gap.contains(|c: char| !c.is_whitespace())
                     && gap.matches('\n').count() < 2
                 {
@@ -1421,10 +1421,10 @@ impl Writing {
             }
             Field::Body(0) if needs_body_separator => format!("{eol}{eol}{inserted}"),
             Field::Body(i) if !inserted.is_empty() && i > 0 => {
-                let blocks = self.blocks.read();
-                let previous = blocks.get(i - 1);
+                let landmarks = self.landmarks.read();
+                let previous = landmarks.get(i - 1);
                 let gap = previous.map_or("", |b| &md[b.line.end..absolute.start]);
-                if previous.is_some_and(|b| matches!(b.kind, BlockKind::Table(_)))
+                if previous.is_some_and(|b| matches!(b.kind, LandmarkKind::Table(_)))
                     && !gap.contains(|c: char| !c.is_whitespace())
                     && gap.matches('\n').count() < 2
                 {
@@ -1456,7 +1456,7 @@ impl Writing {
                 }
             }
         }
-        let old_count = self.blocks.read().len();
+        let old_count = self.landmarks.read().len();
         let result = self.note.write().replace(absolute.clone(), &replacement);
         self.contents.read();
         self.tables.read();
@@ -1481,7 +1481,7 @@ impl Writing {
         }
         if result.is_ok()
             && matches!(field, Field::Heading(_))
-            && self.blocks.read().len() != old_count
+            && self.landmarks.read().len() != old_count
         {
             let pos = absolute.start + replacement.len();
             self.open(self.field_at(pos), [pos; 2]);
@@ -1501,7 +1501,7 @@ impl Writing {
             && (field == Field::TitleGap
                 || matches!(field, Field::Title | Field::Heading(_)) && inserted != replacement
                 || matches!(field, Field::Body(_))
-                    && (self.blocks.read().len() != old_count
+                    && (self.landmarks.read().len() != old_count
                         || inserted != replacement && !needs_body_separator))
         {
             let pos = absolute.start + replacement.len();
