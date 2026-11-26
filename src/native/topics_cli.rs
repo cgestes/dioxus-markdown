@@ -1,24 +1,19 @@
 //! Commands that run without a window: setup, pairing, a text summary of
 //! the topics, and one real comment turn.
+use super::cli::Command;
 use super::topics_live::{Live, load};
 use super::worker;
 use margin_editor_core::comments as file;
 use margin_editor_core::hub::{self, Ask, Endpoints, Space};
 
-/// Run a command from `args`. Returns an exit code when one ran.
-pub(super) fn cli(args: &[String]) -> Option<i32> {
-    let words: Vec<&str> = args.iter().map(String::as_str).collect();
-    let result = match words.as_slice() {
-        ["setup", space, zeroclaw, agent] => setup(space, zeroclaw, agent),
-        ["pair", code] => pair(code),
-        ["topics", "--print"] | ["--topics", "--print"] => print(),
-        ["comment-test", page, quote, request] => comment_test(page, quote, request),
-        ["setup", ..] | ["pair", ..] | ["comment-test", ..] => Err("usage:
-  margin setup <silverbullet-url> <zeroclaw-url> <agent>
-  margin pair <code from `zeroclaw gateway get-paircode --new`>
-  margin comment-test <page> <quote> <request>"
-            .into()),
-        _ => return None,
+/// Run a headless subcommand if one was requested. Returns an exit code when one ran.
+pub(super) fn run(command: Option<&Command>) -> Option<i32> {
+    let result = match command? {
+        Command::Setup { space, zeroclaw, agent } => setup(space, zeroclaw, agent),
+        Command::Pair { code } => pair(code),
+        Command::Topics(args) if args.print => print(),
+        Command::CommentTest { page, quote, request } => comment_test(page, quote, request),
+        Command::Topics(_) | Command::Ui => return None,
     };
     Some(match result {
         Ok(()) => 0,

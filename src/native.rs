@@ -1,5 +1,7 @@
 #[path = "native/blocks.rs"]
 mod blocks;
+#[path = "native/cli.rs"]
+mod cli;
 #[path = "native/commands.rs"]
 mod commands;
 #[path = "native/comments.rs"]
@@ -82,18 +84,14 @@ const CSS: &str = concat!(
     include_str!("native/comments.css"),
 );
 
-/// `margin ui` (or `margin --gallery`) shows the design system's gallery.
-fn gallery_requested() -> bool {
-    std::env::args().skip(1).any(|a| a == "ui" || a == "--gallery")
-}
-
 fn main() {
-    if let Some(code) = topics_cli::cli(&std::env::args().skip(1).collect::<Vec<_>>()) {
+    let args = cli::init();
+    if let Some(code) = topics_cli::run(args.command.as_ref()) {
         std::process::exit(code);
     }
-    let (width, height) = if topics::Start::from_args().is_some() {
+    let (width, height) = if args.topics_args().is_some() {
         (1320.0, 860.0)
-    } else if gallery_requested() {
+    } else if args.is_gallery() {
         (1180.0, 900.0)
     } else {
         (920.0, 650.0)
@@ -288,27 +286,25 @@ struct HostAction {
 }
 
 fn app() -> Element {
-    if let Some(start) = topics::Start::from_args() {
-        return rsx! { topics::Shell { start } };
+    let args = cli::current();
+    if let Some(topics_args) = args.topics_args() {
+        return rsx! { topics::Shell { start: topics::Start::from_cli(topics_args) } };
     }
-    if gallery_requested() {
+    if args.is_gallery() {
         return rsx! { ui::gallery::Gallery {} };
     }
-    if std::env::args().any(|arg| arg == "--test-window") {
+    if args.test_window {
         return notebook_view(
             "# Input check\n\nabcd\nefgh\nijkl\nmnop\n\n| A | B |\n| --- | --- |\n| one | two |\n| three | four |",
             NotebookOptions { inspect: true, ..Default::default() },
         );
     }
-    let split = std::env::args().any(|arg| arg == "--split");
-    let inspect = std::env::args().any(|arg| arg == "--test-editor");
-    if let Some(path) = sync_file_arg() {
-        if std::env::args_os().any(|arg| arg == "--vault" || arg == "--note" || arg == "--passphrase-file") {
-            return rsx! { p { role: "alert", "Open the sync file and the personal vault in separate windows." } };
-        }
+    let split = args.split;
+    let inspect = args.test_editor;
+    if let Some(path) = args.sync_file.clone() {
         return rsx! { SyncFileEditor { path, split, inspect } };
     }
-    if inspect || std::env::args().any(|arg| arg == "--demo") {
+    if inspect || args.demo {
         return rsx! { SampleEditor { split, inspect } };
     }
     rsx! { personal::Desktop { split } }
@@ -332,19 +328,6 @@ fn SampleEditor(split: bool, inspect: bool) -> Element {
 #[cfg(test)]
 fn notebook(initial: &'static str) -> Element {
     notebook_view(initial, NotebookOptions::default())
-}
-
-fn sync_file_arg() -> Option<std::path::PathBuf> {
-    let mut args = std::env::args().skip(1);
-    while let Some(arg) = args.next() {
-        if arg == "--sync-file" {
-            return args.next().map(std::path::PathBuf::from);
-        }
-        if let Some(path) = arg.strip_prefix("--sync-file=") {
-            return Some(std::path::PathBuf::from(path));
-        }
-    }
-    None
 }
 
 #[derive(Clone)]

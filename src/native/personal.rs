@@ -1,6 +1,6 @@
 //! Private desktop entry point. Editor signals are updated on the Dioxus thread.
 use super::{CSS, View, notebook_view};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use dioxus_native::prelude::*;
 use futures_util::StreamExt;
 use loro::LoroDoc;
@@ -13,7 +13,6 @@ use margin_editor_core::{
 };
 use std::{
     collections::VecDeque,
-    path::PathBuf,
     rc::Rc,
     sync::{Arc, Mutex, OnceLock},
     time::Duration,
@@ -22,30 +21,18 @@ use std::{
 pub(super) static DEVICE: OnceLock<(Vault, String)> = OnceLock::new();
 
 fn initialize() -> Result<()> {
-    let args: Vec<_> = std::env::args_os().skip(1).collect();
-    let value = |flag: &str| -> Result<Option<PathBuf>> {
-        args.iter()
-            .position(|s| s == flag)
-            .map(|n| {
-                args.get(n + 1)
-                    .map(PathBuf::from)
-                    .context("missing option value")
-            })
-            .transpose()
+    let args = super::cli::current();
+    let dir = match &args.vault {
+        Some(path) => path.clone(),
+        None => vault::default_dir()?,
     };
-    let dir = value("--vault")?.unwrap_or(vault::default_dir()?);
-    let pass = value("--passphrase-file")?;
+    let pass = args.passphrase_file.as_deref();
     let v = if dir.join("device.json").exists() {
-        Vault::open(&dir, pass.as_deref())?
+        Vault::open(&dir, pass)?
     } else {
-        Vault::create(
-            &dir,
-            Identity::from_recovery(&Recovery::new()),
-            pass.as_deref(),
-        )?
+        Vault::create(&dir, Identity::from_recovery(&Recovery::new()), pass)?
     };
-    let requested = value("--note")?.map(|p| p.to_string_lossy().into_owned());
-    let room = open_note(&v, requested.as_deref())?;
+    let room = open_note(&v, args.note.as_deref())?;
     DEVICE
         .set((v, room))
         .map_err(|_| anyhow::anyhow!("vault already initialized"))

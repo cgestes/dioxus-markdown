@@ -40,23 +40,12 @@ pub(super) struct Start {
 }
 
 impl Start {
-    /// The window's start, when the command line asks for topics.
-    pub(super) fn from_args() -> Option<Self> {
-        let args: Vec<String> = std::env::args().skip(1).collect();
-        if !args.iter().any(|a| a == "topics" || a == "--topics") {
-            return None;
-        }
-        let value = |flag: &str| {
-            args.iter()
-                .position(|a| a == flag)
-                .and_then(|i| args.get(i + 1))
-                .map(String::as_str)
-        };
-        let demo = args.iter().any(|a| a == "--demo");
-        Some(Self::new(demo, value("--open"), value("--tab"), value("--doc")))
+    /// Build the window's starting place from parsed `margin topics` CLI args.
+    pub(super) fn from_cli(args: &super::cli::TopicsArgs) -> Self {
+        Self::build(args.demo, args.open.as_deref(), args.tab.unwrap_or(Tab::Overview), args.doc.as_deref())
     }
 
-    fn new(demo: bool, open: Option<&str>, tab: Option<&str>, doc: Option<&str>) -> Self {
+    fn build(demo: bool, open: Option<&str>, tab: Tab, doc: Option<&str>) -> Self {
         let place = match open.filter(|s| !s.is_empty()) {
             Some("today") => Place::Today,
             Some("inbox") => Place::Inbox,
@@ -64,22 +53,21 @@ impl Start {
             None if demo => Place::Topic("house".into()),
             None => Place::Today,
         };
-        let tab = match tab.unwrap_or_default() {
-            "discussions" => Tab::Discussions,
-            "calendar" => Tab::Calendar,
-            "questions" => Tab::Questions,
-            "docs" => Tab::Docs,
-            "procedures" => Tab::Procedures,
-            "lists" => Tab::Lists,
-            "code" => Tab::Code,
-            _ => Tab::Overview,
-        };
         Self {
             demo,
             place,
             tab,
             doc: doc.filter(|d| !d.is_empty()).map(String::from),
         }
+    }
+
+    #[cfg(test)]
+    fn new(demo: bool, open: Option<&str>, tab: Option<&str>, doc: Option<&str>) -> Self {
+        use clap::ValueEnum;
+        let tab = tab
+            .and_then(|s| Tab::from_str(s, true).ok())
+            .unwrap_or(Tab::Overview);
+        Self::build(demo, open, tab, doc)
     }
 }
 
@@ -96,8 +84,8 @@ enum Place {
     Topic(String),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Tab {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub(super) enum Tab {
     Overview,
     Discussions,
     Calendar,
