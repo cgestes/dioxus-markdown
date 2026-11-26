@@ -633,7 +633,6 @@ pub mod text {
     pub struct Layout {
         lines: Vec<LineData>,
         len: usize,
-        font_size: f32,
     }
 
     thread_local! {
@@ -752,7 +751,7 @@ pub mod text {
                 glyphs.push(Glyph { byte, len: ch.len_utf8(), x, advance: r.width() as f32 });
             }
             finish(&mut lines, &mut glyphs, line_start..text.len(), false);
-            let layout = Rc::new(Layout { lines, len: text.len(), font_size });
+            let layout = Rc::new(Layout { lines, len: text.len() });
             CACHE.with_borrow_mut(|c| c.insert(id, (key, layout.clone())));
             Some(layout)
         }
@@ -812,13 +811,12 @@ pub mod text {
 
         /// One left-to-right run per line: the mirror does not expose bidi runs.
         pub fn runs(&self) -> impl Iterator<Item = Run> {
-            std::iter::once(Run { range: self.text_range(), font_size: self.layout.font_size })
+            std::iter::once(Run { range: self.text_range() })
         }
     }
 
     pub struct Run {
         range: Range<usize>,
-        font_size: f32,
     }
 
     impl Run {
@@ -828,10 +826,6 @@ pub mod text {
 
         pub fn is_rtl(&self) -> bool {
             false
-        }
-
-        pub fn font_size(&self) -> f32 {
-            self.font_size
         }
     }
 
