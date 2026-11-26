@@ -6,7 +6,8 @@
 //! (`people/nikki-sample`). The space README maps Slack and Telegram chats to
 //! folders, `reminders.md` holds every deadline, and `<folder>/questions.md`
 //! holds open questions. This module only parses; `hub` does the I/O.
-use crate::{
+pub use margin_editor_core::heading::{h1, page_title, split_heading};
+use margin_editor_core::{
     dates,
     preview::{self, Block},
     table,
@@ -45,7 +46,7 @@ pub struct Topic {
 
 /// Roots that belong to SilverBullet itself, not to the agent's topics.
 /// Margin's own files (`_margin/comments/…`) are not a topic either.
-const HIDDEN: [&str; 3] = ["Library", "Repositories", crate::comments::ROOT];
+const HIDDEN: [&str; 3] = ["Library", "Repositories", margin_editor_core::comments::ROOT];
 /// Folders whose pages are each a topic (one file per person). Their README
 /// relates each page to its owner (`Relationship…` and `File` columns).
 pub const REGISTRIES: [&str; 1] = ["people"];
@@ -196,30 +197,6 @@ pub fn title_from_slug(slug: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-pub fn h1(md: &str) -> Option<&str> {
-    md.lines().find_map(|l| l.strip_prefix("# ")).map(str::trim)
-}
-
-/// Split a heading at its first em dash, colon or parenthesis:
-/// `Weddings — Alex & Sam (2028)` → (`Weddings`, `Alex & Sam (2028)`).
-/// A page's title: its first heading, up to a dash or colon.
-pub fn page_title(md: &str) -> Option<&str> {
-    h1(md).map(|h| split_heading(h).0).filter(|t| !t.is_empty())
-}
-
-pub fn split_heading(heading: &str) -> (&str, &str) {
-    let found = [" — ", " – ", " - ", ": ", " ("]
-        .iter()
-        .filter_map(|sep| heading.find(sep).map(|at| (at, *sep)))
-        .min();
-    match found {
-        // A parenthesis belongs to what it encloses.
-        Some((at, " (")) => (heading[..at].trim(), heading[at..].trim()),
-        Some((at, sep)) => (heading[..at].trim(), heading[at + sep.len()..].trim()),
-        None => (heading.trim(), ""),
-    }
 }
 
 /// Build the topic tree from the space listing.
@@ -426,15 +403,6 @@ impl Source {
             Self::Slack => "Slack",
             Self::Chat => "Chat",
             Self::Other => "Channel",
-        }
-    }
-
-    pub fn class(self) -> &'static str {
-        match self {
-            Self::Telegram => "tg",
-            Self::Slack => "sl",
-            Self::Chat => "ch",
-            Self::Other => "ot",
         }
     }
 }
@@ -751,7 +719,7 @@ pub fn origin(key: &str) -> Origin {
     if bare == GENERAL_CHAT {
         return Origin::General;
     }
-    if let Some(thread) = bare.strip_prefix(crate::comments::SESSION_PREFIX) {
+    if let Some(thread) = bare.strip_prefix(margin_editor_core::comments::SESSION_PREFIX) {
         return Origin::Comment(thread.into());
     }
     let mut parts = key.split('_');
@@ -948,7 +916,7 @@ pub fn transcript(messages: &[Message]) -> Vec<Turn> {
 
 /// Margin's context ahead of a message: the topic line or a comment's page.
 fn strip_preamble(text: &str) -> &str {
-    if let Some(rest) = crate::comments::strip_preamble(text) {
+    if let Some(rest) = margin_editor_core::comments::strip_preamble(text) {
         return rest;
     }
     text.strip_prefix(PREAMBLE)

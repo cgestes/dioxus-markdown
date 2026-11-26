@@ -111,10 +111,10 @@ pub fn Gallery() -> Element {
                     Card {
                         CardTitle { text: "Recent discussions", icon: Icon::Chat, note: "memory · topic:car".to_string() }
                         Rows {
-                            Row { title: "its a mazda 3 - dt-868-mz", leading: rsx! { SourceGlyph { source: Source::Slack } },
+                            Row { title: "its a mazda 3 - dt-868-mz", leading: rsx! { ChannelGlyph { channel: Channel::Slack } },
                                 snippet: "agent: Got it. The reminders will keep pinging…".to_string(),
                                 sub: rsx! { SubItem { text: "Slack · #car" } SubItem { text: "36 msgs" } }, trailing: "13 h".to_string(), onclick: move |_| {} }
-                            Row { title: "Telegram car group", leading: rsx! { SourceGlyph { source: Source::Telegram } }, dot: true,
+                            Row { title: "Telegram car group", leading: rsx! { ChannelGlyph { channel: Channel::Telegram } }, dot: true,
                                 snippet: "agent: Gmail access works now.".to_string(), trailing: "7 h".to_string(), onclick: move |_| {} }
                             Row { title: "maintenance.md", leading: rsx! { Badge { text: "MD", tone: Tone::Accent } }, snippet: "Car · 4 KB".to_string() }
                         }
@@ -126,9 +126,9 @@ pub fn Gallery() -> Element {
                     for hue in Hue::ALL { Tile { icon: Icon::Car, hue } }
                     Tile { icon: Icon::Home, hue: Hue::Clay, size: TileSize::Large }
                     Tile { icon: Icon::Heart, hue: Hue::Plum, size: TileSize::Small }
-                    SourceGlyph { source: Source::Telegram }
-                    SourceGlyph { source: Source::Slack }
-                    SourceGlyph { source: Source::Chat }
+                    ChannelGlyph { channel: Channel::Telegram }
+                    ChannelGlyph { channel: Channel::Slack }
+                    ChannelGlyph { channel: Channel::Chat }
                     Avatar { ai: true }
                     Avatar { initial: "Y" }
                     DateBox { top: "THU", day: "26" }

@@ -7,7 +7,7 @@ publish = false
 # The agent's side: SilverBullet and ZeroClaw over the tailnet (native-tls
 # uses the system trust store), and the device token.
 [dependencies]
-margin-editor-core = { path = "../.." }
+osom-topics = { path = "../osom-topics" }
 percent-encoding = "2.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

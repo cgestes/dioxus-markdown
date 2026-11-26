@@ -352,7 +352,7 @@ pub fn turn(thread: &str, page: &str, md: &str, range: Range<usize>, request: &s
     let range = md.floor_char_boundary(range.start.min(md.len()))..md.floor_char_boundary(range.end.min(md.len()));
     let ask = Ask {
         page: page.into(),
-        title: crate::topics::page_title(md).unwrap_or_default().into(),
+        title: crate::heading::page_title(md).unwrap_or_default().into(),
         place: place(md, range.start),
         quote: md[range].into(),
         request: request.into(),

@@ -1,6 +1,6 @@
 //! Icons: one set for the editor, the comments and the Topics window.
 //! Lucide-style strokes on a 24-unit grid; `Grip` and `Sparkle` are filled.
-use super::Source;
+use super::Channel;
 use crate::prelude::*;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -136,12 +136,12 @@ impl Icon {
         Icon::AlertOctagon,
     ];
 
-    /// The glyph of a conversation's source.
-    pub fn for_source(source: Source) -> Self {
-        match source {
-            Source::Telegram => Self::Telegram,
-            Source::Slack => Self::Slack,
-            Source::Chat | Source::Other => Self::Chat,
+    /// The glyph of a conversation's channel.
+    pub fn for_channel(channel: Channel) -> Self {
+        match channel {
+            Channel::Telegram => Self::Telegram,
+            Channel::Slack => Self::Slack,
+            Channel::Chat | Channel::Other => Self::Chat,
         }
     }
 

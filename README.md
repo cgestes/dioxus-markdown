@@ -157,10 +157,11 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | Crate | Holds | Heavy dependencies |
 | --- | --- | --- |
 | `crates/workspace-hack` | No code: it pins the dependency features that builds would otherwise resolve differently, so `cargo run`, a vault build and `cargo test` share one compile of Dioxus, Blitz and the workspace crates | none |
-| `margin-editor-core` (root) | Markdown editing commands, the preview model, the topic and comment formats. No I/O. It builds for native and for wasm. | none |
+| `margin-editor-core` (root) | Markdown editing commands, the preview model, the comment format, page titles and dates. No I/O. It builds for native and for wasm. | none |
 | `crates/margin-note` | `Note` (a Loro document) and the standalone sync file | Loro |
 | `crates/margin-projection` | The editor's Markdown model, no UI: what a field shows and how its edits map back to the source, title and body, blocks, list continuation, span styles, link cards. Its tests build no renderer. | none |
 | `crates/margin-vault` | The encrypted vault: keys, SQLite storage, relay and sync. `margin` uses it only with `--features vault`. | crypto, SQLite, tokio |
+| `crates/osom-topics` | Osom's model: the topics of the agent's space, its chats and reminders. It parses; the hub does the I/O. | none |
 | `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token | HTTP, WebSocket |
 | `crates/margin-ui` | The design system: tokens, components, fonts, the gallery | Dioxus |
 | `crates/margin-editor` | The Markdown editor: Rich, Live and Source views, tables, comments, undo, on Blitz (native) or Dioxus Web (browser). The app that opens it decides where the note lives (`NoteStore`). | Dioxus Native, Blitz |
@@ -171,7 +172,7 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 
 Loro is the document model in every build: it merges your edits with an agent's and gives undo that restores the selection. [Why Loro stays](docs/decisions/0001-loro-is-the-document-model.md)
 
-`margin-ui` depends only on the pure core, so vault, sync or agent changes never rebuild it. `margin --help`, `osom --help` and `margin-vault --help` list each binary's options.
+`margin-ui` depends only on the pure core, so vault, sync, topic or agent changes never rebuild it. `margin --help`, `osom --help` and `margin-vault --help` list each binary's options.
 
 ## Build order
 

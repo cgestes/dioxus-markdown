@@ -20,7 +20,7 @@ These follow the product principles in `SPEC.md` §1.
 | Rules | `--line`, `--line-strong` | Borders and separators; hovered or emphasised borders |
 | Accent | `--accent`, `--accent-deep` | Primary actions, links, selection; their hover and pressed state |
 | Status | `--ok`, `--info` / `--info-wash`, `--warn` / `--warn-ink` / `--warn-wash` / `--warn-line`, `--alert` / `--alert-wash` / `--alert-line` | Connected, information, needs attention (comment highlights), errors |
-| Sources | `--telegram`, `--slack`, `--chat` and their `-wash` | Where a conversation comes from (`SourceGlyph`) |
+| Sources | `--telegram`, `--slack`, `--chat` and their `-wash` | Where a conversation comes from (`ChannelGlyph`) |
 | Tile hues | `--hue-{slate,rose,clay,ochre,plum,pine}` and their `-wash` | A topic's mark (`Tile`, `ui::Hue`) |
 | Shape | `--radius-s` 4, `--radius` 7, `--radius-l` 10, `--radius-pill` | Badges; buttons and fields; cards; chips |
 | Space | `--space-1` … `--space-5` (4, 8, 12, 16, 24) | Gaps and padding |
@@ -81,12 +81,12 @@ Each is a Dioxus component (or a function) exported from `ui`. Props not listed 
 
 | Component | When | API |
 | --- | --- | --- |
-| `Icon` / `icon()` | Every glyph: the editor's tools and the Topics marks | `Icon::X.draw()` (14px, in buttons), `icon(Icon::X)` (16px `svg.i`), `Icon::X.svg(class)`; `Icon::ALL`, `Icon::for_source` |
+| `Icon` / `icon()` | Every glyph: the editor's tools and the Topics marks | `Icon::X.draw()` (14px, in buttons), `icon(Icon::X)` (16px `svg.i`), `Icon::X.svg(class)`; `Icon::ALL`, `Icon::for_channel` |
 | `Tile` | A topic's mark: an icon on a tinted square | `Tile { icon, hue: Hue, size?: Small \| Medium \| Large }` |
 | `Badge` | A count, a kind (`PDF`), an id (`Q1`), the agent's name | `Badge { text, tone?: Tone }` |
 | `Banner` | A message across a place: an error, a note | `Banner { text, tone? }` (`Alert` is announced) |
 | `DateBox` | A calendar entry's date | `DateBox { top, day }`; `dates::chip(iso, today)` gives both |
-| `SourceGlyph` | Where a conversation comes from | `SourceGlyph { source }` |
+| `ChannelGlyph` | Where a conversation comes from (the app maps its sources onto `Channel`) | `ChannelGlyph { channel }` |
 | `Avatar` | Who wrote a comment | `Avatar { ai?, initial? }` (used by `Message` in thread style) |
 
 `Hue` (`Slate`, `Rose`, `Clay`, `Ochre`, `Plum`, `Pine`) and `Tone` (`Neutral`, `Accent`, `Ok`, `Info`, `Warn`, `Alert`) map to the tokens above.
@@ -111,7 +111,7 @@ Each is a Dioxus component (or a function) exported from `ui`. Props not listed 
 | `Message` | Topics chat panel, transcripts, comment threads |
 | `MarkdownView` | Topic overview page, chat replies, transcripts, comment bodies (through `Message`) |
 | `Icon` | Everywhere |
-| `Tile`, `DateBox`, `SourceGlyph` | Topics |
+| `Tile`, `DateBox`, `ChannelGlyph` | Topics |
 | `Badge` | Topics (counts, doc kinds, question ids), comments (open count, agent name) |
 | `Banner` | Topics errors, comment file errors, tool approvals |
 

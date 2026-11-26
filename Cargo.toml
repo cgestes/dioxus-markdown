@@ -10,12 +10,13 @@ members = [
     "crates/margin",
     "crates/margin-web",
     "crates/osom",
+    "crates/osom-topics",
     "crates/workspace-hack",
 ]
 resolver = "3"
 
-# The pure core: Markdown editing commands, the preview model and the topic
-# and comment formats, with no I/O.
+# The pure core: Markdown editing commands, the preview model and the comment
+# format, with no I/O.
 [package]
 name = "margin-editor-core"
 version = "0.1.0"

@@ -1,5 +1,5 @@
 //! Containers, list rows and the small marks inside them.
-use super::{Button, Hue, Icon, Source, Tone, Variant, icon};
+use super::{Button, Hue, Icon, Tone, Variant, icon};
 use crate::prelude::*;
 
 /// A surface that groups one kind of content. `onclick` makes the whole
@@ -147,10 +147,32 @@ pub fn DateBox(top: String, day: String) -> Element {
     rsx! { span { class: "ui-date", small { "{top}" } b { "{day}" } } }
 }
 
+/// Where a conversation comes from, as the design system draws it. The app
+/// maps its own idea of a source onto one of these.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Channel {
+    Telegram,
+    Slack,
+    Chat,
+    #[default]
+    Other,
+}
+
+impl Channel {
+    fn class(self) -> &'static str {
+        match self {
+            Self::Telegram => "tg",
+            Self::Slack => "sl",
+            Self::Chat => "ch",
+            Self::Other => "ot",
+        }
+    }
+}
+
 /// Where a conversation comes from, as a round glyph.
 #[component]
-pub fn SourceGlyph(source: Source) -> Element {
-    rsx! { span { class: "ui-glyph {source.class()}", {icon(Icon::for_source(source))} } }
+pub fn ChannelGlyph(channel: Channel) -> Element {
+    rsx! { span { class: "ui-glyph {channel.class()}", {icon(Icon::for_channel(channel))} } }
 }
 
 /// Who wrote a message: the agent's sparkle, or a person's initial.

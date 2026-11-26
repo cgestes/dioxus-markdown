@@ -5,7 +5,7 @@
 //! A browser build keeps the types and the stand-in agent; the transports are
 //! native only.
 #![cfg_attr(target_arch = "wasm32", allow(unused_imports, dead_code))]
-use margin_editor_core::topics::{Message, Session, SpaceFile};
+use osom_topics::{Message, Session, SpaceFile};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};

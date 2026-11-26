@@ -5,7 +5,7 @@ pub mod comments;
 pub mod dates;
 pub mod edit;
 pub mod format;
+pub mod heading;
 pub mod preview;
 pub mod syntax;
 pub mod table;
-pub mod topics;

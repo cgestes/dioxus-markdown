@@ -1,8 +1,18 @@
 //! What the Topics window shows, whatever it came from: the live space
 //! (SilverBullet + ZeroClaw) or the demo data in `topics_demo`.
-pub use margin_editor_core::topics::{KeyDate, Question as QuestionRow, Source, Turn as ChatLine};
+pub use osom_topics::{KeyDate, Question as QuestionRow, Source, Turn as ChatLine};
 
-pub use margin_ui::{Hue, Icon};
+pub use margin_ui::{Channel, Hue, Icon};
+
+/// How the design system draws a conversation's source.
+pub fn channel(source: Source) -> Channel {
+    match source {
+        Source::Telegram => Channel::Telegram,
+        Source::Slack => Channel::Slack,
+        Source::Chat => Channel::Chat,
+        Source::Other => Channel::Other,
+    }
+}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Agenda {

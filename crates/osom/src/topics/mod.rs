@@ -17,14 +17,14 @@ use crate::topics::view::*;
 use margin_ui as ui;
 use margin_ui::{
     self, Badge, Banner, Button, Card, CardTitle, CheckItem, Chip, Composer, DateBox, MarkdownView, Message,
-    MessageStyle, NavItem, Row, Rows, SourceGlyph, SubItem, TabItem, Tabs, TextField, Tile, TileSize, Tone, Variant,
+    MessageStyle, NavItem, Row, Rows, ChannelGlyph, SubItem, TabItem, Tabs, TextField, Tile, TileSize, Tone, Variant,
 };
 use margin_editor::support::worker::{batch, turn, work};
 use margin_editor::{Comments, HostAction, HostBar, NotebookOptions};
 use dioxus_native::prelude::*;
 use margin_editor_core::dates;
 use margin_hub::{self as hub, Ask, ChatEvent, Endpoints, Page};
-use margin_editor_core::topics as model;
+use osom_topics as model;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -666,7 +666,7 @@ fn ThreadItem(thread: ThreadRow, topic_title: Option<String>) -> Element {
     let (key, title, inline) = (th.key.clone(), th.title.clone(), !th.turns.is_empty());
     rsx! {
         Row { title: th.title.clone(), dot: th.unread, snippet: th.snippet.clone(), trailing: th.when.clone(),
-            leading: rsx! { SourceGlyph { source: th.source } },
+            leading: rsx! { ChannelGlyph { channel: channel(th.source) } },
             sub: rsx! {
                 SubItem { text: format!("{} · {}", th.source.name(), th.place) }
                 if th.messages > 0 { SubItem { text: format!("{} msgs", th.messages) } }
@@ -694,7 +694,7 @@ fn Discussions(topic: TopicView) -> Element {
         div { class: "chips",
             Chip { label: "All", selected: filter.is_none(), onclick: move |_| set(None) }
             for s in topic.sources() {
-                Chip { label: s.name(), icon: Icon::for_source(s), selected: filter == Some(s), onclick: move |_| set(Some(s)) }
+                Chip { label: s.name(), icon: Icon::for_channel(channel(s)), selected: filter == Some(s), onclick: move |_| set(Some(s)) }
             }
         }
         Card {
@@ -954,7 +954,7 @@ fn Inbox() -> Element {
             for item in w.inbox.iter() {
                 Card { key: "{item.key}",
                     Row { title: item.text.clone(), trailing: item.when.clone(),
-                        leading: rsx! { SourceGlyph { source: item.source } },
+                        leading: rsx! { ChannelGlyph { channel: channel(item.source) } },
                         sub: rsx! { SubItem { text: format!("{} · {}", item.source.name(), item.place) } },
                         if let Some(to) = filed.get(&item.key) {
                             div { class: "filed", if to == "none" { "Dismissed — not a topic." } else { "Filed to {w.find(to).map(|t| t.title.clone()).unwrap_or_default()} ✓" } }

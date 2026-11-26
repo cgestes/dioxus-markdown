@@ -4,7 +4,7 @@ use crate::topics::demo;
 use crate::topics::view::*;
 use margin_editor_core::dates;
 use margin_hub::{AgentChat, Canned, Endpoints, Page, Space, ZeroClaw};
-use margin_editor_core::topics::{self as model, Kind, Origin, Reminder, Session, Topic};
+use osom_topics::{self as model, Kind, Origin, Reminder, Session, Topic};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

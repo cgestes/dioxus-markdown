@@ -4352,7 +4352,7 @@ dependencies = [
 name = "margin-hub"
 version = "0.1.0"
 dependencies = [
- "margin-editor-core",
+ "osom-topics",
  "percent-encoding",
  "security-framework 3.7.0",
  "serde",
@@ -5215,9 +5215,20 @@ dependencies = [
  "margin-editor-core",
  "margin-hub",
  "margin-ui",
+ "osom-topics",
  "png 0.18.1",
  "tokio",
  "webbrowser",
+]
+
+[[package]]
+name = "osom-topics"
+version = "0.1.0"
+dependencies = [
+ "margin-editor-core",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

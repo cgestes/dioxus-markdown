@@ -27,10 +27,9 @@ pub mod typefaces;
 
 pub use button::{Button, Chip, Segment, Segmented, TabItem, Tabs, Variant};
 pub use combobox::{Combobox, ComboboxItem};
-pub use content::{Avatar, Badge, Banner, Card, CardTitle, DateBox, NavItem, Row, Rows, SourceGlyph, SubItem, Tile, TileSize};
+pub use content::{Avatar, Badge, Banner, Card, CardTitle, Channel, ChannelGlyph, DateBox, NavItem, Row, Rows, SubItem, Tile, TileSize};
 pub use field::{CheckItem, Checkbox, Composer, TextField};
 pub use icon::{Icon, icon};
-pub use margin_editor_core::topics::Source;
 pub use markdown::MarkdownView;
 pub use menu::{Menu, MenuItem, MenuRow, MenuSection, MenuSeparator, Popover, Toolbar, ToolbarLook, ToolbarSep};
 pub use message::{Message, MessageStyle};
