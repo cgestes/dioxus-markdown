@@ -91,7 +91,7 @@ pub(super) fn today_data(w: &Workspace) -> TodayData {
         threads,
         unread,
         shopping,
-        label: dates::long_date(&w.today),
+        label: calendar::long_date(&w.today),
         today: w.today.clone(),
         topics: w.topics.len(),
     }

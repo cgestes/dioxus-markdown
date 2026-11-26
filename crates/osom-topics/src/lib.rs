@@ -6,6 +6,8 @@
 //! (`people/nikki-sample`). The space README maps Slack and Telegram chats to
 //! folders, `reminders.md` holds every deadline, and `<folder>/questions.md`
 //! holds open questions. This crate only parses; `margin-hub` does the I/O.
+pub mod calendar;
+
 pub use margin_editor_core::heading::{h1, page_title, split_heading};
 use margin_editor_core::{
     dates,

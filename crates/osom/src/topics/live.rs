@@ -4,7 +4,7 @@ use crate::topics::demo;
 use crate::topics::view::*;
 use margin_editor_core::dates;
 use margin_hub::{AgentChat, Canned, Endpoints, Page, Space, ZeroClaw};
-use osom_topics::{self as model, Kind, Origin, Reminder, Session, Topic};
+use osom_topics::{self as model, Kind, Origin, Reminder, Session, Topic, calendar};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -288,7 +288,7 @@ fn live_topic(t: &Topic, cx: &Cx) -> TopicView {
     reminders.sort_by(|a, b| a.1.due().cmp(b.1.due()));
     let next = reminders
         .first()
-        .map(|(_, r)| format!("{} · {}", short(&r.what, 18), dates::day_month(r.due())))
+        .map(|(_, r)| format!("{} · {}", short(&r.what, 18), calendar::day_month(r.due())))
         .unwrap_or_default();
     let agenda: Vec<Agenda> = reminders
         .iter()
@@ -416,7 +416,7 @@ fn thread_row(th: &model::Thread, now: i64, turns: Option<&Vec<ChatLine>>) -> Th
         snippet,
         place: th.label.clone(),
         when: dates::parse_time(&s.last_activity)
-            .map(|t| dates::ago(now, t))
+            .map(|t| calendar::ago(now, t))
             .unwrap_or_default(),
         sort: s.last_activity.clone(),
         messages: s.message_count,

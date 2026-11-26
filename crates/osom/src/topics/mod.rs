@@ -34,6 +34,7 @@ use dioxus_native::prelude::*;
 use margin_editor_core::dates;
 use margin_hub::{self as hub, Ask, ChatEvent, Endpoints, Page};
 use osom_topics as model;
+use osom_topics::calendar;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -348,7 +349,7 @@ fn host(url: &str) -> String {
 }
 
 fn date_box(iso: &str, today: &str) -> Element {
-    let (top, day) = dates::chip(iso, today).unwrap_or_default();
+    let (top, day) = calendar::chip(iso, today).unwrap_or_default();
     rsx! { DateBox { top, day } }
 }
 
