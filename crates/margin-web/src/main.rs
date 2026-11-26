@@ -29,7 +29,7 @@ mod page {
     fn app() -> Element {
         let options = options();
         if options.gallery {
-            return rsx! { margin_ui::gallery::Gallery {} };
+            return rsx! { margin_editor::Gallery {} };
         }
         if options.test_window {
             return notebook_view(INPUT_CHECK, NotebookOptions { inspect: true, ..Default::default() });

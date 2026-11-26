@@ -1,5 +1,5 @@
 //! One turn of a conversation: the topic chat, a transcript, a comment thread.
-use super::{Avatar, Icon, MarkdownView};
+use super::{Avatar, Icon};
 use crate::prelude::*;
 
 /// Where a message is shown.
@@ -14,10 +14,13 @@ pub enum MessageStyle {
     Thread,
 }
 
-/// A message: who wrote it, its Markdown body, and how far along it is.
-/// While `pending` the body is shown as plain text (it is still arriving)
-/// or "Thinking…"; `failed` shows it as an error. `tools` lists what the
-/// agent ran. Children go under the body (a proposed edit, say).
+/// A message: who wrote it, its body, and how far along it is. `body` is
+/// plain text. A finished message shows `rich` in its place when the caller
+/// gives one: the body as the caller draws it (the editor crate's
+/// `MarkdownView`, say). While `pending` the plain text is shown (it is
+/// still arriving) or "Thinking…"; `failed` shows it as an error. `tools`
+/// lists what the agent ran. Children go under the body (a proposed edit,
+/// say).
 #[component]
 pub fn Message(
     author: String,
@@ -28,6 +31,7 @@ pub fn Message(
     #[props(default)] tools: Vec<String>,
     #[props(default)] at: Option<String>,
     #[props(default)] style: MessageStyle,
+    #[props(default)] rich: Option<Element>,
     #[props(default)] children: Element,
 ) -> Element {
     let tools = match (tools.is_empty(), pending) {
@@ -35,13 +39,10 @@ pub fn Message(
         (false, true) => Some(format!("{}…", tools.join(", "))),
         (false, false) => Some(format!("used {}", tools.join(", "))),
     };
-    let compact = style != MessageStyle::Card;
-    let text = if pending {
-        rsx! { div { class: "ui-msg-text plain", if body.is_empty() { "Thinking…" } else { "{body}" } } }
-    } else if failed {
-        rsx! { div { class: "ui-msg-text", "{body}" } }
-    } else {
-        rsx! { MarkdownView { text: body.clone(), compact } }
+    let text = match rich {
+        _ if pending => rsx! { div { class: "ui-msg-text plain", if body.is_empty() { "Thinking…" } else { "{body}" } } },
+        Some(rich) if !failed => rich,
+        _ => rsx! { div { class: "ui-msg-text", "{body}" } },
     };
     let kind = match style {
         MessageStyle::Bubble => "bubble",

@@ -62,7 +62,7 @@ On **Today**, **Key dates** shows the next three weeks of entries from the `Key 
 | `osom comment-test <page> "<quote>" "<request>"` | Asks the comment agent about a passage of a page, as a new comment thread would, and prints its reply and proposed edit. Uses a throwaway session. |
 | `osom topics --print` | Lists topics with their reminder, discussion, question and doc counts. |
 | `scripts/bundle-osom.sh` | Builds `target/Osom.app`, the Topics window as a double-clickable macOS app. |
-| `margin ui` | The design system's gallery: every component in every state. `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints it to `target/ui-gallery.png`. [Design system](docs/design-system.md) |
+| `margin ui` | The design system's gallery: every component in every state, and Markdown as the editor crate draws it. `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints the components to `target/ui-gallery.png`. [Design system](docs/design-system.md) |
 | `cargo test -p osom topics_shots -- --ignored` | Paints each view to `target/topics-shots`. Add `MARGIN_TOPICS_LIVE=1` for the live space. |
 
 ## Test native Live editing
@@ -163,8 +163,8 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | `crates/margin-vault` | The encrypted vault: keys, SQLite storage, relay and sync. `margin` uses it only with `--features vault`. | crypto, SQLite, tokio |
 | `crates/osom-topics` | Osom's model: the topics of the agent's space, its chats and reminders. It parses; the hub does the I/O. | none |
 | `crates/margin-hub` | SilverBullet and ZeroClaw clients, the device token. It implements the core's agent and page-file interfaces. | HTTP, WebSocket |
-| `crates/margin-ui` | The design system: tokens, components, fonts, the gallery | Dioxus |
-| `crates/margin-editor` | The Markdown editor: Rich, Live and Source views, tables, comments, undo, on Blitz (native) or Dioxus Web (browser). The app that opens it decides where the note lives (`NoteStore`: a vault, a sync file, a page on a server) and who answers comments (`AgentChat`). | Dioxus Native, Blitz |
+| `crates/margin-ui` | The design system: tokens, components, fonts, the gallery. It uses no other workspace crate: it knows no Markdown and no app. | Dioxus |
+| `crates/margin-editor` | The Markdown editor: Rich, Live and Source views, tables, comments, undo, on Blitz (native) or Dioxus Web (browser). The app that opens it decides where the note lives (`NoteStore`: a vault, a sync file, a page on a server) and who answers comments (`AgentChat`). Also Markdown to read (`MarkdownView`). | Dioxus Native, Blitz |
 | `crates/margin` | `margin`, the notebook app: your personal vault (`--features vault`), a sync file or the Field notes sample, and the gallery (`margin ui`) | clap |
 | `crates/margin-web` | `margin-web`, the notebook in a browser page, installable as a web app (`dx serve --web --package margin-web`) | Dioxus Web |
 | `crates/osom` | The Topics window (`osom`) | |
@@ -172,7 +172,7 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 
 Loro is the document model in every build: it merges your edits with an agent's and gives undo that restores the selection. [Why Loro stays](docs/decisions/0001-loro-is-the-document-model.md)
 
-`margin-ui` depends only on the pure core, so vault, sync, topic or agent changes never rebuild it. The editor reaches the agent and the space only through the core's interfaces, so a hub change rebuilds only the hub and Osom. `margin --help`, `osom --help` and `margin-vault --help` list each binary's options.
+`margin-ui` depends on no other workspace crate, so no change to the Markdown core, the editor, the vault or an app rebuilds it, and it compiles alongside them. The editor reaches the agent and the space only through the core's interfaces, so a hub change rebuilds only the hub and Osom. `margin --help`, `osom --help` and `margin-vault --help` list each binary's options.
 
 ## Build order
 

@@ -107,7 +107,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "[!NOTE]",
         keywords: &["callout", "note", "info", "admonition", "banner"],
         glyph: None,
-        icon: Some(Icon::for_callout(CalloutKind::Note)),
+        icon: Some(crate::callout_icon(CalloutKind::Note)),
     },
     SlashItem {
         kind: SlashKind::Callout(CalloutKind::Tip),
@@ -116,7 +116,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "[!TIP]",
         keywords: &["tip", "callout", "hint", "idea", "admonition"],
         glyph: None,
-        icon: Some(Icon::for_callout(CalloutKind::Tip)),
+        icon: Some(crate::callout_icon(CalloutKind::Tip)),
     },
     SlashItem {
         kind: SlashKind::Callout(CalloutKind::Important),
@@ -125,7 +125,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "[!IMPORTANT]",
         keywords: &["important", "callout", "key", "admonition"],
         glyph: None,
-        icon: Some(Icon::for_callout(CalloutKind::Important)),
+        icon: Some(crate::callout_icon(CalloutKind::Important)),
     },
     SlashItem {
         kind: SlashKind::Callout(CalloutKind::Warning),
@@ -134,7 +134,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "[!WARNING]",
         keywords: &["warning", "warn", "callout", "alert", "admonition"],
         glyph: None,
-        icon: Some(Icon::for_callout(CalloutKind::Warning)),
+        icon: Some(crate::callout_icon(CalloutKind::Warning)),
     },
     SlashItem {
         kind: SlashKind::Callout(CalloutKind::Caution),
@@ -143,7 +143,7 @@ const ITEMS: &[SlashItem] = &[
         hint: "[!CAUTION]",
         keywords: &["caution", "danger", "callout", "error", "admonition"],
         glyph: None,
-        icon: Some(Icon::for_callout(CalloutKind::Caution)),
+        icon: Some(crate::callout_icon(CalloutKind::Caution)),
     },
     SlashItem {
         kind: SlashKind::CodeBlock,

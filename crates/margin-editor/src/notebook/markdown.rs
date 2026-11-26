@@ -122,7 +122,7 @@ impl CalloutBox {
                         writing.show_callout_menu(next);
                     },
                     span { class: "callout-tag-inner",
-                        {icon(Icon::for_callout(kind))}
+                        {icon(crate::callout_icon(kind))}
                         span { "{kind.label()}" }
                     }
                 }
@@ -137,7 +137,7 @@ impl CalloutBox {
                                 key: "{option.tag()}",
                                 id: format!("callout-pick-{}", option.tag().to_ascii_lowercase()),
                                 label: option.label().to_owned(),
-                                icon: Icon::for_callout(option),
+                                icon: crate::callout_icon(option),
                                 selected: option == kind,
                                 onclick: move |_| writing.set_callout_kind(start, option),
                             }

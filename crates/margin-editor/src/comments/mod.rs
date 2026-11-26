@@ -7,7 +7,7 @@ use crate::support::page::{PageSource, WriteError};
 use crate::platform::text;
 use crate::ui::{Badge, Banner, Button, Card, Chip, Composer, Icon, Message, MessageStyle, Segment, Segmented, Tone, Variant};
 use crate::support::worker::{batch, turn, work};
-use crate::{Field, Writing, report};
+use crate::{Field, MarkdownView, Writing, report};
 use crate::prelude::*;
 use loro::cursor::Cursor;
 use margin_editor_core::comments::{self as file, ProposalState};
@@ -963,6 +963,7 @@ fn ThreadCard(writing: Writing, id: usize, active: bool) -> Element {
                 } else {
                     Message { key: "{m.id}", author: m.author.clone(), body: m.body.clone(), ai: m.ai,
                         failed: thread.failed.contains(&m.id), style: MessageStyle::Thread,
+                        rich: rsx! { MarkdownView { text: m.body.clone(), compact: true } },
                         if let Some(p) = m.proposal.clone() {
                             ProposalView { writing, thread: tid, message: mi, fits: p.fits(&current), resolved, proposal: p }
                         }

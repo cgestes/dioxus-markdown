@@ -21,7 +21,7 @@ fn main() {
 fn app() -> Element {
     let args = cli::current();
     if args.is_gallery() {
-        return rsx! { margin_ui::gallery::Gallery {} };
+        return rsx! { margin_editor::Gallery {} };
     }
     if args.test_window {
         return notebook_view(INPUT_CHECK, NotebookOptions { inspect: true, ..Default::default() });

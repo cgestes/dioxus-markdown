@@ -4,9 +4,8 @@
 use super::*;
 use crate::prelude::*;
 
-const SAMPLE_MD: &str = "# Car — maintenance\n\nOil every **15,000 km** or a year; see `car/log.md` and [the garage](https://example.com).\n\n## Schedule\n\n- [x] Cabin filter, 2026-04\n- [ ] Brakes: check at next service\n\n> Expired = ~135 € fine.\n\n| Item | Interval | Next due |\n| --- | --- | ---: |\n| Oil + filter | 1 year | 2027-04 |\n| CT | 2 years | 2027-06 |\n";
-
-fn section(title: &str, children: Element) -> Element {
+/// One titled group of samples.
+pub fn section(title: &str, children: Element) -> Element {
     rsx! {
         section { class: "gallery-section",
             h2 { class: "gallery-title", "{title}" }
@@ -15,9 +14,10 @@ fn section(title: &str, children: Element) -> Element {
     }
 }
 
-/// The gallery window.
+/// The gallery window. Children are sections the host adds for what it
+/// builds from these components (`section`): they go before the icons.
 #[component]
-pub fn Gallery() -> Element {
+pub fn Gallery(children: Element) -> Element {
     let noop = move |_| {};
     let text = use_signal(String::new);
     let filled = use_signal(|| "Front-left sensor failing".to_string());
@@ -147,7 +147,7 @@ pub fn Gallery() -> Element {
                 div { class: "gallery-grid",
                     div { class: "gallery-stack",
                         Message { author: "you", body: "Is 60 °C the right setpoint?" }
-                        Message { author: "luc", ai: true, body: "Yes, keep it at **60 °C or above**; see `house/systems.md`.", tools: vec!["file_read".to_string()] }
+                        Message { author: "luc", ai: true, body: "Yes, keep it at 60 °C or above; see house/systems.md.", tools: vec!["file_read".to_string()] }
                         Message { author: "luc", ai: true, pending: true, body: "" }
                         Message { author: "luc", ai: true, failed: true, body: "luc couldn’t answer: the connection closed" }
                     }
@@ -223,12 +223,7 @@ pub fn Gallery() -> Element {
                     }
                 }
             })}
-            {section("Markdown", rsx! {
-                div { class: "gallery-grid",
-                    Card { CardTitle { text: "page", icon: Icon::File } MarkdownView { text: SAMPLE_MD } }
-                    Card { CardTitle { text: "compact", icon: Icon::Chat } MarkdownView { text: SAMPLE_MD, compact: true } }
-                }
-            })}
+            {children}
             {section("Icons", rsx! {
                 div { class: "gallery-icons",
                     for i in Icon::ALL { span { class: "gallery-icon", title: "{i:?}", {icon(i)} } }
@@ -262,7 +257,8 @@ const GALLERY_CSS: &str = "
 mod tests {
     use super::*;
 
-    /// Paint the gallery to `target/ui-gallery.png`.
+    /// Paint the gallery to `target/ui-gallery.png`: this crate's components,
+    /// without the sections a host adds (`margin ui` shows those too).
     /// `cargo test -p margin-ui ui_gallery_shot -- --ignored`
     #[test]
     #[ignore = "writes a screenshot"]
@@ -276,7 +272,7 @@ mod tests {
             viewport: Some(Viewport { window_size: (w, h), ..Default::default() }),
             ..Default::default()
         };
-        let mut doc = DioxusDocument::new(VirtualDom::new(Gallery), config);
+        let mut doc = DioxusDocument::new(VirtualDom::new(|| rsx! { Gallery {} }), config);
         doc.initial_build();
         for _ in 0..6 {
             doc.poll(None);

@@ -146,8 +146,9 @@ pub(super) fn TranscriptPane(session_key: String, title: String) -> Element {
                 div { class: "transcript",
                     if turns.is_empty() { div { class: "empty", "No messages." } }
                     for (i, t) in turns.into_iter().enumerate() {
-                        Message { key: "{i}", author: if t.from_user { "you" } else { "agent" }, body: t.text, ai: !t.from_user,
-                            tools: t.tools, at: (!t.at.is_empty()).then_some(t.at), style: MessageStyle::Card }
+                        Message { key: "{i}", author: if t.from_user { "you" } else { "agent" }, body: t.text.clone(), ai: !t.from_user,
+                            tools: t.tools, at: (!t.at.is_empty()).then_some(t.at), style: MessageStyle::Card,
+                            rich: rsx! { MarkdownView { text: t.text } } }
                     }
                 }
             },

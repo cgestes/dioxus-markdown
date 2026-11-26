@@ -5,6 +5,10 @@
 //! compose these components and add only layout: no button, card, row,
 //! Markdown or checkbox styles of their own. `margin ui` shows every
 //! component in every state (see `docs/design-system.md`).
+//!
+//! This crate depends on no other workspace crate: it knows no Markdown and
+//! no app. The editor crate draws Markdown (`margin_editor::MarkdownView`) in
+//! these styles and hands it to the components that show it.
 /// Dioxus for the renderer this build targets: Blitz natively, the DOM in a
 /// browser. Components import this, so the same `rsx!` serves both.
 pub mod prelude {
@@ -20,7 +24,6 @@ mod content;
 mod field;
 pub mod gallery;
 mod icon;
-mod markdown;
 mod menu;
 mod message;
 pub mod typefaces;
@@ -30,7 +33,6 @@ pub use combobox::{Combobox, ComboboxItem};
 pub use content::{Avatar, Badge, Banner, Card, CardTitle, Channel, ChannelGlyph, DateBox, NavItem, Row, Rows, SubItem, Tile, TileSize};
 pub use field::{CheckItem, Checkbox, Composer, TextField};
 pub use icon::{Icon, icon};
-pub use markdown::MarkdownView;
 pub use menu::{Menu, MenuItem, MenuRow, MenuSection, MenuSeparator, Popover, Toolbar, ToolbarLook, ToolbarSep};
 pub use message::{Message, MessageStyle};
 

@@ -1,6 +1,8 @@
 # Margin design system
 
-Margin's windows (the notebook, its comments, the Topics window) are built from one set of components in `crates/margin-ui/src/`, styled by one stylesheet, `crates/margin-ui/assets/ui.css`, from the tokens in `crates/margin-ui/assets/theme.css`. `margin ui` (or `margin --gallery`) opens a window with every component in every state; `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints it to `target/ui-gallery.png`.
+Margin's windows (the notebook, its comments, the Topics window) are built from one set of components in `crates/margin-ui/src/`, styled by one stylesheet, `crates/margin-ui/assets/ui.css`, from the tokens in `crates/margin-ui/assets/theme.css`. `margin ui` (or `margin --gallery`) opens a window with every component in every state; `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints the components to `target/ui-gallery.png`.
+
+`margin-ui` uses no other workspace crate. It has the styles of read-only Markdown (`.ui-md`) but does not read Markdown: `MarkdownView` is in `crates/margin-editor/src/reading.rs`, and `margin ui` adds it to the gallery (`margin_editor::Gallery`).
 
 ## Principles
 
@@ -8,7 +10,7 @@ These follow the product principles in `SPEC.md` §1.
 
 1. **Calm paper.** A warm page, thin rules, one accent (pine). No heavy chrome: a control appears where it is used, and quiet actions stay quiet (ghost and link buttons) until hovered.
 2. **One source for each look.** A colour, radius, space or type size is a token in `theme.css`. A button, card, row, checkbox or block of Markdown looks the same wherever it appears, because it is the same component.
-3. **Markdown reads the same everywhere.** Read-only Markdown (a topic's page, a chat reply, a transcript, a comment) goes through `MarkdownView`, which uses the notebook's reading projection (`preview::document`) and the editor's table markup.
+3. **Markdown reads the same everywhere.** Read-only Markdown (a topic's page, a chat reply, a transcript, a comment) goes through the editor crate's `MarkdownView`, which uses the notebook's reading projection (`preview::document`) and the editor's table markup.
 4. **Features compose; they don't restyle.** A feature's stylesheet (`topics.css`, `comments.css`, `editor.css`) holds layout and marks that exist only there. It has no button, card, row, Markdown or checkbox styles of its own, and no raw colour where a token exists.
 
 ## Tokens (`crates/margin-ui/assets/theme.css`)
@@ -74,8 +76,8 @@ Each is a Dioxus component (or a function) exported from `ui`. Props not listed 
 | `CardTitle` | A card's small caps heading, with a note or an action at the end | `CardTitle { text, icon?, note?, action?, onaction? }` |
 | `Rows` / `Row` | A list of items separated by rules | `Row { title, leading?, snippet?, sub?, trailing?, onclick?, dot?, children }`. With `onclick` the row is a button; children go under the text. |
 | `SubItem` | One fact on a row's `sub` line | `SubItem { text, icon? }` |
-| `Message` | One turn of a conversation: the chat panel (`Bubble`), a transcript (`Card`), a comment thread (`Thread`) | `Message { author, body, ai?, pending?, failed?, tools?, at?, style?, children }`. While `pending`, the body is plain text ("Thinking…" when empty), so a stream is never parsed as Markdown; finished bodies render with `MarkdownView`. |
-| `MarkdownView` | Read-only Markdown | `MarkdownView { text, compact? }`. `page` (default) uses exactly the editor's heading, prose and mark styles, so a topic's README reads like the page in Rich mode; `compact` scales the same roles down for message bodies. Tables use the editor's `.ledger` markup; task boxes are the editor's checkbox. `runs(passage, ids)` gives the spans alone (the Split preview uses it with `ids`). |
+| `Message` | One turn of a conversation: the chat panel (`Bubble`), a transcript (`Card`), a comment thread (`Thread`) | `Message { author, body, ai?, pending?, failed?, tools?, at?, style?, rich?, children }`. `body` is plain text. A finished message shows `rich` in its place: the body as the caller draws it, `rsx! { MarkdownView { text, compact: true } }` in a chat or a thread. While `pending`, the plain text is shown ("Thinking…" when empty), so a stream is never parsed as Markdown; `failed` shows it as an error. |
+| `MarkdownView` (in `margin-editor`) | Read-only Markdown | `MarkdownView { text, compact? }`. `page` (default) uses exactly the editor's heading, prose and mark styles, so a topic's README reads like the page in Rich mode; `compact` scales the same roles down for message bodies. Tables use the editor's `.ledger` markup; task boxes are the editor's checkbox. |
 
 ### Marks
 
@@ -109,7 +111,7 @@ Each is a Dioxus component (or a function) exported from `ui`. Props not listed 
 | `Card` / `CardTitle` | Topics overview, tabs, Today, inbox, docs grid; each comment thread (`Card`) |
 | `Row` / `Rows` / `SubItem` | Topics agenda, discussions, questions, docs, procedures, inbox |
 | `Message` | Topics chat panel, transcripts, comment threads |
-| `MarkdownView` | Topic overview page, chat replies, transcripts, comment bodies (through `Message`) |
+| `MarkdownView` | Topic overview page, Today's key dates; chat replies, transcripts and comment bodies (as a `Message`'s `rich` body) |
 | `Icon` | Everywhere |
 | `Tile`, `DateBox`, `ChannelGlyph` | Topics |
 | `Badge` | Topics (counts, doc kinds, question ids), comments (open count, agent name) |

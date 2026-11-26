@@ -131,7 +131,8 @@ pub(super) fn ChatPanel() -> Element {
                 div { class: "ctx", {ui::icon(Icon::Spark)} "Context — {context}" }
                 if chat.loading { div { class: "loading", "Loading the conversation…" } }
                 for (i, l) in chat.lines.iter().enumerate() {
-                    Message { key: "{i}", author: "agent", body: l.text.clone(), ai: !l.from_user, tools: l.tools.clone() }
+                    Message { key: "{i}", author: "agent", body: l.text.clone(), ai: !l.from_user, tools: l.tools.clone(),
+                        rich: rsx! { MarkdownView { text: l.text.clone(), compact: true } } }
                 }
                 PendingReply {}
                 if let Some((tool, summary)) = chat.approval.as_ref() {

@@ -4,19 +4,15 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# Margin's design system: tokens, components and the component gallery.
+# Margin's design system: tokens, components and the component gallery. It
+# depends on no other workspace crate (workspace-hack only pins features), so
+# a change to the Markdown core, the editor or an app never rebuilds it.
 [lib]
 path = "src/lib.rs"
-
-[dependencies]
-margin-editor-core = { path = "../.." }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # One set of features for the dependencies every build shares (see its Cargo.toml).
 workspace-hack = { path = "../workspace-hack" }
-# Native builds highlight code blocks. Turned on here, the lowest crate in
-# every interface build, so no build resolves the core differently.
-margin-editor-core = { path = "../..", features = ["syntax-highlighting"] }
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
 parley = { version = "=0.12.0", default-features = false }
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false }

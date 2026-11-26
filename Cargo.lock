@@ -4391,7 +4391,6 @@ dependencies = [
  "blitz-traits",
  "dioxus",
  "dioxus-native",
- "margin-editor-core",
  "parley",
  "png 0.18.1",
  "wasm-bindgen",
@@ -4450,7 +4449,6 @@ version = "0.1.0"
 dependencies = [
  "dioxus",
  "margin-editor",
- "margin-ui",
  "web-sys",
 ]
 

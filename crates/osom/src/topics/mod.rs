@@ -25,11 +25,11 @@ use today::*;
 use topic::*;
 use margin_ui as ui;
 use margin_ui::{
-    self, Badge, Banner, Button, Card, CardTitle, CheckItem, Chip, Composer, DateBox, MarkdownView, Message,
+    self, Badge, Banner, Button, Card, CardTitle, CheckItem, Chip, Composer, DateBox, Message,
     MessageStyle, NavItem, Row, Rows, ChannelGlyph, SubItem, TabItem, Tabs, TextField, Tile, TileSize, Tone, Variant,
 };
 use margin_editor::support::worker::{batch, turn, work};
-use margin_editor::{Comments, HostAction, HostBar, NotebookOptions};
+use margin_editor::{Comments, HostAction, HostBar, MarkdownView, NotebookOptions};
 use dioxus_native::prelude::*;
 use margin_editor_core::dates;
 use margin_hub::{self as hub, Ask, ChatEvent, Endpoints, Page};
