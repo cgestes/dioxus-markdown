@@ -1,6 +1,7 @@
 use super::document::{self, BlockKind, BodyStart};
+use crate::platform::text;
 use super::{Field, Writing};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 
 impl Writing {
     // One stop per heading/blank line/prose field or grid row, in document order.
@@ -139,11 +140,11 @@ impl Writing {
                 to.scroll_offset
             };
         let y = (line.metrics().block_min_coord + line.metrics().block_max_coord) * 0.5;
-        let cursor = parley::Cursor::from_point(layout, x_in_field * layout.scale(), y);
+        let cursor = text::Cursor::from_point(layout, x_in_field * layout.scale(), y);
         let mut pos = cursor.index().clamp(start, end);
         if pos == end && end == line_range.end && end < source.len() && start < end {
             // A downstream caret at a soft wrap belongs to the next visual line.
-            if let Some(cluster) = parley::Cluster::from_byte_index(layout, end - 1) {
+            if let Some(cluster) = text::Cluster::from_byte_index(layout, end - 1) {
                 pos = cluster.text_range().start;
             }
         }

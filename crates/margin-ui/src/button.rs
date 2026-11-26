@@ -1,6 +1,6 @@
 //! Buttons and the controls built from them: chips, segmented switches, tabs.
 use super::Icon;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 
 /// How a button looks.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

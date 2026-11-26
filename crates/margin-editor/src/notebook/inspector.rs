@@ -1,11 +1,13 @@
 //! Opt-in observation of the same Live fields and Loro note used for normal editing.
 use super::{ByteSelection, Field, Writing};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+// Observations come from the native window's events; a browser build records none.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 const HISTORY_LIMIT: usize = 48;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize)]
@@ -110,9 +112,10 @@ struct Observation {
     state: State,
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(super) struct Trace {
     initial: String,
-    started: std::time::Instant,
+    started: web_time::Instant,
     frames: VecDeque<Observation>,
     dropped: usize,
     status: String,
@@ -122,13 +125,14 @@ impl Trace {
     pub(super) fn new(initial: &str) -> Self {
         Self {
             initial: initial.into(),
-            started: std::time::Instant::now(),
+            started: web_time::Instant::now(),
             frames: VecDeque::new(),
             dropped: 0,
             status: String::new(),
         }
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fn observe(&mut self, inputs: Vec<String>, state: State) {
         if self.frames.len() == HISTORY_LIMIT {
             self.frames.pop_front();
@@ -164,7 +168,7 @@ impl Trace {
         Ok(serde_json::to_vec_pretty(&report)?)
     }
     pub(super) fn report(&self, writing: Writing, dir: &Path) -> io::Result<PathBuf> {
-        use std::time::{SystemTime, UNIX_EPOCH};
+        use web_time::{SystemTime, UNIX_EPOCH};
         let bytes = self.report_bytes(writing)?;
         if let Some(session) = writing.personal.peek().as_ref() {
             let blob = session
@@ -249,6 +253,15 @@ pub(super) fn Inspector(mut writing: Writing, trace: Signal<Trace>, desktop: boo
     }
 }
 
+/// Key and IME tracing reads the native window's events; a browser has none to offer.
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn WindowTrace(writing: Writing, trace: Signal<Trace>) -> Element {
+    let _ = (writing, trace);
+    rsx! {}
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn WindowTrace(writing: Writing, mut trace: Signal<Trace>) -> Element {
     use dioxus_native::winit::event::{Ime, WindowEvent};

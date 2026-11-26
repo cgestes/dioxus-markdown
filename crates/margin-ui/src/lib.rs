@@ -5,6 +5,15 @@
 //! compose these components and add only layout: no button, card, row,
 //! Markdown or checkbox styles of their own. `margin ui` shows every
 //! component in every state (see `docs/design-system.md`).
+/// Dioxus for the renderer this build targets: Blitz natively, the DOM in a
+/// browser. Components import this, so the same `rsx!` serves both.
+pub mod prelude {
+    #[cfg(target_arch = "wasm32")]
+    pub use dioxus::prelude::*;
+    #[cfg(not(target_arch = "wasm32"))]
+    pub use dioxus_native::prelude::*;
+}
+
 mod button;
 mod content;
 mod field;

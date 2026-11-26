@@ -28,7 +28,7 @@ preserves concurrent edits and a recovery window.
    - The note’s Markdown lives in one Loro `LoroText` (`markdown`) managed by `Note` (`crates/margin-note/src/note.rs`). Encrypted attachment manifests live in the document’s `attachments` map.
    - Editing must preserve untouched bytes exactly (line endings `LF`/`CRLF`, trailing newlines, spacing, escapes). Never re-serialize the whole document from an AST.
    - Undo/redo captures directed UTF-8 byte selections via Loro cursors; structural commands (table moves, pastes, formatting) commit as a single undoable step.
-   - Shared core (`src/lib.rs`) remains portable across Native and Web/WASM (`mockup/`).
+   - Shared core (`src/lib.rs`) remains portable across Native and Web/WASM. The notebook reaches its renderer only through `crates/margin-editor/src/platform/`, so the same editor builds for Blitz and for Dioxus Web.
 2. **Calm, Distraction-Free Paper Canvas**
    - No heavy branded top header, no permanent formatting ribbon.
    - Contextual UI appears only where and when needed (inline empty-line icons, selection format bar, docked table action bar).

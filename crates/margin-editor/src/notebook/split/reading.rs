@@ -1,7 +1,7 @@
 //! Hit testing in the read-only projection always targets the source input.
 use super::{Field, Source, report, selection};
 use crate::ui;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::{
     checkbox::{Input, Mode},
     preview::{self, Block, Passage},
@@ -11,7 +11,7 @@ fn passage_id(from: usize, row: usize, col: usize) -> String {
     format!("reading-cell-{from}-{row}-{col}")
 }
 
-fn hit_text(doc: &blitz_dom::BaseDocument, id: &str, passage: &Passage, x: f64, y: f64) -> usize {
+fn hit_text(doc: &crate::platform::Document, id: &str, passage: &Passage, x: f64, y: f64) -> usize {
     let Some(node_id) = doc.get_element_by_id(id) else {
         return passage.from;
     };
@@ -180,7 +180,7 @@ fn follow(source: Source, blocks: &[Block], head: usize) {
             frame,
             0.,
             target.y - view.y - 12.,
-            blitz_dom::ScrollBehavior::Instant,
+            crate::platform::ScrollBehavior::Instant,
         );
     }
 }

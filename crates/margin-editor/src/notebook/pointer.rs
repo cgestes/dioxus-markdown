@@ -1,8 +1,9 @@
 //! Route gestures to Markdown positions. A native input is a view of a source
 //! range. Only a gesture wholly inside one input belongs to that input.
 use super::{Field, Writing};
-use blitz_dom::BaseDocument;
-use dioxus_native::prelude::*;
+use crate::platform::text;
+use crate::platform::Document;
+use crate::prelude::*;
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct Drag {
@@ -160,7 +161,7 @@ impl Writing {
             left -= f64::from(text.scroll_offset);
             top += node.text_input_v_centering_offset(scale);
         }
-        let offset = parley::Cursor::from_point(
+        let offset = text::Cursor::from_point(
             layout,
             ((x - left) * scale) as f32,
             ((y - top) * scale) as f32,
@@ -176,7 +177,7 @@ impl Writing {
         })
     }
 
-    pub(super) fn column_at(self, doc: &BaseDocument, t: usize, r: usize, x: f64) -> Option<Field> {
+    pub(super) fn column_at(self, doc: &Document, t: usize, r: usize, x: f64) -> Option<Field> {
         let viewport =
             doc.get_client_bounding_rect(doc.get_element_by_id(&format!("grid-scroll-{t}"))?)?;
         // Clip to the visible portion when a wide grid is horizontally scrolled.
@@ -307,6 +308,17 @@ impl Writing {
             }));
             if self.span.peek().is_some() {
                 self.span.set(None);
+            }
+            // Where the caret arrives only after the release, place it now, so the
+            // release reads this press and not the caret's previous position.
+            if !crate::platform::press_places_caret(&e)
+                && let Some(root) = self.root.peek().as_ref()
+            {
+                let at = self.projection_peek(hit.field).source_to_display(hit.pos);
+                let mut doc = root.doc_mut();
+                if let Some(id) = doc.get_element_by_id(&hit.field.id()) {
+                    doc.with_text_input(id, |mut input| input.select_byte_range(at, at));
+                }
             }
             return; // Parley handles double clicks, word drags and platform caret affinity.
         }

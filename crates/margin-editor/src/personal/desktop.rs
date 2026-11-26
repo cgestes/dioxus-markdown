@@ -2,7 +2,7 @@
 //! the Dioxus thread.
 use crate::{CSS, View, notebook_view};
 use anyhow::{Result, ensure};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use futures_util::StreamExt;
 use loro::LoroDoc;
 use margin_note::note::Note;

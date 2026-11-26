@@ -1,7 +1,7 @@
 //! Icons: one set for the editor, the comments and the Topics window.
 //! Lucide-style strokes on a 24-unit grid; `Grip` and `Sparkle` are filled.
 use super::Source;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Icon {

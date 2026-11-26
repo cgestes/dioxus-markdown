@@ -6,12 +6,19 @@ use margin_hub::{AgentChat, Ask, ChatEvent};
 use std::sync::Arc;
 
 /// Run blocking work on a thread and await it from the UI.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn work<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl Future<Output = T> {
     let (tx, rx) = futures_channel::oneshot::channel();
     std::thread::spawn(move || {
         let _ = tx.send(f());
     });
     async move { rx.await.expect("worker thread") }
+}
+
+/// A browser tab has one thread: the work runs when the future is first polled.
+#[cfg(target_arch = "wasm32")]
+pub fn work<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl Future<Output = T> {
+    async move { f() }
 }
 
 /// Start one agent turn; its events arrive on the receiver. Dropping the
@@ -25,7 +32,8 @@ pub fn turn(
     let (tx, rx) = unbounded();
     let inline = agent.inline();
     let mut run = move || agent.chat(&ask, &mut |e| tx.unbounded_send(e).is_ok(), &mut decide);
-    if inline {
+    // No threads in a browser tab: every turn runs here.
+    if inline || cfg!(target_arch = "wasm32") {
         run();
     } else {
         std::thread::spawn(run);

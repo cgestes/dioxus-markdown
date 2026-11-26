@@ -1,7 +1,8 @@
 //! The focused input projects part of the Markdown selection. Its anchor and
 //! moving end may be on opposite sides of a widget or hidden syntax.
 use super::{ByteSelection, Field, Sections, Writing, document::BodyStart, report};
-use dioxus_native::prelude::*;
+use crate::platform::text;
+use crate::prelude::*;
 
 impl Writing {
     pub fn absolute_selection(self) -> Option<ByteSelection> {
@@ -121,48 +122,10 @@ impl Writing {
     }
 }
 
-/// Keep the focused input's internal scroll offset aligned with its caret,
-/// ensuring a full 2px CSS margin on the right edge of single-line inputs
-/// (such as long table cells) so the 1.5px caret is never clipped at 1× or 2×.
-pub(super) fn keep_caret_in_view(doc: &mut blitz_dom::BaseDocument, id: dioxus_native::NodeId) {
-    let Some(node) = doc.get_node_mut(id) else {
-        return;
-    };
-    let width = node.final_layout().content_box_width();
-    let height = node.final_layout().content_box_height();
-    let Some(input) = node
-        .element_data_mut()
-        .and_then(|e| e.text_input_data_mut())
-    else {
-        return;
-    };
-    input.clamp_scroll_offset(width, height);
-    if !input.is_multiline
-        && width > 0.0
-        && let Some(layout) = input.editor.try_layout()
-        && let Some(caret) = input.editor.cursor_geometry(1.5)
-    {
-        let scale = layout.scale();
-        let caret_x = caret.x0 as f32 / scale;
-        let caret_pad = 2.0_f32;
-        let caret_end = caret_x + caret_pad;
-        let content = layout.full_width() / scale;
-        let max_offset = (content.max(caret_end) - width).max(0.0);
-        let mut offset = input.scroll_offset;
-        if caret_end > offset + width {
-            offset = caret_end - width;
-        }
-        if caret_x < offset {
-            offset = caret_x;
-        }
-        input.scroll_offset = offset.clamp(0.0, max_offset);
-    }
-}
-
 /// An auto-sized prose field can be taller than the window. Scroll to the
 /// shaped caret inside it so the next line stays visible at every zoom level.
-pub(super) fn scroll_caret(doc: &mut blitz_dom::BaseDocument, id: dioxus_native::NodeId) {
-    keep_caret_in_view(doc, id);
+pub(super) fn scroll_caret(doc: &mut crate::platform::Document, id: crate::platform::NodeId) {
+    crate::platform::keep_caret_in_view(doc, id);
     let Some(node) = doc.get_node(id) else { return };
     let Some(input) = node.element_data().and_then(|e| e.text_input_data()) else {
         return;
@@ -192,7 +155,7 @@ pub(super) fn scroll_caret(doc: &mut blitz_dom::BaseDocument, id: dioxus_native:
     if dy != 0.0
         && let Some(root) = doc.try_root_element().map(|n| n.id)
     {
-        doc.scroll_by(root, 0.0, dy, blitz_dom::ScrollBehavior::Instant);
+        doc.scroll_by(root, 0.0, dy, crate::platform::ScrollBehavior::Instant);
     }
 }
 
@@ -228,13 +191,13 @@ pub(super) fn SelectionInk(writing: Writing, field: Field) -> Element {
     };
     let proj = writing.projection_peek(field);
     let cursor = |p| {
-        parley::Cursor::from_byte_index(
+        text::Cursor::from_byte_index(
             layout,
             proj.source_to_display(p),
-            parley::Affinity::Downstream,
+            text::Affinity::Downstream,
         )
     };
-    let selected = parley::Selection::new(cursor(start), cursor(end));
+    let selected = text::Selection::new(cursor(start), cursor(end));
     let l = node.final_layout();
     let scale = f64::from(layout.scale());
     let x = f64::from(

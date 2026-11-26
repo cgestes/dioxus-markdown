@@ -5,7 +5,7 @@
 use crate::Writing;
 use crate::ui::{Button, Variant};
 use crate::support::worker::work;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_hub::Space;
 
 /// The page a notebook edits.

@@ -2,11 +2,15 @@
 //! `margin` opens the Field notes sample in its place.
 use crate::comments::CommentThread;
 use anyhow::Result;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_note::note::Note;
 
 /// What the status bar says when a note is kept nowhere: here, always.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) const UNSAVED: &str = "Not saved: this build has no vault (build with --features vault)";
+/// A browser has no vault to build with yet.
+#[cfg(target_arch = "wasm32")]
+pub(crate) const UNSAVED: &str = "Not saved: the note lasts until this page closes";
 
 /// The notes menu's open state; only a vault session shows the menu.
 #[derive(Clone)]

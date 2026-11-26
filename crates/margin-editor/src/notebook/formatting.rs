@@ -1,7 +1,8 @@
 use super::{Field, Writing, report};
+use crate::platform::text;
 use crate::Icon;
 use crate::ui::{Button, Toolbar, ToolbarLook, ToolbarSep, Variant};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::format::{InlineSelection, Style};
 
 impl Writing {
@@ -31,10 +32,10 @@ impl Writing {
         let proj = self.projection_peek(field);
         let cursor = |at: usize| {
             let byte = proj.source_to_display(at);
-            parley::Cursor::from_byte_index(
+            text::Cursor::from_byte_index(
                 layout,
                 byte.min(input.editor.raw_text().len()),
-                parley::Affinity::Downstream,
+                text::Affinity::Downstream,
             )
             .geometry(layout, 0.0)
         };

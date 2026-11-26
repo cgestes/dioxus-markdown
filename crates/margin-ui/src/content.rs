@@ -1,6 +1,6 @@
 //! Containers, list rows and the small marks inside them.
 use super::{Button, Hue, Icon, Source, Tone, Variant, icon};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 
 /// A surface that groups one kind of content. `onclick` makes the whole
 /// card a target (a comment thread becomes the active one).

@@ -1,7 +1,7 @@
 //! Slash command menu (`/`) on an empty line for fast keyboard/mouse block insertion.
 use super::{Field, Writing, report};
 use crate::Icon;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::callout::CalloutKind;
 
 #[derive(Clone, PartialEq, Debug)]

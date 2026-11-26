@@ -1,7 +1,7 @@
 //! Commands that can change more than the focused native input.
 use super::{Field, Writing, report};
 use crate::table;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::edit::text_change;
 
 impl Writing {

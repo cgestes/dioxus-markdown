@@ -1,36 +1,17 @@
 {
-  "name": "margin-editor-study",
+  "name": "margin-studies",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs",
-    "build:web": "node build.mjs && node build-web.mjs",
-    "icons": "node build-icons.mjs",
     "test": "node --test test/*.test.mjs",
-    "test:browser": "node test/browser-interactions.mjs",
-    "test:vault": "node test/vault-browser.mjs",
+    "test:web": "node test/web-editor.mjs",
     "experiment:history": "node experiments/loro-history/run.mjs"
   },
   "dependencies": {
-    "@codemirror/commands": "6.11.1",
-    "@codemirror/lang-markdown": "6.5.2",
-    "@codemirror/language": "6.13.1",
-    "@codemirror/merge": "6.12.3",
-    "@codemirror/state": "6.7.6",
-    "@codemirror/view": "6.43.15",
-    "@lezer/highlight": "1.2.5",
-    "libsodium-wrappers": "0.8.4",
     "loro-crdt": "1.18.0",
-    "loro-protocol": "0.3.0",
-    "yjs": "13.6.33"
+    "loro-protocol": "0.3.0"
   },
   "devDependencies": {
-    "@fontsource/dm-sans": "5.3.0",
-    "@fontsource/ibm-plex-mono": "5.3.0",
-    "@fontsource/instrument-serif": "5.3.0",
-    "@fontsource/stix-two-text": "5.3.0",
-    "esbuild": "0.28.2",
-    "lucide-static": "1.77.0",
     "playwright-core": "1.65.1"
   }
 }

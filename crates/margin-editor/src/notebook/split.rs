@@ -2,7 +2,7 @@
 //! maps its shaped glyphs back to that input and never takes over typing.
 use super::{ByteSelection, Field, Writing, lists, mounted_field, report, selection};
 pub(crate) mod reading;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::{
     checkbox::{Input, Mode},
     edit::text_change,

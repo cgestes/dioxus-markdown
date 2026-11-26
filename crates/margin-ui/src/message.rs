@@ -1,6 +1,6 @@
 //! One turn of a conversation: the topic chat, a transcript, a comment thread.
 use super::{Avatar, Icon, MarkdownView};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 
 /// Where a message is shown.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -18,7 +18,8 @@ pub(crate) mod slash;
 pub(crate) mod split;
 pub(crate) mod writing;
 
-use dioxus_native::{NodeHandle, prelude::*};
+use crate::platform::NodeHandle;
+use crate::prelude::*;
 use margin_editor_core::checkbox::markdown_markers;
 use margin_note::note::Note;
 use margin_editor_core::table;
@@ -124,7 +125,7 @@ pub(crate) fn restore_focus(root: &NodeHandle, mut request: FocusRequest) {
     doc.set_focus_to(id);
     doc.with_text_input(id, |mut editor| editor.select_byte_range(anchor, focus));
     if let Field::Cell(t, r, c) = field {
-        use blitz_dom::ScrollBehavior;
+        use crate::platform::ScrollBehavior;
         if let Some(container) = doc.get_element_by_id(&format!("grid-scroll-{t}"))
             && let (Some(cell), Some(view)) = (
                 doc.get_element_by_id(&format!("slot-{t}-{r}-{c}"))
@@ -145,9 +146,9 @@ pub(crate) fn restore_focus(root: &NodeHandle, mut request: FocusRequest) {
 
 pub(crate) fn mounted_field(event: MountedEvent, field: Field, request: FocusRequest) {
     if request.peek().is_some_and(|(target, _)| target == field)
-        && let Some(handle) = event.downcast::<NodeHandle>()
+        && let Some(handle) = crate::platform::mounted(&event)
     {
-        restore_focus(handle, request);
+        restore_focus(&handle, request);
     }
 }
 
@@ -239,7 +240,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     });
     // On a phone the pane would cover the note, so it waits for the comments button.
     let mut comments_open =
-        use_signal(move || seed_comments && initial_view == View::Live && !cfg!(target_os = "ios"));
+        use_signal(move || seed_comments && initial_view == View::Live && !crate::platform::phone_sized());
     let active_comment = use_signal(move || {
         if seed_comments {
             comments.peek().iter().find(|t| !t.file.resolved).map(|t| t.id)
@@ -383,8 +384,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let mut inspecting = use_signal(|| inspect_at_start);
     let mut trace =
         use_signal(|| inspector::Trace::new(if inspect_at_start { initial } else { "" }));
-    let window =
-        use_hook(try_consume_context::<std::sync::Arc<dyn dioxus_native::winit::window::Window>>);
+    let window = crate::platform::use_window();
     let window_title = use_memo(move || {
         if personal.peek().is_some() {
             return "Margin · Personal vault".to_owned();
@@ -568,13 +568,14 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     rsx! {
         style { "{ui::CSS}" }
         style { "{CSS}" }
+        crate::platform::Head {}
         main { class: "notebook", class: if embedded { "embedded" }, class: if view()==View::Split { "split-view" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
             onpointerdown: move |event| { writing.clear_goal(); writing.dismiss_menu_at(event.client_coordinates().x,event.client_coordinates().y); },
             onpointermove: move |e| writing.pointer_move(e),
             onpointerup: move |_| writing.end_drag(),
             onpointercancel: move |_| writing.end_drag(),
             oninput: move |_| reveal_input.set(true),
-            onmounted: move |event| root.set(event.downcast::<NodeHandle>().cloned()),
+            onmounted: move |event| root.set(crate::platform::mounted(&event)),
             onkeydown: move |e| {
                 if !source() && !e.is_composing() && e.modifiers().is_empty() {
                     match e.key() {

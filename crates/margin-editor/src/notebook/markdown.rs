@@ -1,9 +1,9 @@
 //! Presentation ranges live in the same UTF-8 source coordinate space as Parley and Loro.
 use super::ui::{Button, Icon, Menu, MenuItem, Variant, icon};
 use super::{Field, Writing, report};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::callout::CalloutKind;
-use parley::Cluster;
+use crate::platform::text::{self, Cluster};
 #[cfg(test)]
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
@@ -674,7 +674,7 @@ impl Writing {
     }
 
     fn vertical_band(
-        layout: &parley::Layout<blitz_dom::node::TextBrush>,
+        layout: &text::Layout,
         proj: &super::projection::Projection,
         raw_len: usize,
         range: &Range<usize>,
@@ -688,10 +688,10 @@ impl Writing {
             .source_to_display(range.end.saturating_sub(1).max(range.start))
             .min(raw_len);
         let first_geom =
-            parley::Cursor::from_byte_index(layout, d_start, parley::Affinity::Downstream)
+            text::Cursor::from_byte_index(layout, d_start, text::Affinity::Downstream)
                 .geometry(layout, 0.0);
         let last_geom =
-            parley::Cursor::from_byte_index(layout, d_end, parley::Affinity::Downstream)
+            text::Cursor::from_byte_index(layout, d_end, text::Affinity::Downstream)
                 .geometry(layout, 0.0);
         let min_y = (first_geom.y0.min(last_geom.y0) as f32 - scroll_top) / scale;
         let max_y = (first_geom.y1.max(last_geom.y1) as f32 - scroll_top) / scale;
@@ -759,16 +759,16 @@ impl Writing {
                 );
                 let tag_d_start = proj.source_to_display(c.tag_range.start).min(raw_len);
                 let tag_d_end = proj.source_to_display(c.tag_range.end).min(raw_len);
-                let tag_start_geom = parley::Cursor::from_byte_index(
+                let tag_start_geom = text::Cursor::from_byte_index(
                     layout,
                     tag_d_start,
-                    parley::Affinity::Downstream,
+                    text::Affinity::Downstream,
                 )
                 .geometry(layout, 0.0);
-                let tag_end_geom = parley::Cursor::from_byte_index(
+                let tag_end_geom = text::Cursor::from_byte_index(
                     layout,
                     tag_d_end,
-                    parley::Affinity::Downstream,
+                    text::Affinity::Downstream,
                 )
                 .geometry(layout, 0.0);
                 CalloutBox {

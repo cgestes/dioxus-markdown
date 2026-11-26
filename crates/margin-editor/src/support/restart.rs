@@ -5,7 +5,7 @@
 //! build asks the new binary what it was built with, and only restarts into an
 //! identical build: a vault window never reopens as a build without the vault.
 
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use futures_util::StreamExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

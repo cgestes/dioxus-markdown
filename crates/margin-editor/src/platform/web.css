@@ -1,0 +1,11 @@
+/* Browser defaults that Blitz does not have. The notebook's own styles are
+   the same on both renderers (notebook/editor.css, margin-ui's theme). */
+html, body { min-height: 100%; }
+textarea, input, button { font: inherit; color: inherit; letter-spacing: inherit; margin: 0; }
+textarea { display: block; resize: none; overflow: hidden; outline: 0; }
+input, button { outline: 0; }
+button { cursor: pointer; }
+/* The notebook paints its own caret over the styled text (.caret-ink). */
+.paper textarea, .paper .grid-cell { caret-color: transparent; }
+/* A word wider than its column breaks instead of being clipped. */
+.cell-measure, .paper .grid-cell { overflow-wrap: anywhere; }

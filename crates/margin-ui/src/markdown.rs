@@ -1,7 +1,7 @@
 //! Read-only Markdown, in the notebook's reading projection
 //! (`preview::document`): the same lines, spans and tables everywhere.
 use super::{Icon, icon};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::callout::CalloutKind;
 use margin_editor_core::preview::{self, Block, Passage};
 

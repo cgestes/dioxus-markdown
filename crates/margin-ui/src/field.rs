@@ -1,6 +1,6 @@
 //! Text entry and checkboxes.
 use super::{Button, Icon, Variant};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 
 /// A text field with a placeholder Blitz can show (an overlay while empty).
 /// Keys stay inside the field, so the editor around it does not react.

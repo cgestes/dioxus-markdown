@@ -1,9 +1,9 @@
 use super::selection_model::SelectionInk;
+use crate::platform::text;
 use crate::table::{self, Table};
 use super::{Field, Writing, mounted_field, report, selection};
-use crate::NodeHandle;
 use crate::ui::{Button, Menu, MenuItem, MenuRow, MenuSeparator, Toolbar, ToolbarLook, ToolbarSep, Variant};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use pulldown_cmark::Alignment;
 
 impl Writing {
@@ -524,18 +524,6 @@ impl Writing {
         self.focus_cell(t, r, c);
     }
 
-    fn reveal_cell_caret(self, field: Field) {
-        let Some(handle) = self.root.peek().clone() else {
-            return;
-        };
-        let mut doc = handle.doc_mut();
-        if let Some(id) = doc.get_element_by_id(&field.id())
-            && doc.get_focussed_node_id() == Some(id)
-        {
-            super::selection_model::keep_caret_in_view(&mut doc, id);
-        }
-    }
-
     fn cell_input(mut self, t: usize, r: usize, c: usize, value: &str) {
         // A Markdown cell is one line. Enter moves between rows, so a line break can
         // only arrive inside inserted text.
@@ -632,7 +620,7 @@ pub fn Heading(writing: Writing, field: Field) -> Element {
             textarea { id, class: "note-title h{level}", class: if !main { "section-title" },
                 aria_label: label, placeholder: if main { "Untitled" } else { "" }, value: "{title}", style,
                 onmounted: move |e| {
-                    if let Some(handle) = e.downcast::<NodeHandle>() { handle.doc_mut().resolve(0.0); }
+                    if let Some(handle) = crate::platform::mounted(&e) { handle.doc_mut().resolve(0.0); }
                     mounted_field(e, field, writing.focus);
                     writing.refresh_boxes();
                     writing.refresh_link_card();
@@ -689,7 +677,7 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
                 let input = node.element_data()?.text_input_data()?;
                 let layout = input.editor.try_layout()?;
                 let disp = proj.source_to_display(start);
-                let cluster = parley::Cluster::from_byte_index(layout, disp)?;
+                let cluster = text::Cluster::from_byte_index(layout, disp)?;
                 let scale = layout.scale();
                 let y = (cluster.line().metrics().block_min_coord / scale - input.scroll_offset)
                     .round() as i32;
@@ -718,7 +706,7 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
                     id: field.id(), class: "body-editor", aria_label: "Edit note body", value: "{body}", style,
                     aria_describedby: (writing.marker)().map(|_| "marker-hint"),
                     onmounted: move |e| {
-                        if let Some(handle) = e.downcast::<NodeHandle>() { handle.doc_mut().resolve(0.0); }
+                        if let Some(handle) = crate::platform::mounted(&e) { handle.doc_mut().resolve(0.0); }
                         mounted_field(e, field, writing.focus);
                         writing.refresh_boxes();
                         writing.refresh_link_card();
@@ -1146,10 +1134,7 @@ fn GridRow(
                                     onfocus: move |_| writing.track_field(field),
                                     onpointerup: move |_| writing.track_field(field),
                                     onkeydown: move |e| writing.cell_key(index, row, col, e),
-                                    onkeyup: move |_| {
-                                        writing.reveal_cell_caret(field);
-                                        writing.track_field(field);
-                                    },
+                                    onkeyup: move |_| writing.track_field(field),
                                     oninput: move |e| writing.cell_input(index, row, col, &e.value()),
                                     "{value}"
                                 }

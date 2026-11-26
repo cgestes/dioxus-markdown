@@ -1,6 +1,6 @@
 //! Floating surfaces and the controls inside them: popovers, menus, toolbars.
 use super::{Button, Icon, Variant};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 
 /// A floating surface (a menu, a picker). The caller positions it with
 /// `class`/`style`. `keep_focus` stops a press from taking focus away from

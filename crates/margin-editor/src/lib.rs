@@ -1,14 +1,21 @@
 //! Margin: the notebook editor, its comments and personal notes.
+#[cfg(not(target_arch = "wasm32"))]
 mod cli;
 mod notebook;
 mod comments;
 mod personal;
 mod platform;
 pub mod support;
+#[cfg(target_arch = "wasm32")]
+mod web;
+#[cfg(target_arch = "wasm32")]
+use web::cli;
 #[cfg(test)]
 mod tests;
 
-use dioxus_native::{NodeHandle, prelude::*};
+pub(crate) use margin_ui::prelude;
+use platform::NodeHandle;
+use prelude::*;
 use margin_note::note::Note;
 use margin_editor_core::table;
 use margin_ui as ui;
@@ -20,8 +27,6 @@ pub use comments::CommentAgent;
 pub use notebook::{Comments, HostAction, HostBar, NotebookOptions, View, notebook_view};
 use ui::Icon;
 
-#[cfg(target_os = "macos")]
-use platform::macos;
 
 const SAMPLE: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x].\n\n## Listening stops\n\n| Stop | Listen for | Take |\n| :--- | :--- | ---: |\n| North lock | Water through the gate | 45 s |\n| Footbridge | Steps on the steel deck | 30 s |\n\n- [ ] Leave **ten seconds** of silence.\n- [x] Set the recorder to `48 kHz`.";
 /// The editor's own styles; tokens and components come from `ui::CSS`.
@@ -47,24 +52,8 @@ pub fn run() {
     launch("Margin", size, app);
 }
 
-/// Open a window titled `title` whose content is `root`.
-pub fn launch(title: &str, size: (f64, f64), root: fn() -> Element) {
-    let window = dioxus_native::WindowAttributes::default().with_title(title);
-    // On iPhone and iPad the window is the screen; a requested size would crop it.
-    #[cfg(not(target_os = "ios"))]
-    let window = window.with_surface_size(dioxus_native::LogicalSize::new(size.0, size.1));
-    #[cfg(target_os = "ios")]
-    let _ = size;
-    #[cfg(target_os = "macos")]
-    macos::launch(window, root);
-    #[cfg(not(target_os = "macos"))]
-    {
-        let config = dioxus_native::Config::new()
-            .with_window_attributes(window)
-            .with_font_ctx(typefaces::notebook_fonts());
-        dioxus_native::launch_cfg(root, vec![], vec![Box::new(config)]);
-    }
-}
+/// Open a window (or, in a browser, the page) titled `title` whose content is `root`.
+pub use platform::launch;
 
 fn app() -> Element {
     let args = cli::current();

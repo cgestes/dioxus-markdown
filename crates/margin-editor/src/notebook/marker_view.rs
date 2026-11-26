@@ -1,8 +1,8 @@
 use super::Writing;
 use super::{Field, report};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::checkbox::{Input, Mode, markdown_markers};
-use parley::Cluster;
+use crate::platform::text::Cluster;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) struct MarkerBox {
@@ -47,12 +47,11 @@ impl MarkerBox {
                     e.stop_propagation();
                     writing.click_checkbox(field, open, e.modifiers());
                 },
-                // Blitz drops the click after a touch whose press the editor cancelled
-                // (the move it synthesises before a finger press starts a pan), so a
-                // finger toggles on release. click_checkbox consumes the press, so a
-                // click that does arrive afterwards is ignored.
+                // Where no click follows the release, the release toggles.
+                // click_checkbox consumes the press, so a click that does arrive
+                // afterwards is ignored.
                 onpointerup: move |e| {
-                    if e.pointer_type() == "touch" {
+                    if !crate::platform::click_follows_release(&e) {
                         writing.end_drag();
                         writing.click_checkbox(field, open, e.modifiers());
                     }
@@ -331,86 +330,30 @@ impl Writing {
 
 #[component]
 pub(super) fn WindowLayout(writing: Writing) -> Element {
-    use dioxus_native::winit::event::{Ime, WindowEvent};
+    use crate::platform::FieldEvent;
     let mut writing = writing;
-    let mut resized = true;
-    let mut wheeled = false;
-    let mut previous = None;
-    let mut prev_scroll = (0u64, 0u64, None::<(u64, u64)>);
-    // Window hooks run before Blitz. On the following redraw its text editor
-    // has the updated IME/selection geometry. Idle redraws need no note scan.
-    dioxus_native::use_window_event(move |event, _| match event {
-        WindowEvent::Ime(Ime::Preedit(text, _))
-            if !text.is_empty() && writing.cells.peek().is_some() =>
-        {
-            writing.cell_editing.set(true);
+    // The platform reports when the focused field's caret, text or geometry
+    // has settled; the overlays are then measured against the new layout.
+    crate::platform::use_field_watch(writing.root, move |event| match event {
+        FieldEvent::Composing => {
+            if writing.cells.peek().is_some() {
+                writing.cell_editing.set(true);
+            }
         }
-        WindowEvent::SurfaceResized(_) | WindowEvent::ScaleFactorChanged { .. } => resized = true,
-        WindowEvent::MouseWheel { .. } => wheeled = true,
-        WindowEvent::RedrawRequested => {
-            let Some(handle) = writing.root.peek().clone() else {
-                return;
-            };
-            let changed_size = std::mem::take(&mut resized);
-            let did_wheel = std::mem::take(&mut wheeled);
-            if changed_size {
-                handle.doc_mut().resolve(0.0);
-            }
-            let (current, cur_scroll) = {
-                let doc = handle.doc();
-                let vs = doc.viewport_scroll();
-                let cur = doc.get_focussed_node_id().and_then(|id| {
-                    let text = doc.get_node(id)?.element_data()?.text_input_data()?;
-                    Some((id, text.editor.generation(), text.scroll_offset.to_bits()))
-                });
-                let rect_pos = cur
-                    .and_then(|(id, _, _)| doc.get_client_bounding_rect(id))
-                    .map(|r| (r.x.to_bits(), r.y.to_bits()));
-                (cur, (vs.x.to_bits(), vs.y.to_bits(), rect_pos))
-            };
-            let gen_changed = match (current, previous) {
-                (Some((id, rev, _)), Some((pid, prev, _))) => id != pid || rev != prev,
-                (Some(_), None) => true,
-                _ => false,
-            };
-            if gen_changed && let Some((id, _, _)) = current {
-                super::selection_model::keep_caret_in_view(&mut handle.doc_mut(), id);
-            }
-            let (settled, settled_scroll) = {
-                let doc = handle.doc();
-                let vs = doc.viewport_scroll();
-                let cur = doc.get_focussed_node_id().and_then(|id| {
-                    let text = doc.get_node(id)?.element_data()?.text_input_data()?;
-                    Some((id, text.editor.generation(), text.scroll_offset.to_bits()))
-                });
-                let rect_pos = cur
-                    .and_then(|(id, _, _)| doc.get_client_bounding_rect(id))
-                    .map(|r| (r.x.to_bits(), r.y.to_bits()));
-                (cur, (vs.x.to_bits(), vs.y.to_bits(), rect_pos))
-            };
-            if changed_size
-                || did_wheel
-                || settled != previous
-                || settled_scroll != prev_scroll
-                || cur_scroll != prev_scroll
-            {
-                previous = settled;
-                prev_scroll = settled_scroll;
-                if writing.drag.peek().is_none() {
-                    if writing.focus.peek().is_none()
-                        && let Some(field) = *writing.active.peek()
-                    {
-                        writing.track_field(field);
-                    }
-                    writing.refresh_format_position();
-                    writing.refresh_empty_line();
-                    writing.refresh_slash();
-                    writing.refresh_link_card();
+        FieldEvent::Changed => {
+            if writing.drag.peek().is_none() {
+                if writing.focus.peek().is_none()
+                    && let Some(field) = *writing.active.peek()
+                {
+                    writing.track_field(field);
                 }
-                writing.refresh_boxes();
+                writing.refresh_format_position();
+                writing.refresh_empty_line();
+                writing.refresh_slash();
+                writing.refresh_link_card();
             }
+            writing.refresh_boxes();
         }
-        _ => {}
     });
     rsx! {}
 }

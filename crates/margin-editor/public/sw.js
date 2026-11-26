@@ -1,6 +1,6 @@
 // Offline copy of the notebook for the installed web app. Network first, so a new
 // deploy shows up on the next launch; the cached copy answers only when offline.
-// Notes themselves live in IndexedDB and never pass through here.
+// Only the app's own files are cached; notes never pass through here.
 const CACHE = "margin-shell-v1";
 const SHELL = ["./", "manifest.webmanifest", "icon.svg", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 

@@ -3,7 +3,7 @@ use super::marker_view::MarkerBox;
 use crate::table::{self, Table};
 use super::{ByteSelection, Field, FocusRequest, Sections, report, selection};
 use crate::NodeHandle;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use margin_editor_core::checkbox::{Input, Marker, Mode};
 use margin_editor_core::edit::text_change;
 use margin_note::note::Note;

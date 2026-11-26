@@ -4,10 +4,11 @@
 //! page of the space, a local stand-in elsewhere; both stream the same way.
 //! On a page, threads save to `_margin/comments/<page>.json` (see `page`).
 use crate::support::page::PageSource;
+use crate::platform::text;
 use crate::ui::{Badge, Banner, Button, Card, Chip, Composer, Icon, Message, MessageStyle, Segment, Segmented, Tone, Variant};
 use crate::support::worker::{batch, turn, work};
 use crate::{Field, Writing, report};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use loro::cursor::Cursor;
 use margin_editor_core::comments::{self as file, ProposalState};
 use margin_hub::{self as hub, AgentChat, Canned, ChatEvent};
@@ -796,9 +797,9 @@ pub fn CommentInk(writing: Writing, field: Field) -> Element {
         + node.text_input_v_centering_offset(scale);
     let mut rects: Vec<(usize, f64, f64, f64, f64, bool, bool)> = Vec::new();
     for (tid, range, is_active, is_resolved) in hits {
-        let c0 = parley::Cursor::from_byte_index(layout, proj.source_to_display(range.start), parley::Affinity::Downstream);
-        let c1 = parley::Cursor::from_byte_index(layout, proj.source_to_display(range.end), parley::Affinity::Downstream);
-        for (rect, _) in parley::Selection::new(c0, c1).geometry(layout) {
+        let c0 = text::Cursor::from_byte_index(layout, proj.source_to_display(range.start), text::Affinity::Downstream);
+        let c1 = text::Cursor::from_byte_index(layout, proj.source_to_display(range.end), text::Affinity::Downstream);
+        for (rect, _) in text::Selection::new(c0, c1).geometry(layout) {
             let w = (rect.x1 - rect.x0) / scale;
             let h = (rect.y1 - rect.y0) / scale;
             if w > 0.5 && h > 0.5 {

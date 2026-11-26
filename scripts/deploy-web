@@ -1,21 +1,29 @@
 #!/bin/sh
-# Builds the browser notebook and publishes it to GitHub Pages from the gh-pages branch.
-# The branch holds only the latest site: each deploy replaces it with one commit.
+# Builds the notebook for the browser (Dioxus Web) and publishes it to GitHub
+# Pages from the gh-pages branch. The branch holds only the latest site: each
+# deploy replaces it with one commit.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 remote=${MARGIN_DEPLOY_REMOTE:-origin}
+url=$(git -C "$root" remote get-url "$remote")
 
-npm --prefix "$root/mockup" run build:web
+# GitHub Pages serves a project site under /<repository>/.
+base=$(basename "$url" .git)
+(cd "$root" && dx bundle --web --release --package margin-editor --base-path "$base")
+bundle="${CARGO_TARGET_DIR:-$root/target}/dx/margin/release/web/public"
+[ -f "$bundle/index.html" ] || { echo "No web bundle at $bundle" >&2; exit 1; }
+
 source=$(git -C "$root" rev-parse --short HEAD)
 [ -z "$(git -C "$root" status --porcelain)" ] || source="$source-dirty"
 
 site=$(mktemp -d)
 trap 'rm -rf "$site"' EXIT
-cp -R "$root/mockup/dist/." "$site"
+cp -R "$bundle/." "$site"
+touch "$site/.nojekyll"
 git -C "$site" init -q -b gh-pages
 git -C "$site" add -A
 git -C "$site" commit -q -m "Deploy web notebook from $source"
-git -C "$site" push -q -f "$(git -C "$root" remote get-url "$remote")" gh-pages
+git -C "$site" push -q -f "$url" gh-pages
 
 # GitHub usually serves a new gh-pages branch by itself; otherwise turn Pages on (needs the GitHub CLI).
 if command -v gh >/dev/null; then

@@ -10,3 +10,7 @@ publisher = "Margin"
 
 [ios]
 deployment_target = "17.0"
+
+# Browser: `dx serve --web --package margin-editor`.
+[web.app]
+title = "Margin"

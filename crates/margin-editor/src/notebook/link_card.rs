@@ -5,10 +5,11 @@ use super::link_preview::{
     format_markdown_link, is_external_url, space_cache_key, space_md_path,
 };
 use super::projection::ParsedLink;
+use crate::platform::text;
 use crate::ui::{Button, Icon, Popover, TextField, Variant, icon};
 use crate::support::worker::work;
 use super::{Field, Writing, report};
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -31,24 +32,24 @@ struct LinkBounds {
 }
 
 fn link_fragment_bounds(
-    layout: &parley::Layout<blitz_dom::node::TextBrush>,
+    layout: &text::Layout,
     start_byte: usize,
     end_byte: usize,
     caret_byte: usize,
 ) -> LinkBounds {
     let start_cursor =
-        parley::Cursor::from_byte_index(layout, start_byte, parley::Affinity::Downstream);
+        text::Cursor::from_byte_index(layout, start_byte, text::Affinity::Downstream);
     let end_cursor =
-        parley::Cursor::from_byte_index(layout, end_byte, parley::Affinity::Downstream);
+        text::Cursor::from_byte_index(layout, end_byte, text::Affinity::Downstream);
     let frags = if end_byte > start_byte {
-        parley::Selection::new(start_cursor, end_cursor).geometry(layout)
+        text::Selection::new(start_cursor, end_cursor).geometry(layout)
     } else {
         Vec::new()
     };
     if frags.is_empty() {
         let g = start_cursor.geometry(layout, 0.0);
         let caret =
-            parley::Cursor::from_byte_index(layout, caret_byte, parley::Affinity::Downstream)
+            text::Cursor::from_byte_index(layout, caret_byte, text::Affinity::Downstream)
                 .geometry(layout, 0.0);
         return LinkBounds {
             first_x: g.x0,
@@ -85,8 +86,8 @@ fn link_fragment_bounds(
 }
 
 fn place_card_in_paper(
-    doc: &blitz_dom::BaseDocument,
-    paper_rect: blitz_dom::BoundingRect,
+    doc: &crate::platform::Document,
+    paper_rect: crate::platform::BoundingRect,
     origin_x: f64,
     origin_y: f64,
     scale: f64,
@@ -279,11 +280,11 @@ impl Writing {
                 self.open(self.field_at(pos), [pos; 2]);
             }
             OpenTarget::ExternalUrl(url) => {
-                let _ = webbrowser::open(&url);
+                crate::platform::open_url(&url);
             }
             OpenTarget::SpacePage(path) => {
                 if let Some(page) = self.page.peek().as_ref() {
-                    let _ = webbrowser::open(&page.space.page_url(&path));
+                    crate::platform::open_url(&page.space.page_url(&path));
                 }
             }
             OpenTarget::None => {}

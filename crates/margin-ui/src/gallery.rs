@@ -2,7 +2,7 @@
 //! state, on the real fonts and tokens. The living reference for
 //! `docs/design-system.md`.
 use super::*;
-use dioxus_native::prelude::*;
+use crate::prelude::*;
 
 const SAMPLE_MD: &str = "# Car — maintenance\n\nOil every **15,000 km** or a year; see `car/log.md` and [the garage](https://example.com).\n\n## Schedule\n\n- [x] Cabin filter, 2026-04\n- [ ] Brakes: check at next service\n\n> Expired = ~135 € fine.\n\n| Item | Interval | Next due |\n| --- | --- | ---: |\n| Oil + filter | 1 year | 2027-04 |\n| CT | 2 years | 2027-06 |\n";
 

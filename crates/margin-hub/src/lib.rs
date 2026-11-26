@@ -1,6 +1,10 @@
 //! Network access to the topic space (SilverBullet) and the agent (ZeroClaw),
 //! both reached over the tailnet. Every call blocks; the native UI runs them on
 //! worker threads.
+//!
+//! A browser build keeps the types and the stand-in agent; the transports are
+//! native only.
+#![cfg_attr(target_arch = "wasm32", allow(unused_imports, dead_code))]
 use margin_editor_core::topics::{Message, Session, SpaceFile};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::de::DeserializeOwned;
@@ -93,12 +97,14 @@ impl Endpoints {
         self.zeroclaw.split("://").nth(1).unwrap_or(&self.zeroclaw)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// The gateway, signed in with this Mac's stored token when it has one.
     pub fn zeroclaw(&self) -> ZeroClaw {
         ZeroClaw::new(&self.zeroclaw, token::load(self.account()))
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Exchange a one-time pairing code for a device token and keep it in the
 /// Keychain. Returns the gateway, signed in.
 pub fn pair(endpoints: &Endpoints, code: &str) -> Result<ZeroClaw> {
@@ -120,6 +126,7 @@ pub fn encode_path(path: &str) -> String {
     path.split('/').map(encode).collect::<Vec<_>>().join("/")
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn http(timeout: Duration) -> ureq::Agent {
     use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
     ureq::Agent::config_builder()
@@ -146,6 +153,7 @@ struct Reply {
     body: String,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn reply(response: std::result::Result<ureq::http::Response<ureq::Body>, ureq::Error>) -> Result<Reply> {
     let mut r = response.map_err(|e| e.to_string())?;
     let status = r.status().as_u16();
@@ -163,6 +171,7 @@ fn reply(response: std::result::Result<ureq::http::Response<ureq::Body>, ureq::E
     Ok(Reply { status, etag, body })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn ok(r: Reply) -> Result<Reply> {
     if (200..300).contains(&r.status) {
         Ok(r)
@@ -184,6 +193,7 @@ pub struct Page {
 #[derive(Clone)]
 pub struct Space {
     base: String,
+    #[cfg(not(target_arch = "wasm32"))]
     http: ureq::Agent,
 }
 
@@ -192,10 +202,12 @@ impl Space {
     pub fn new(base: &str) -> Self {
         Self {
             base: base.into(),
+            #[cfg(not(target_arch = "wasm32"))]
             http: http(Duration::from_secs(20)),
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn list(&self) -> Result<Vec<SpaceFile>> {
         let r = ok(reply(
             self.http
@@ -206,6 +218,7 @@ impl Space {
         serde_json::from_str(&r.body).map_err(|e| format!("space listing: {e}"))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn read(&self, path: &str) -> Result<Page> {
         let r = ok(reply(
             self.http
@@ -219,6 +232,7 @@ impl Space {
         })
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// A page that may not exist yet: `None` when the server has no such file.
     pub fn read_optional(&self, path: &str) -> Result<Option<Page>> {
         let r = reply(
@@ -237,6 +251,7 @@ impl Space {
         }))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Write a page if nobody changed it since `etag`. Returns the new version.
     pub fn write(&self, path: &str, text: &str, etag: Option<&str>) -> Result<Option<String>> {
         let mut req = self
@@ -255,6 +270,7 @@ impl Space {
         Ok(ok(r)?.etag)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn delete(&self, path: &str) -> Result<()> {
         ok(reply(
             self.http
@@ -325,6 +341,8 @@ impl AgentChat for Canned {
     fn chat(&self, ask: &Ask, on: &mut dyn FnMut(ChatEvent) -> bool, _decide: &mut dyn FnMut() -> bool) {
         let reply = (self.reply)(ask);
         for word in reply.split_inclusive(' ') {
+            // A browser tab has one thread: the stand-in answers without the pauses.
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(pause) = self.pause {
                 std::thread::sleep(pause);
             }
@@ -340,24 +358,55 @@ impl AgentChat for Canned {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Deserialize)]
 struct SessionList {
     sessions: Vec<Session>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Deserialize)]
 struct MessageList {
     messages: Vec<Message>,
 }
 
+/// The browser has no transport for the space yet: every call says so.
+#[cfg(target_arch = "wasm32")]
+impl Space {
+    const UNREACHABLE: &str = "The space isn't reachable from the browser yet.";
+
+    pub fn list(&self) -> Result<Vec<SpaceFile>> {
+        Err(Self::UNREACHABLE.into())
+    }
+
+    pub fn read(&self, _path: &str) -> Result<Page> {
+        Err(Self::UNREACHABLE.into())
+    }
+
+    pub fn read_optional(&self, _path: &str) -> Result<Option<Page>> {
+        Err(Self::UNREACHABLE.into())
+    }
+
+    pub fn write(&self, _path: &str, _text: &str, _etag: Option<&str>) -> Result<Option<String>> {
+        Err(Self::UNREACHABLE.into())
+    }
+
+    pub fn delete(&self, _path: &str) -> Result<()> {
+        Err(Self::UNREACHABLE.into())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 /// The ZeroClaw gateway, authenticated with a paired device token.
 #[derive(Clone)]
 pub struct ZeroClaw {
     base: String,
     token: Option<String>,
+    #[cfg(not(target_arch = "wasm32"))]
     http: ureq::Agent,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl ZeroClaw {
     /// `base` comes from `Endpoints`, without a trailing `/`.
     pub fn new(base: &str, token: Option<String>) -> Self {
@@ -548,6 +597,7 @@ impl ZeroClaw {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl AgentChat for ZeroClaw {
     fn chat(&self, ask: &Ask, on: &mut dyn FnMut(ChatEvent) -> bool, decide: &mut dyn FnMut() -> bool) {
         match self.turn(ask, on, decide) {
@@ -563,6 +613,7 @@ impl AgentChat for ZeroClaw {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The device token, kept in the macOS Keychain (a 0600 file elsewhere).
 /// `ZEROCLAW_TOKEN` overrides it.
 /// The device token. Release builds on macOS keep it in the Keychain. Dev

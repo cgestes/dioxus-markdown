@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>{app_title}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="color-scheme" content="light">
+        <meta name="theme-color" content="#fcfbf8">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-title" content="Margin">
+        <link rel="manifest" href="manifest.webmanifest">
+        <link rel="icon" href="icon.svg" type="image/svg+xml">
+        <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+        <script>
+            // iOS zooms into any focused field under 16px and stays zoomed. maximum-scale
+            // stops that; Safari still allows pinch zoom.
+            if (/iPhone|iPad/.test(navigator.platform) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))
+                document.querySelector('meta[name="viewport"]').content += ", maximum-scale=1";
+            // The deployed site keeps an offline copy for the installed web app (public/sw.js).
+            if (location.protocol === "https:" && "serviceWorker" in navigator)
+                navigator.serviceWorker.register("sw.js").catch(() => {});
+        </script>
+    </head>
+    <body>
+        <div id="main"></div>
+    </body>
+</html>
