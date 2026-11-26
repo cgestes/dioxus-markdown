@@ -6,23 +6,30 @@ publish = false
 
 # Feature pins (the cargo-hakari pattern, kept by hand). Cargo resolves a
 # dependency's features from the crates in the build, and a crate's build
-# depends on its dependencies' features. The vault (tokio, its crypto) and
-# its file dialogs (rfd) turn on features in crates that Dioxus and Blitz
-# use too, so without these pins `cargo run -p margin`, a vault build and
-# `cargo test --workspace` would each compile Dioxus, Blitz, margin-ui and
-# margin-editor separately, and an edit would rebuild every copy.
+# depends on its dependencies' features. The vault (tokio, its crypto), its
+# file dialogs (rfd) and margin-hub (TLS) turn on features in crates that
+# Dioxus and Blitz use too. Without these pins `cargo run -p margin`, a vault
+# build, `osom`, `cargo test -p margin-editor` and `cargo test --workspace`
+# would each compile Dioxus, Blitz, margin-ui and margin-editor separately,
+# and an edit would rebuild every copy.
 #
 # margin-ui depends on this crate, so every build that has the interface
 # has these features. To refresh the list, compare
 #   cargo tree -p margin -e normal,build -e features
-# with
+# (and -p osom, -p margin-editor) with
 #   cargo tree --workspace --all-features -e normal,build,dev -e features
-# for the crates under margin-ui.
+# for the crates under margin-editor.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.54", default-features = false, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
 digest = { version = "0.10.7", default-features = false, features = ["mac"] }
 crypto-common = { version = "0.1.7", default-features = false, features = ["getrandom", "rand_core"] }
+# margin-hub's WebSocket (TLS) and its HTTP stack; Dioxus devtools share
+# tungstenite, and fastrand sits under the interface too.
+tungstenite = { version = "0.29", features = ["native-tls"] }
+fastrand = { version = "2.5", features = ["std"] }
+# clap (in margin and osom) turns on its default; it sits under the editor too.
+anstyle = "1.0.14"
 # The vault's SQLite (hashlink) asks for it; Loro shares this hashbrown.
 hashbrown = { version = "0.16.1", default-features = false, features = ["default-hasher"] }
 

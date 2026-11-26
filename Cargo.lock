@@ -9338,14 +9338,17 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 name = "workspace-hack"
 version = "0.1.0"
 dependencies = [
+ "anstyle",
  "crypto-common",
  "digest",
  "dispatch2",
+ "fastrand",
  "futures-util",
  "hashbrown 0.16.1",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
  "tokio",
+ "tungstenite",
 ]
 
 [[package]]
