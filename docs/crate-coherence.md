@@ -1,6 +1,6 @@
 # Crate coherence: audit and plan
 
-Status: in progress, 2026-11-26. Phases 1 to 4 are done; phase 5 remains. The findings below describe the crates as they were before the plan; crate names in them are the old ones (`margin-editor-core` is now `margin-core`, `margin-hub` is now `osom-hub`).
+Status: done, 2026-11-26, except the optional renames of step 5.2, which were decided against. The findings below describe the crates as they were before the plan; crate names in them are the old ones (`margin-editor-core` is now `margin-core`, `margin-hub` is now `osom-hub`).
 
 The question: does each crate provide one thing, contain only what serves it, and expose an interface that matches? Eight of the thirteen crates do. Four do not, and one has a duplicated concept. This document lists every finding, the layout to aim for, and the steps to get there.
 
@@ -146,12 +146,12 @@ These touch the most files.
 | 4.3 | Done. `margin-hub` is `osom-hub`. | H1 | S |
 | 4.4 | Done. The root crate is `crates/margin-core`. The root `Cargo.toml` is a workspace manifest only. | C1 | M |
 
-### Phase 5: last
+### Phase 5: last (done)
 
 | Step | Change | Findings | Size |
 | --- | --- | --- | --- |
-| 5.1 | Remove `NoteSync`'s protocol and keep a small note file for `--sync-file`. It can be rebuilt if the vault needs it. | N1 | M |
-| 5.2 | Optional renames for the shared names (`Message`, `Thread`, `Turn`) | X1 | M |
+| 5.1 | Done. `NoteSync` is gone; `margin_note::file::NoteFile` keeps a note in one local file for `--sync-file`, and still opens files written before. The Loro history tests (`tests/loro_history.rs`, `tests/loro_archive.rs`) stay: they test Loro, not `NoteSync`. | N1 | M |
+| 5.2 | Not done, by decision D6: the shared names (`Message`, `Thread`, `Turn`) stay; each is qualified by its module. | X1 | M |
 
 ## Checks after every step
 

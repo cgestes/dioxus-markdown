@@ -9,7 +9,7 @@ mod tests;
 
 use margin_ui::prelude::*;
 use margin_editor::{Comments, INPUT_CHECK, InMemory, MarkdownView, NoteStore, NotebookOptions, SAMPLE, Store, notebook_view};
-use margin_note::note::Note;
+use margin_note::{file::NoteFile, note::Note};
 use margin_ui::gallery::{GRID, Gallery, section};
 use margin_ui::{Card, CardTitle, Icon};
 
@@ -69,24 +69,23 @@ fn SampleEditor(inspect: bool) -> Element {
     notebook_view(SAMPLE, NotebookOptions { store: Some(store), ..sample_options(inspect) })
 }
 
-/// A standalone Loro history file as the notebook's store: every change to
-/// the note is written back to the file.
+/// A standalone Loro file as the notebook's store: every change to the note
+/// is written back to the file.
 struct SyncFileStore {
-    path: std::path::PathBuf,
-    state: std::rc::Rc<margin_note::sync::NoteSync>,
+    file: std::rc::Rc<NoteFile>,
 }
 
 impl NoteStore for SyncFileStore {
     fn note(&self) -> Option<Note> {
-        Some(Note::from_doc(self.state.note().document().clone()))
+        Some(self.file.note())
     }
 
     fn use_persistence(&self, note: Signal<Note>) -> Signal<String> {
         let mut status = use_signal(String::new);
-        let (path, state) = (self.path.clone(), self.state.clone());
+        let file = self.file.clone();
         use_effect(move || {
             note.read();
-            match state.save_to_file(&path) {
+            match file.save() {
                 Ok(()) if !status.peek().is_empty() => status.set(String::new()),
                 Ok(()) => {}
                 Err(error) => status.set(format!("Couldn’t save the sync file. {error}")),
@@ -98,14 +97,9 @@ impl NoteStore for SyncFileStore {
 
 #[component]
 fn SyncFileEditor(path: std::path::PathBuf, inspect: bool) -> Element {
-    use margin_note::sync::NoteSync;
     let loaded = use_hook(|| {
-        let sync = match NoteSync::load_from_file(&path) {
-            Ok(sync) => sync,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => NoteSync::new(Note::new(SAMPLE), 1),
-            Err(e) => return Err(e.to_string()),
-        };
-        Ok(Store::new(SyncFileStore { path, state: std::rc::Rc::new(sync) }))
+        let file = NoteFile::open(&path, SAMPLE).map_err(|e| e.to_string())?;
+        Ok::<_, String>(Store::new(SyncFileStore { file: std::rc::Rc::new(file) }))
     });
     let store = match loaded {
         Ok(store) => store,

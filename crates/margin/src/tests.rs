@@ -110,3 +110,26 @@ fn default_build_opens_field_notes_in_memory_and_says_it_is_not_saved() {
     let status = text(&doc, "save-status");
     assert!(status.contains("Not saved") && status.contains("--features vault"), "{status}");
 }
+
+/// `--sync-file PATH`: a path with no file starts as Field notes, every
+/// change is written to the file, and reopening the path shows it.
+#[test]
+fn a_sync_file_keeps_the_note_between_openings() {
+    use margin_note::file::NoteFile;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("notes").join("field.sync");
+    let editor = |path: &std::path::Path| {
+        open(VirtualDom::new_with_props(crate::SyncFileEditor, crate::SyncFileEditorProps { path: path.to_owned(), inspect: true }))
+    };
+    let mut doc = editor(&path);
+    assert!(value(&doc, "note-title").ends_with("Field notes"));
+    assert_eq!(NoteFile::open(&path, "").unwrap().note().markdown(), SAMPLE, "the file is written as the note opens");
+
+    click(&mut doc, "note-title");
+    commit_text(&mut doc, "My ");
+    let edited = NoteFile::open(&path, "").unwrap().note().markdown();
+    assert!(edited != SAMPLE && edited.contains("My "), "the edit reached the file: {}", &edited[..40]);
+
+    let reopened = editor(&path);
+    assert!(value(&reopened, "note-title").contains("My "), "{}", value(&reopened, "note-title"));
+}
