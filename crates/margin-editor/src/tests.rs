@@ -3107,7 +3107,7 @@ fn LiveEditor(text: String, options: NotebookOptions) -> Element {
 #[ignore = "talks to the live space and agent over the tailnet"]
 fn live_comment_streams_a_reply_and_saves_the_thread() {
     use crate::comments::{CommentAgent, DraftComment};
-    use crate::support::page::PageSource;
+    use crate::PageSource;
     use margin_hub::Endpoints;
     use std::{sync::Arc, time::Duration};
     use dioxus_native::DioxusDocument;

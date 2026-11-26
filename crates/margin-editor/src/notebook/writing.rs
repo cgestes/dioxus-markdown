@@ -92,8 +92,8 @@ pub(crate) struct Writing {
     pub handles: BlockHandles,
     pub discussion: crate::comments::Discussion,
     /// The page this notebook edits, if any, and where it stands.
-    pub page: Signal<Option<crate::support::page::PageSource>>,
-    pub page_state: Signal<crate::support::page::PageState>,
+    pub page: Signal<Option<super::page::PageSource>>,
+    pub page_state: Signal<super::page::PageState>,
 }
 
 impl Writing {

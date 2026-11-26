@@ -1,6 +1,5 @@
-//! Shared runtime pieces: the page reader, the background worker, and the
-//! restart into a newer build.
-pub mod page;
+//! Shared runtime pieces: the background worker, and the restart into a newer
+//! build.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod restart;
 pub mod worker;

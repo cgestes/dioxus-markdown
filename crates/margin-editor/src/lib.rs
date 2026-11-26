@@ -27,7 +27,7 @@ pub use notebook::{Comments, HostAction, HostBar, InMemory, NoteStore, NotebookO
 // Markdown to read.
 pub use reading::MarkdownView;
 pub(crate) use reading::callout_icon;
-pub use support::page::{PageFiles, PageSource};
+pub use notebook::page::{PageFiles, PageSource};
 use ui::Icon;
 
 /// *Field notes*, the sample note: the demo, a new vault's first note, the tests.

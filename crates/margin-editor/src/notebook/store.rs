@@ -3,7 +3,7 @@
 //! encrypted vault, a sync file, a page on a server, nowhere), and says so
 //! in the status bar.
 use crate::comments::CommentThread;
-use crate::support::page::PageSource;
+use super::page::PageSource;
 use crate::prelude::*;
 use margin_note::note::Note;
 use std::rc::Rc;

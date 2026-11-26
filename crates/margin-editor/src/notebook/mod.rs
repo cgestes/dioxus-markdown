@@ -7,6 +7,7 @@ pub(crate) mod link_card;
 pub(crate) mod markdown;
 pub(crate) mod marker_view;
 pub(crate) mod navigation;
+pub(crate) mod page;
 pub(crate) mod pointer;
 pub(crate) mod selection_model;
 pub(crate) mod slash;
@@ -25,7 +26,7 @@ use margin_ui::Icon;
 pub(crate) use writing::Writing;
 pub(crate) use document::{LandmarkKind, Sections};
 use margin_ui as ui;
-use crate::support::{page, restart};
+use crate::support::restart;
 use crate::CSS;
 pub use store::{InMemory, NoteStore, Store};
 

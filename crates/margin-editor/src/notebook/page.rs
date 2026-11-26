@@ -3,11 +3,11 @@
 //! and its comment file save together: anchors and applied edits in the
 //! comment file always describe text the server has. The app supplies the
 //! server through `PageFiles` (Osom: the agent's space).
-use crate::Writing;
+use super::Writing;
 use crate::ui::{Button, Variant};
 use crate::support::worker::work;
 use crate::prelude::*;
-pub use margin_editor_core::files::{PageFiles, Versioned, WriteError};
+pub use margin_editor_core::files::{PageFiles, WriteError};
 use std::sync::Arc;
 
 /// The page a notebook edits.

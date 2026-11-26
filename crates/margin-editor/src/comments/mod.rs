@@ -3,7 +3,7 @@
 //! agent answers through `agent::AgentChat`: ZeroClaw's read-only agent on a
 //! page of the space, a local stand-in elsewhere; both stream the same way.
 //! On a page, threads save to `_margin/comments/<page>.json` (see `page`).
-use crate::support::page::{PageSource, WriteError};
+use crate::notebook::page::{PageSource, WriteError};
 use crate::platform::text;
 use crate::ui::{Badge, Banner, Button, Card, Chip, Composer, Icon, Message, MessageStyle, Segment, Segmented, Tone, Variant};
 use crate::support::worker::{batch, turn, work};
