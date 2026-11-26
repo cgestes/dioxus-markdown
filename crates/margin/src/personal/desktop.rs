@@ -70,8 +70,6 @@ pub(crate) struct Session {
 /// the vault, edits and threads are saved back, reports go to the inbox.
 pub(crate) struct VaultStore {
     pub session: Session,
-    /// The notes menu's open state, when the desktop shows one.
-    pub menu: Option<Signal<bool>>,
 }
 
 impl margin_editor::NoteStore for VaultStore {
@@ -94,14 +92,6 @@ impl margin_editor::NoteStore for VaultStore {
     fn attach_report(&self, name: &str, bytes: &[u8]) -> Option<Result<String>> {
         let vault = &self.session.vault;
         Some(vault.attach(&vault.inbox(), name, bytes).map(|blob| format!("encrypted inbox attachment {blob}")))
-    }
-
-    fn title(&self) -> Option<String> {
-        Some("Margin · Personal vault".to_owned())
-    }
-
-    fn menu(&self) -> Option<Signal<bool>> {
-        self.menu
     }
 }
 
@@ -322,14 +312,16 @@ fn PrivateEditor(room: String) -> Element {
     };
     let show_discussion = session.room == session.vault.first_note_room()
         && session.threads.iter().any(|thread| !thread.file.resolved);
+    // The notes menu's open state, when the desktop shows one.
     let menu = try_consume_context::<Menu>().map(|Menu(open)| open);
-    let store = use_hook(|| margin_editor::Store::new(VaultStore { session, menu }));
+    let store = use_hook(|| margin_editor::Store::new(VaultStore { session }));
     // The vault's own threads come from the store; `Sample` only opens the
     // discussion pane on them.
     notebook_view(
         "",
         margin_editor::NotebookOptions {
             comments: if show_discussion { margin_editor::Comments::Sample } else { margin_editor::Comments::Empty },
+            host: margin_editor::Host { title: Some("Margin · Personal vault".to_owned()), menu, ..Default::default() },
             store: Some(store),
             ..Default::default()
         },

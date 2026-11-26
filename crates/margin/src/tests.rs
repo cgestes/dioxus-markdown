@@ -50,7 +50,7 @@ fn personal_editor_persists_input_and_keeps_diagnostics_on_device() -> anyhow::R
     // The session reaches the editor as a store, as the vault desktop passes it.
     fn open_session() -> Element {
         let store = use_hook(|| {
-            Store::new(personal::VaultStore { session: consume_context::<personal::Session>(), menu: None })
+            Store::new(personal::VaultStore { session: consume_context::<personal::Session>() })
         });
         notebook_view("", NotebookOptions { store: Some(store), ..Default::default() })
     }

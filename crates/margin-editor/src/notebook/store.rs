@@ -1,7 +1,8 @@
 //! Where a notebook's note lives. The editor edits a `Note`; the app that
-//! embeds it decides where the note comes from and how it is kept (an
-//! encrypted vault, a sync file, a page on a server, nowhere), and says so
-//! in the status bar.
+//! embeds it decides where the note comes from and how it and its comments
+//! are kept (an encrypted vault, a sync file, a page on a server, nowhere),
+//! and says so in the status bar. What the app's window adds around the
+//! notebook is `Host`, not the store.
 use crate::comments::CommentThread;
 use super::page::PageSource;
 use crate::prelude::*;
@@ -33,18 +34,6 @@ pub trait NoteStore {
     /// Keep an inspector report here; `None` writes it as a file instead.
     /// Returns a description of where it went.
     fn attach_report(&self, _name: &str, _bytes: &[u8]) -> Option<anyhow::Result<String>> {
-        None
-    }
-
-    /// The window title while this note is open, when the store names its
-    /// place (the window title then hides inspector details).
-    fn title(&self) -> Option<String> {
-        None
-    }
-
-    /// The open state of the app's notes menu, when it has one; the editor's
-    /// dock then shows a Notes button that toggles it.
-    fn menu(&self) -> Option<Signal<bool>> {
         None
     }
 

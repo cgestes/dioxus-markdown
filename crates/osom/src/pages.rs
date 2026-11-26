@@ -1,7 +1,6 @@
 //! A document or a stored conversation, opened in its own pane.
 use super::*;
-use margin_editor::{NoteStore, PageSource, Store};
-use margin_note::note::Note;
+use margin_editor::{Note, NoteStore, PageSource, Store};
 
 /// Where a pane's back button returns to.
 pub(super) fn back_label(ui: &Ui) -> &'static str {
@@ -101,7 +100,7 @@ pub(super) fn DocPane(path: String) -> Element {
             };
             let source = ui.live().map(|live| PageSource { path: page.path.clone(), files: Arc::new(live.space.clone()), etag: page.etag.clone() });
             let key = format!("{}@{}", page.path, page.etag.clone().unwrap_or_default());
-            let options = NotebookOptions { comments, host: Some(host), ..Default::default() };
+            let options = NotebookOptions { view: View::Rich, comments, host: Host { bar: Some(host), ..Default::default() }, ..Default::default() };
             rsx! { div { class: "min-h-[400px] bg-page [&_.notebook]:min-h-0 [&_#comments-pane]:top-0 [&_#comments-pane]:max-h-[calc(100vh-120px)]", PageEditor { key: "{key}", text: page.text.clone(), source, options } } }
         }
     }

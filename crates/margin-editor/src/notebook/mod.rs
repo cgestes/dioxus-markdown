@@ -152,10 +152,23 @@ pub(crate) fn mounted_field(event: MountedEvent, field: Field, request: FocusReq
     }
 }
 
+/// The view a notebook opens in.
 #[derive(Clone, Copy, Default, PartialEq)]
 pub enum View {
+    /// The formatted text: Markdown's delimiters stay hidden.
+    Rich,
+    /// The formatted text, with the Markdown shown where the caret is.
     #[default]
     Live,
+    /// The whole note as Markdown source.
+    Source,
+}
+
+/// What the notebook shows: the note's fields (Rich and Live, which differ
+/// by `EditMode`), or its source.
+#[derive(Clone, Copy, PartialEq)]
+enum Pane {
+    Fields,
     Source,
 }
 
@@ -178,17 +191,32 @@ pub struct NotebookOptions {
     /// Show the debug inspector from the start.
     pub inspect: bool,
     pub comments: Comments,
-    /// Set when another window hosts the editor (the Topics window): the
-    /// editor's bar then starts with the host's way back and ends with its
-    /// actions, and the page aligns with the host's column.
-    pub host: Option<HostBar>,
+    /// What the app around the notebook supplies: its window's title, its
+    /// menu, its bar.
+    pub host: Host,
     /// Where the note lives (a vault, a sync file, a page on a server);
     /// without one it is edited in memory and the status bar says nothing
     /// about it.
     pub store: Option<Store>,
 }
 
-/// The host's part of an embedded editor's bar.
+/// What the app around a notebook supplies to it.
+#[derive(Clone, Default, PartialEq)]
+pub struct Host {
+    /// The window's title while this notebook is open. Without one the
+    /// notebook titles the window after the note.
+    pub title: Option<String>,
+    /// The open state of the app's own menu (its list of notes): the bar
+    /// then starts with a Notes button that toggles it.
+    pub menu: Option<Signal<bool>>,
+    /// Set when the notebook is a pane of the app's window (the Topics
+    /// window): the bar then starts with the app's way back and ends with
+    /// its actions, the page aligns with the app's column, and the window's
+    /// title stays the app's.
+    pub bar: Option<HostBar>,
+}
+
+/// The app's part of the bar of a notebook it shows as a pane.
 #[derive(Clone, PartialEq)]
 pub struct HostBar {
     pub back: String,
@@ -208,6 +236,12 @@ pub struct HostAction {
 
 pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, host, store } = options;
+    let Host { title: host_title, menu: host_menu, bar: host } = host;
+    let (initial_pane, initial_mode) = match initial_view {
+        View::Rich => (Pane::Fields, projection::EditMode::Rich),
+        View::Live => (Pane::Fields, projection::EditMode::Markdown),
+        View::Source => (Pane::Source, projection::EditMode::Markdown),
+    };
     let page_source = store.as_ref().and_then(|s| s.page());
     let embedded = host.is_some();
     let seed_comments = start_comments == Comments::Sample;
@@ -233,7 +267,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     });
     // On a phone the pane would cover the note, so it waits for the comments button.
     let mut comments_open =
-        use_signal(move || seed_comments && initial_view == View::Live && !crate::platform::phone_sized());
+        use_signal(move || seed_comments && initial_pane == Pane::Fields && !crate::platform::phone_sized());
     let active_comment = use_signal(move || {
         if seed_comments {
             comments.peek().iter().find(|t| !t.file.resolved).map(|t| t.id)
@@ -242,8 +276,8 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         }
     });
     let draft_comment = use_signal(|| None);
-    let mut view = use_signal(|| initial_view);
-    let source = move || view() != View::Live;
+    let mut view = use_signal(|| initial_pane);
+    let source = move || view() != Pane::Fields;
     let message = use_signal(String::new);
     let prior_discussion = use_hook(|| {
         std::rc::Rc::new(std::cell::RefCell::new(
@@ -271,8 +305,8 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let newer_build = restart::use_newer_build();
     let mut root = use_signal(|| None::<NodeHandle>);
     let mut bookmark = use_signal(|| [0, 0]);
-    let initial_field = match initial_view {
-        View::Live if inspect_at_start => Some(Field::Body(0)),
+    let initial_field = match initial_pane {
+        Pane::Fields if inspect_at_start => Some(Field::Body(0)),
         _ => None,
     };
     let mut focus = use_signal(|| initial_field.map(|field| (field, [0; 2])));
@@ -319,7 +353,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         drag: use_signal(|| None),
         pressed_box: use_signal(|| None),
         mouse_box: use_signal(|| None),
-        edit_mode: use_signal(move || if embedded { projection::EditMode::Rich } else { projection::EditMode::Markdown }),
+        edit_mode: use_signal(move || initial_mode),
         cursor_source: use_signal(|| None),
         parsed: use_memo(move || projection::parse_markdown(&contents.read())),
         dom_dirty: use_signal(|| true),
@@ -369,8 +403,9 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let mut trace =
         use_signal(|| inspector::Trace::new(if inspect_at_start { initial } else { "" }));
     let window = crate::platform::use_window();
+    let names_place = host_title.is_some();
     let window_title = use_memo(move || {
-        if let Some(title) = store.peek().as_ref().and_then(|s| s.title()) {
+        if let Some(title) = host_title.clone() {
             return title;
         }
         let md = contents.read();
@@ -386,8 +421,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         let title = window_title.read();
         // A host (Osom) owns its window's title.
         if let Some(window) = window.as_ref().filter(|_| !embedded) {
-            let names_place = store.peek().as_ref().is_some_and(|s| s.title().is_some());
-            if !names_place && inspecting() && view() == View::Live {
+            if !names_place && inspecting() && view() == Pane::Fields {
                 window.set_title(&format!("{title}  |  {}", trace.read().title_status()));
             } else {
                 window.set_title(&title);
@@ -507,7 +541,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         .map(|i| md.floor_char_boundary(i.min(md.len())));
         bookmark.set(range);
         writing.reset();
-        if next == View::Live {
+        if next == Pane::Fields {
             writing.open(writing.field_at(range[1]), range);
         } else {
             focus.set(Some((Field::Source, range)));
@@ -523,16 +557,16 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         };
         w.edit_mode.set(next_mode);
         if source() {
-            change_view(View::Live);
+            change_view(Pane::Fields);
         } else if let Some(range) = current_sel {
             w.open(w.field_at(range[1]), range);
         }
     };
-    let is_rich = view() == View::Live && (writing.edit_mode)() == projection::EditMode::Rich;
-    let is_md_live = view() == View::Live && (writing.edit_mode)() == projection::EditMode::Markdown;
+    let is_rich = view() == Pane::Fields && (writing.edit_mode)() == projection::EditMode::Rich;
+    let is_md_live = view() == Pane::Fields && (writing.edit_mode)() == projection::EditMode::Markdown;
     let mut toggle_debug = move || {
         if source() {
-            change_view(View::Live);
+            change_view(Pane::Fields);
             trace.set(inspector::Trace::new(&contents.peek()));
             inspecting.set(true);
             return;
@@ -604,7 +638,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
             },
             div { id: "mode-bar", class: "{DOCK_TOOLS} {dock_layout}",
                 nav { class: "flex items-center gap-[5px] max-[485px]:gap-[3px] {pill_bar_extra}", aria_label: "Editor tools",
-                    if let Some(mut open) = store.peek().as_ref().and_then(|s| s.menu()) {
+                    if let Some(mut open) = host_menu {
                         ui::Button { id: "notes-menu", label: "Notes", text: "Notes", expanded: open(), onclick: move |_| { let visible = open(); open.set(!visible); } }
                     }
                     if let Some(h) = host.as_ref() {
@@ -618,12 +652,12 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                         items: vec![
                             ui::Segment { id: "rich-mode", label: "Rich", tip: Some("Rich editing (delimiters stay hidden)"), selected: is_rich },
                             ui::Segment { id: "live-mode", label: "Live", tip: Some("Keyboard-first Markdown live editing"), selected: is_md_live },
-                            ui::Segment { id: "source-mode", label: "Source", tip: None, selected: view() == View::Source },
+                            ui::Segment { id: "source-mode", label: "Source", tip: None, selected: view() == Pane::Source },
                         ],
                         onselect: move |i: usize| match i {
                             0 => set_edit_mode(projection::EditMode::Rich),
                             1 => set_edit_mode(projection::EditMode::Markdown),
-                            _ => change_view(View::Source),
+                            _ => change_view(Pane::Source),
                         },
                     }
                     ui::Button { id: "insert-table", variant: ui::Variant::Icon, label: "Insert table", tip: "Insert Markdown table", icon: Icon::Table, onclick: move |_| writing.insert_table(source()) }
@@ -645,7 +679,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                                     selected: panel_open,
                                     onclick: move |_| {
                                         if source() {
-                                            change_view(View::Live);
+                                            change_view(Pane::Fields);
                                             comments_open.set(true);
                                         } else {
                                             let next = !*comments_open.peek();

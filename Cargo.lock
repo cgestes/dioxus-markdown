@@ -5210,7 +5210,6 @@ dependencies = [
  "margin-editor",
  "margin-editor-core",
  "margin-hub",
- "margin-note",
  "margin-ui",
  "osom-topics",
  "png 0.18.1",

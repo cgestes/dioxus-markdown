@@ -3183,3 +3183,63 @@ fn live_comment_streams_a_reply_and_saves_the_thread() {
     assert_eq!(saved.threads[0].anchor.exact, quote);
     assert_eq!(saved.threads[0].messages.len(), 2, "your comment and the answer");
 }
+
+/// An attribute of the element with id `name`.
+fn attribute(doc: &DioxusDocument, name: &str, attribute: &str) -> Option<String> {
+    doc.inner.borrow().get_node(id(doc, name)).unwrap().attr(attribute.into()).map(str::to_owned)
+}
+
+fn has(doc: &DioxusDocument, name: &str) -> bool {
+    doc.inner.borrow().get_element_by_id(name).is_some()
+}
+
+#[test]
+fn a_notebook_opens_in_the_view_it_is_asked_for() {
+    let options = |view| NotebookOptions { view, ..Default::default() };
+    let roots: [(fn() -> Element, &str); 3] = [
+        (|| notebook_view(SAMPLE, NotebookOptions { view: View::Rich, ..Default::default() }), "rich-mode"),
+        (|| notebook_view(SAMPLE, NotebookOptions::default()), "live-mode"),
+        (|| notebook_view(SAMPLE, NotebookOptions { view: View::Source, ..Default::default() }), "source-mode"),
+    ];
+    assert!(options(View::default()) == NotebookOptions::default(), "Live is the default");
+    for (root, selected) in roots {
+        let doc = open(VirtualDom::new(root));
+        for mode in ["rich-mode", "live-mode", "source-mode"] {
+            let on = attribute(&doc, mode, "aria-pressed").as_deref() == Some("true");
+            assert_eq!(on, mode == selected, "{mode} when opened as {selected}");
+        }
+        // Source is one field of Markdown; Rich and Live show the note's fields.
+        assert_eq!(has(&doc, "markdown"), selected == "source-mode");
+        assert_eq!(has(&doc, "note-title"), selected != "source-mode");
+    }
+}
+
+#[test]
+fn the_host_supplies_its_menu_button_and_its_pane_bar() {
+    // Alone, the notebook has neither.
+    let alone = editor();
+    assert!(!has(&alone, "notes-menu") && !has(&alone, "doc-back"));
+
+    // The app's menu: the bar starts with a Notes button that toggles it.
+    fn with_menu() -> Element {
+        let menu = use_signal(|| false);
+        rsx! {
+            div { id: "menu-state", "{menu}" }
+            {notebook_view(SAMPLE, NotebookOptions { host: Host { menu: Some(menu), ..Default::default() }, ..Default::default() })}
+        }
+    }
+    let mut doc = open(VirtualDom::new(with_menu));
+    assert_eq!(text(&doc, "menu-state"), "false");
+    click(&mut doc, "notes-menu");
+    assert_eq!(text(&doc, "menu-state"), "true");
+
+    // A pane of the app's window: the bar starts with the app's way back.
+    // Being a pane does not choose the view: it is still Live unless asked.
+    fn as_pane() -> Element {
+        let bar = HostBar { back: "Docs".into(), onback: EventHandler::new(|_| {}), crumb: "notes.md".into(), actions: vec![] };
+        notebook_view(SAMPLE, NotebookOptions { host: Host { bar: Some(bar), ..Default::default() }, ..Default::default() })
+    }
+    let pane = open(VirtualDom::new(as_pane));
+    assert!(has(&pane, "doc-back") && !has(&pane, "notes-menu"));
+    assert_eq!(attribute(&pane, "live-mode", "aria-pressed").as_deref(), Some("true"));
+}
