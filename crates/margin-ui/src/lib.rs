@@ -36,14 +36,9 @@ pub use icon::{Icon, icon};
 pub use menu::{Menu, MenuItem, MenuRow, MenuSection, MenuSeparator, Popover, Toolbar, ToolbarLook, ToolbarSep};
 pub use message::{Message, MessageStyle};
 
-/// Tokens and component styles, for every window.
-pub const CSS: &str = concat!(
-    include_str!("../assets/theme.css"),
-    "\n",
-    include_str!("../assets/table.css"),
-    "\n",
-    include_str!("../assets/ui.css"),
-);
+/// Tokens, component styles, and compiled Tailwind v4 utilities, for every window.
+/// Rebuild with `./scripts/build-css` after changing CSS or Tailwind classes.
+pub const CSS: &str = include_str!("../assets/tailwind.css");
 
 /// A tint for tiles and glyphs (`--hue-*` tokens).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

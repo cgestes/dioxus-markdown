@@ -7,9 +7,9 @@ use crate::prelude::*;
 /// One titled group of samples.
 pub fn section(title: &str, children: Element) -> Element {
     rsx! {
-        section { class: "gallery-section",
-            h2 { class: "gallery-title", "{title}" }
-            div { class: "gallery-body", {children} }
+        section { class: "flex flex-col gap-3",
+            h2 { class: "m-0 text-faint type-label uppercase", "{title}" }
+            div { class: "flex flex-col gap-3", {children} }
         }
     }
 }
@@ -43,12 +43,11 @@ pub fn Gallery(children: Element) -> Element {
         .collect::<Vec<_>>();
     rsx! {
         style { "{CSS}" }
-        style { "{GALLERY_CSS}" }
-        main { class: "gallery",
-            h1 { class: "gallery-head", "Margin design system" }
-            p { class: "gallery-lede", "Tokens from assets/theme.css, styles from assets/ui.css. Features compose these components; they add layout only." }
+        main { class: "flex flex-col gap-6 px-8 pt-6 pb-12 bg-page text-ink type-ui leading-[1.45]",
+            h1 { class: "m-0 type-h1", "Margin design system" }
+            p { class: "m-0 text-muted", "Tokens from assets/theme.css and Tailwind v4 utilities compiled into margin_ui::CSS. Features compose these components; they add layout only." }
             {section("Buttons", rsx! {
-                div { class: "gallery-line",
+                div { class: "flex flex-wrap items-center gap-2",
                     for (v, name) in [(Variant::Default, "Default"), (Variant::Primary, "Primary"), (Variant::Ghost, "Ghost"), (Variant::Link, "Link →")] {
                         Button { label: name.to_string(), variant: v, onclick: noop }
                     }
@@ -61,13 +60,13 @@ pub fn Gallery(children: Element) -> Element {
                 }
             })}
             {section("Chips, segmented switch, tabs", rsx! {
-                div { class: "gallery-line",
+                div { class: "flex flex-wrap items-center gap-2",
                     Chip { label: "All", selected: true, onclick: noop }
                     Chip { label: "Telegram", icon: Icon::Telegram, onclick: noop }
                     Chip { label: "Slack", icon: Icon::Slack, onclick: noop }
                     Chip { label: "Summarize this week", onclick: noop }
                 }
-                div { class: "gallery-line",
+                div { class: "flex flex-wrap items-center gap-2",
                     Segmented { label: "Markdown view", items: segments, onselect: move |i| segment.set(i) }
                 }
                 Tabs { items: vec![
@@ -78,13 +77,13 @@ pub fn Gallery(children: Element) -> Element {
                     ], selected: tab(), onselect: move |i| tab.set(i) }
             })}
             {section("Text entry and checkboxes", rsx! {
-                div { class: "gallery-grid",
+                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
                     TextField { value: text, placeholder: "Search topics" }
                     TextField { value: filled, placeholder: "Quote" }
                     Composer { placeholder: "Ask about Car…", onsend: move |_| {} }
                     Composer { placeholder: "Comment or ask the agent to edit…", send_label: "Post".to_string(), onsend: move |_| {} }
                 }
-                div { class: "gallery-line",
+                div { class: "flex flex-wrap items-center gap-2",
                     Checkbox { checked: false }
                     Checkbox { checked: true }
                     CheckItem { text: "Ripe mangoes", checked: checked(), onclick: move |_| checked.toggle() }
@@ -92,8 +91,8 @@ pub fn Gallery(children: Element) -> Element {
                 }
             })}
             {section("Cards and rows", rsx! {
-                div { class: "gallery-grid",
-                    div { class: "gallery-nav",
+                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
+                    div { class: "flex flex-col gap-0.5 !flex-[0_0_220px] p-2.5 rounded-l bg-rail",
                         NavItem { label: "Today", leading: icon(Icon::Calendar), count: (4, Tone::Accent), selected: true, onclick: noop }
                         NavItem { label: "Unfiled", leading: icon(Icon::Inbox), count: (3, Tone::Alert), onclick: noop }
                         NavItem { label: "House", hint: "Plumber · Thu", leading: rsx! { Tile { icon: Icon::Home, hue: Hue::Clay } }, dot: true, onclick: noop }
@@ -122,7 +121,7 @@ pub fn Gallery(children: Element) -> Element {
                 }
             })}
             {section("Marks", rsx! {
-                div { class: "gallery-line",
+                div { class: "flex flex-wrap items-center gap-2",
                     for hue in Hue::ALL { Tile { icon: Icon::Car, hue } }
                     Tile { icon: Icon::Home, hue: Hue::Clay, size: TileSize::Large }
                     Tile { icon: Icon::Heart, hue: Hue::Plum, size: TileSize::Small }
@@ -133,25 +132,25 @@ pub fn Gallery(children: Element) -> Element {
                     Avatar { initial: "Y" }
                     DateBox { top: "THU", day: "26" }
                 }
-                div { class: "gallery-line",
+                div { class: "flex flex-wrap items-center gap-2",
                     for tone in Tone::ALL { Badge { text: tone.class().to_string(), tone } }
                     Badge { text: "Q1", tone: Tone::Accent }
                     Badge { text: "PDF", tone: Tone::Alert }
                 }
-                div { class: "gallery-grid",
+                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
                     Banner { text: "SilverBullet: HTTP 502", tone: Tone::Alert }
                     Banner { text: "Comment file saved with the page.", tone: Tone::Info }
                 }
             })}
             {section("Messages", rsx! {
-                div { class: "gallery-grid",
-                    div { class: "gallery-stack",
+                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
+                    div { class: "flex flex-col gap-3 p-3 border border-solid border-line rounded-l bg-surface",
                         Message { author: "you", body: "Is 60 °C the right setpoint?" }
                         Message { author: "luc", ai: true, body: "Yes, keep it at 60 °C or above; see house/systems.md.", tools: vec!["file_read".to_string()] }
                         Message { author: "luc", ai: true, pending: true, body: "" }
                         Message { author: "luc", ai: true, failed: true, body: "luc couldn’t answer: the connection closed" }
                     }
-                    div { class: "gallery-stack",
+                    div { class: "flex flex-col gap-3 p-3 border border-solid border-line rounded-l bg-surface",
                         Message { author: "you", body: "Shorten this to a few words.", style: MessageStyle::Thread }
                         Message { author: "scribe", ai: true, body: "The rest of the bullet gives the context, so the lead-in only names the part.", style: MessageStyle::Thread, tools: vec!["file_read".to_string()] }
                         Message { author: "scribe", ai: true, pending: true, body: "The rest of the bullet gives", style: MessageStyle::Thread }
@@ -160,7 +159,7 @@ pub fn Gallery(children: Element) -> Element {
                 }
             })}
             {section("Menus, popovers, toolbars", rsx! {
-                div { class: "gallery-grid gallery-menus",
+                div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[0_1_220px] [&>*]:min-w-0",
                     Menu { label: "Column menu",
                         MenuSection { label: "Column B" }
                         MenuRow {
@@ -181,7 +180,7 @@ pub fn Gallery(children: Element) -> Element {
                         MenuItem { label: "Table", icon: Icon::Table, hint: "| |", option: true, onclick: noop }
                     }
                     Popover { label: "Popover",
-                        div { class: "gallery-pop", "A popover holds any small surface: a picker, a preview, a confirmation." }
+                        div { class: "max-w-[200px] p-2 text-muted", "A popover holds any small surface: a picker, a preview, a confirmation." }
                     }
                     Combobox {
                         label: "Code language",
@@ -198,7 +197,7 @@ pub fn Gallery(children: Element) -> Element {
                         },
                     }
                 }
-                div { class: "gallery-line",
+                div { class: "flex flex-wrap items-center gap-2",
                     Toolbar { label: "Dock", look: ToolbarLook::Dock,
                         Button { label: "Insert table", icon: Icon::Table, variant: Variant::Icon, onclick: noop }
                         ToolbarSep {}
@@ -225,33 +224,13 @@ pub fn Gallery(children: Element) -> Element {
             })}
             {children}
             {section("Icons", rsx! {
-                div { class: "gallery-icons",
-                    for i in Icon::ALL { span { class: "gallery-icon", title: "{i:?}", {icon(i)} } }
+                div { class: "flex flex-wrap gap-2 text-ink",
+                    for i in Icon::ALL { span { class: "flex items-center justify-center w-8 h-8 border border-solid border-line rounded-m bg-surface", title: "{i:?}", {icon(i)} } }
                 }
             })}
         }
     }
 }
-
-/// Layout of the gallery page only.
-const GALLERY_CSS: &str = "
-.gallery { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-5) 32px 48px; background: var(--page); color: var(--ink); font: var(--font-ui); line-height: 1.45; }
-.gallery-head { margin: 0; font: var(--font-h1); letter-spacing: var(--track-h1); }
-.gallery-lede { margin: 0; color: var(--muted); }
-.gallery-section { display: flex; flex-direction: column; gap: var(--space-3); }
-.gallery-title { margin: 0; color: var(--faint); font: var(--font-label); letter-spacing: var(--track-label); text-transform: uppercase; }
-.gallery-body { display: flex; flex-direction: column; gap: var(--space-3); }
-.gallery-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.gallery-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-4); }
-.gallery-grid > * { flex: 1 1 360px; min-width: 0; }
-.gallery-stack { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-l); background: var(--surface); }
-.gallery-nav { display: flex; flex-direction: column; gap: 2px; flex: 0 0 220px; padding: 10px; border-radius: var(--radius-l); background: var(--rail); }
-.gallery-icons { display: flex; flex-wrap: wrap; gap: var(--space-2); color: var(--ink); }
-.gallery-icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-.gallery-icon .i { width: 16px; height: 16px; }
-.gallery-menus > * { flex: 0 1 220px; }
-.gallery-pop { max-width: 200px; padding: var(--space-2); color: var(--muted); }
-";
 
 #[cfg(test)]
 mod tests {

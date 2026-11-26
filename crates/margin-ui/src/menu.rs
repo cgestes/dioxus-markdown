@@ -114,9 +114,9 @@ pub enum ToolbarLook {
 impl ToolbarLook {
     fn class(self) -> &'static str {
         match self {
-            Self::Dock => "dock",
-            Self::Floating => "floating",
-            Self::Inline => "inline",
+            Self::Dock => "toolbar-dock",
+            Self::Floating => "toolbar-floating",
+            Self::Inline => "toolbar-inline",
         }
     }
 }

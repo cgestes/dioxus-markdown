@@ -1,0 +1,145 @@
+/* Margin's Tailwind v4 entry point.
+   Compiled into crates/margin-ui/assets/tailwind.css by `./scripts/build-css`
+   and embedded into `margin_ui::CSS` so `cargo test`, `cargo run`, and
+   `dx serve` share one stylesheet with zero runtime JS/CSS tooling. */
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "./theme.css" layer(base);
+@import "./table.css" layer(components);
+@import "./ui.css" layer(components);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "../src";
+@source "../../margin-editor/src";
+@source "../../margin/src";
+@source "../../margin-web/src";
+@source "../../osom/src";
+
+@theme {
+  /* Surfaces */
+  --color-page: #fcfbf8;
+  --color-rail: #f3f2ef;
+  --color-surface: #ffffff;
+  --color-wash: #f4f4fd;
+  --color-pale: #e7e7fb;
+
+  /* Inks */
+  --color-ink: #22211f;
+  --color-ink-strong: #0f0e0c;
+  --color-muted: #5c5953;
+  --color-faint: #75716a;
+  --color-on-accent: #ffffff;
+
+  /* Rules */
+  --color-line: #e3e0da;
+  --color-line-strong: #cac6be;
+
+  /* Accent ramp */
+  --color-accent: #5b5bd6;
+  --color-accent-deep: #4342ad;
+  --color-accent-soft: #d3d3f7;
+  --color-accent-ring: #9e9df0;
+
+  /* Floating dark toolbar */
+  --color-toolbar: #25244f;
+  --color-toolbar-edge: #3a3970;
+  --color-toolbar-ink: #f1f1fd;
+  --color-toolbar-hover: #4a4990;
+
+  /* Status */
+  --color-ok: #3f9a6e;
+  --color-ok-wash: #ebf7f1;
+  --color-ok-line: #bde2ce;
+  --color-info: #2c6a91;
+  --color-info-wash: #ebf3f9;
+  --color-info-line: #bfd6e7;
+  --color-warn: #c97a16;
+  --color-warn-ink: #5f4c17;
+  --color-warn-wash: #f8f2e1;
+  --color-warn-line: #e3d3a8;
+  --color-alert: #944a34;
+  --color-alert-wash: #f9eee8;
+  --color-alert-line: #e3c4b8;
+
+  /* Conversation sources */
+  --color-telegram: #2c6a91;
+  --color-telegram-wash: #ebf3f9;
+  --color-slack: #6d4479;
+  --color-slack-wash: #eee6f0;
+  --color-chat: #5b5bd6;
+  --color-chat-wash: #e7e7fb;
+
+  /* Tile hues */
+  --color-hue-slate: #2f5d75;
+  --color-hue-slate-wash: #e3ebf0;
+  --color-hue-rose: #9a4a42;
+  --color-hue-rose-wash: #f5e5e3;
+  --color-hue-clay: #8a5532;
+  --color-hue-clay-wash: #f3e7dc;
+  --color-hue-ochre: #7a6220;
+  --color-hue-ochre-wash: #f2ecd6;
+  --color-hue-plum: #6a4a82;
+  --color-hue-plum-wash: #ece5f1;
+  --color-hue-pine: #5b5bd6;
+  --color-hue-pine-wash: #e7e7fb;
+
+  /* Syntax highlighting */
+  --color-syn-comment: #6f6a61;
+  --color-syn-keyword: #5b48c8;
+  --color-syn-string: #2b7553;
+  --color-syn-number: #a65518;
+  --color-syn-type: #235d82;
+  --color-syn-function: #4342ad;
+  --color-syn-constant: #88407e;
+  --color-syn-attribute: #7c581c;
+  --color-syn-operator: #6b665e;
+  --color-syn-tag: #9a3e38;
+
+  /* Fonts */
+  --font-sans: "Geist", -apple-system, system-ui, sans-serif;
+  --font-display: "Geist", -apple-system, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Radii */
+  --radius-s: 4px;
+  --radius-m: 7px;
+  --radius-l: 10px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-pop: 0 6px 20px rgba(22, 21, 44, .14);
+  --shadow-menu: 0 8px 26px rgba(22, 21, 44, .15);
+  --shadow-bar: 0 4px 14px rgba(22, 21, 44, .2);
+  --shadow-side: -8px 0 24px rgba(22, 21, 44, .12);
+}
+
+/* Margin's semantic typography roles (matching theme.css tokens). */
+@utility type-ui {
+  font: var(--font-ui);
+}
+@utility type-control {
+  font: var(--font-control);
+}
+@utility type-hint {
+  font: var(--font-hint);
+}
+@utility type-label {
+  font: var(--font-label);
+  letter-spacing: var(--track-label);
+}
+@utility type-mono-ui {
+  font: var(--font-mono-ui);
+}
+@utility type-h1 {
+  font: var(--font-h1);
+  letter-spacing: var(--track-h1);
+}
+@utility type-h2 {
+  font: var(--font-h2);
+  letter-spacing: var(--track-h2);
+}
+@utility type-h3 {
+  font: var(--font-h3);
+  letter-spacing: var(--track-h3);
+}

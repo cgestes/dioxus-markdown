@@ -1,0 +1,22 @@
+#!/bin/sh
+# Compiles Margin's Tailwind v4 utility sheet from tailwind.in.css into
+# crates/margin-ui/assets/tailwind.css, which margin-ui embeds via include_str!
+# so native Blitz, Dioxus Web, and `cargo test` all use the same CSS.
+#
+# Uses a locally installed `tailwindcss` binary if present, otherwise runs
+# Tailwind v4 via `npx` with zero repo `node_modules` required.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+in="$root/crates/margin-ui/assets/tailwind.in.css"
+out="$root/crates/margin-ui/assets/tailwind.css"
+
+if command -v tailwindcss >/dev/null 2>&1; then
+  exec tailwindcss -i "$in" -o "$out" --minify
+fi
+
+exec npx -y -p tailwindcss -p @tailwindcss/cli sh -c '
+  tw="$(dirname "$(command -v tailwindcss)")/../tailwindcss"
+  cd "$(dirname "$1")"
+  sed "s|@import \"tailwindcss/|@import \"$tw/|g" "$1" \
+    | tailwindcss -i - -o "$2" --minify
+' _ "$in" "$out"

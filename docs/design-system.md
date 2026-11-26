@@ -1,6 +1,6 @@
 # Margin design system
 
-Margin's windows (the notebook, its comments, the Topics window) are built from one set of components in `crates/margin-ui/src/`, styled by one stylesheet, `crates/margin-ui/assets/ui.css`, from the tokens in `crates/margin-ui/assets/theme.css`. `margin ui` (or `margin --gallery`) opens a window with every component in every state; `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints the components to `target/ui-gallery.png`.
+Margin's windows (the notebook, its comments, the Topics window) are built from one set of components in `crates/margin-ui/src/`, styled with Tailwind v4 utilities (`crates/margin-ui/assets/tailwind.in.css`) and Margin's tokens (`crates/margin-ui/assets/theme.css`) compiled by `./scripts/build-css` into `crates/margin-ui/assets/tailwind.css` and embedded via `margin_ui::CSS`. `margin ui` (or `margin --gallery`) opens a window with every component in every state; `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints the components to `target/ui-gallery.png`.
 
 `margin-ui` uses no other workspace crate. It has the styles of read-only Markdown (`.ui-md`) but does not read Markdown: `MarkdownView` is in `crates/margin-editor/src/reading.rs`. The gallery takes extra sections as children, and the apps that open it (`margin ui`, `margin-web`'s `?gallery`) add a Markdown section.
 

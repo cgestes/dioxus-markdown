@@ -9,21 +9,22 @@
 .inspector-strip {
     position: fixed; top: 36px; left: 0; right: 0; height: 0; z-index: 10;
 }
-/* The editor's own controls (ui::Variant::Bare buttons). Scoped to the
-   notebook, with no specificity of their
-   own, so ui-* components and other windows that embed a notebook keep their
-   look. */
-:where(.notebook) nav, .history-tools, :where(.notebook) button { display: flex; align-items: center; }
-:where(.notebook) nav { gap: 6px; }
-:where(.notebook) button {
-    justify-content: center; gap: 6px; height: 28px; padding: 0 8px;
-    border: 1px solid transparent; border-radius: var(--radius); background: transparent;
-    color: var(--muted); font: var(--font-ui); cursor: pointer; user-select: none;
+@layer base {
+  /* The editor's own controls (ui::Variant::Bare buttons). Scoped to the
+     notebook inside @layer base so ui-* components (@layer components) and
+     Tailwind utilities (@layer utilities) keep their look. */
+  :where(.notebook) nav, .history-tools, :where(.notebook) button { display: flex; align-items: center; }
+  :where(.notebook) nav { gap: 6px; }
+  :where(.notebook) button {
+      justify-content: center; gap: 6px; height: 28px; padding: 0 8px;
+      border: 1px solid transparent; border-radius: var(--radius); background: transparent;
+      color: var(--muted); font: var(--font-ui); cursor: pointer; user-select: none;
+  }
+  :where(.notebook) button:hover { background: var(--pale); color: var(--accent-deep); }
+  :where(.notebook) button:active { background: var(--line); }
+  :where(.notebook) button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  :where(.notebook) button:disabled { color: var(--faint); opacity: .36; background: transparent; cursor: default; }
 }
-:where(.notebook) button:hover { background: var(--pale); color: var(--accent-deep); }
-:where(.notebook) button:active { background: var(--line); }
-:where(.notebook) button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-:where(.notebook) button:disabled { color: var(--faint); opacity: .36; background: transparent; cursor: default; }
 .restart-app { color: var(--accent-deep); border-color: var(--accent-deep); }
 .history-tools { padding-left: 5px; border-left: 1px solid var(--line); gap: 1px; }
 .mode-dock .ui-btn.icon { width: 26px; height: 24px; border-radius: 5px; }

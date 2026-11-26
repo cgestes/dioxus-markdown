@@ -512,7 +512,7 @@ fn LinkPreviewBody(
             button {
                 id: "link-card-open",
                 class: "ui-link-card-target",
-                class: if !can_open { "static" },
+                class: if !can_open { "is-static" },
                 aria_label: if can_open { format!("Open {}", preview.display_target) } else { preview.display_target.clone() },
                 title: current_url,
                 onclick: move |_| writing.open_link_target(open_target.clone()),
