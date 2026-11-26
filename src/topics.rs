@@ -7,6 +7,7 @@
 //! folders, `reminders.md` holds every deadline, and `<folder>/questions.md`
 //! holds open questions. This module only parses; `hub` does the I/O.
 use crate::{
+    dates,
     preview::{self, Block},
     table,
 };
@@ -578,6 +579,71 @@ pub fn reminders(md: &str) -> Vec<Reminder> {
         .collect()
 }
 
+/// The same planning page the agent reads for its day brief.
+pub const PLANNING_PAGE: &str = "planning/README.md";
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeyDate {
+    pub day: i64,
+    pub markdown: String,
+}
+
+impl KeyDate {
+    fn from_list_item(item: &str) -> Option<Self> {
+        let (_, body) = item.trim().split_once(char::is_whitespace)?;
+        let markdown = body.trim();
+        let day = plain(markdown)
+            .split(|c: char| !c.is_ascii_digit() && c != '-')
+            .filter(|token| token.len() == 10)
+            .find_map(|token| {
+                let day = dates::parse_date(token)?;
+                // parse_date normalizes impossible dates such as February 30.
+                (dates::iso_date(day * 86400) == token).then_some(day)
+            })?;
+        Some(Self {
+            day,
+            markdown: markdown.to_owned(),
+        })
+    }
+}
+
+/// Dated list entries under the planning page's “Key dates” heading.
+/// Keep the whole entry, including emphasis and the times the agent wrote.
+pub fn key_dates(md: &str) -> Vec<KeyDate> {
+    let mut section_level = None;
+    let mut skip_until = 0;
+    let mut entries = Vec::new();
+    for (event, range) in Parser::new(md).into_offset_iter() {
+        if range.start < skip_until {
+            continue;
+        }
+        match event {
+            Event::Start(Tag::BlockQuote(_)) => skip_until = range.end,
+            Event::Start(Tag::Heading { level, .. })
+                if section_level.is_none_or(|parent| level <= parent) =>
+            {
+                let title = plain(md[range].trim().trim_matches('#').trim());
+                section_level = title
+                    .trim_matches(|c: char| !c.is_alphanumeric())
+                    .eq_ignore_ascii_case("key dates")
+                    .then_some(level);
+            }
+            Event::Start(Tag::Item) => {
+                // A list item owns its nested bullets, headings and wrapped lines.
+                skip_until = range.end;
+                if section_level.is_some()
+                    && let Some(entry) = KeyDate::from_list_item(&md[range])
+                {
+                    entries.push(entry);
+                }
+            }
+            _ => {}
+        }
+    }
+    entries.sort_by_key(|entry| entry.day);
+    entries
+}
+
 /// One row of a `questions.md` bank.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Question {
@@ -1006,6 +1072,57 @@ mod tests {
         let owners: Vec<_> = all.iter().map(|r| r.owner(&t)).collect();
         assert_eq!(owners, [Some("car"), Some("wedding"), Some("people/dana-anghel")]);
         assert_eq!(all[1].due(), "2026-11-26");
+    }
+
+    #[test]
+    fn planning_key_dates_keep_the_whole_entry_and_only_read_the_named_section() {
+        let md = "# Planning\n\n- 2031-04-01 outside the section\n\n## Key dates ⭐\n\n\
+                  A note written on 2031-04-02.\n\n\
+                  - **Tue 2031-04-08: important**. Meet at 10:30.\n  Bring the forms.\n\
+                  - 2031-04-05 — [Workshop](details.md), heads-up 2031-04-04.\n\
+                  - 2031-02-30 invalid date\n\n\
+                  ```md\n- 2031-04-06 example only\n```\n\n\
+                  ## Day brief\n\n- 2031-04-07 outside the section\n";
+        let entries = key_dates(md);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].day, dates::parse_date("2031-04-05").unwrap());
+        assert_eq!(entries[1].day, dates::parse_date("2031-04-08").unwrap());
+        assert_eq!(entries[1].markdown, "**Tue 2031-04-08: important**. Meet at 10:30.\n  Bring the forms.");
+    }
+
+    #[test]
+    fn headings_in_quotes_and_lists_do_not_change_the_planning_section() {
+        let md = "\
+> ## Key dates
+
+- 2031-04-01 Outside
+
+- ## Key dates
+
+- 2031-04-02 Also outside
+
+## Key dates
+
+- 2031-04-08 Appointment
+  - Bring the forms
+
+> ## Example
+> - 2031-04-09 Quoted example
+
+- ## Checklist
+
+- 2031-04-10 Visit";
+        let entries = key_dates(md);
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.markdown.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "2031-04-08 Appointment\n  - Bring the forms",
+                "2031-04-10 Visit"
+            ]
+        );
     }
 
     #[test]
