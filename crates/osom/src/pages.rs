@@ -161,7 +161,7 @@ mod tests {
     use margin_editor::CommentAgent;
     use margin_editor::testing::{ask_about, comment_file, threads};
     use margin_editor_core::comments as file;
-    use margin_hub::{Endpoints, Space};
+    use osom_hub::{Endpoints, Space};
 
     /// The notebook asks the real comment agent on a real page of the space,
     /// streams the reply into the thread and saves the comment file next to

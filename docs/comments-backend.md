@@ -135,7 +135,7 @@ The contract is defined in scribe's `AGENTS.md`, and the first turn restates it 
 | Place | What |
 | --- | --- |
 | `src/comments.rs` (core, pure, tested) | Thread, message and proposal model (serde); sidecar merge; `TextQuote` capture and resolve on `&str`; request builder; `visible` and `proposal` parsers |
-| `crates/margin-hub/src/lib.rs` | Reuse `ZeroClaw::chat` and `Space::read/write`; add `abort(session)` (`POST /api/sessions/{id}/abort`) for a **Stop** button |
+| `crates/osom-hub/src/lib.rs` | Reuse `ZeroClaw::chat` and `Space::read/write`; add `abort(session)` (`POST /api/sessions/{id}/abort`) for a **Stop** button |
 | `crates/margin-editor/src/comments/mod.rs` (from `main`) | Replace the two `mock_llm_reply` call sites with `CommentAgent::reply`, run on a worker thread like the topic chat. Stream into a pending AI message. Load the sidecar when a vault page opens and save it on change. |
 | `hub::AgentChat` (as built) | `trait AgentChat { fn chat(&self, ask: &Ask, on: &mut dyn FnMut(ChatEvent) -> bool, decide: &mut dyn FnMut() -> bool) }`, events `Chunk / Tool / Approval / Done(full) / Error`, exactly one of the last two. Implemented by `ZeroClaw` and `Canned` (the stand-in). Chosen per notebook through `NotebookOptions::comments`: vault page + paired → scribe; otherwise the stand-in. `on` returning false stops the turn. |
 

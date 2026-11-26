@@ -7,7 +7,7 @@ publish = false
 # Feature pins (the cargo-hakari pattern, kept by hand). Cargo resolves a
 # dependency's features from the crates in the build, and a crate's build
 # depends on its dependencies' features. The vault (tokio, its crypto), its
-# file dialogs (rfd) and margin-hub (TLS) turn on features in crates that
+# file dialogs (rfd) and osom-hub (TLS) turn on features in crates that
 # Dioxus and Blitz use too. Without these pins `cargo run -p margin`, a vault
 # build, `osom`, `cargo test -p margin-editor` and `cargo test --workspace`
 # would each compile Dioxus, Blitz, margin-ui and margin-editor separately,
@@ -24,7 +24,7 @@ tokio = { version = "1.54", default-features = false, features = ["io-util", "ma
 futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
 digest = { version = "0.10.7", default-features = false, features = ["mac"] }
 crypto-common = { version = "0.1.7", default-features = false, features = ["getrandom", "rand_core"] }
-# margin-hub's WebSocket (TLS) and its HTTP stack; Dioxus devtools share
+# osom-hub's WebSocket (TLS) and its HTTP stack; Dioxus devtools share
 # tungstenite, and fastrand sits under the interface too.
 tungstenite = { version = "0.29", features = ["native-tls"] }
 fastrand = { version = "2.5", features = ["std"] }

@@ -3,7 +3,7 @@
 use crate::demo;
 use crate::view::*;
 use margin_editor_core::{dates, heading};
-use margin_hub::{AgentChat, Canned, Endpoints, Page, Space, ZeroClaw};
+use osom_hub::{AgentChat, Canned, Endpoints, Page, Space, ZeroClaw};
 use osom_topics::{self as model, Kind, Origin, Reminder, Session, Topic, calendar};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

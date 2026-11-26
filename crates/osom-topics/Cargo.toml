@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 # Osom's model: the topics of the agent's space, its chats and reminders.
-# It parses; margin-hub does the I/O.
+# It parses; osom-hub does the I/O.
 [dependencies]
 margin-editor-core = { path = "../.." }
 # `tasks` reads a page as the notebook does.

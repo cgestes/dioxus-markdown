@@ -1,11 +1,12 @@
 [package]
-name = "margin-hub"
+name = "osom-hub"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
-# The agent's side: SilverBullet and ZeroClaw over the tailnet (native-tls
-# uses the system trust store), and the device token.
+# Osom's network access: SilverBullet (the space) and ZeroClaw (the agent)
+# over the tailnet (native-tls uses the system trust store), and the device
+# token. It implements the core's agent and page-file interfaces.
 [dependencies]
 margin-editor-core = { path = "../.." }
 osom-topics = { path = "../osom-topics" }

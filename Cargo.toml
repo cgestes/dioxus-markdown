@@ -5,7 +5,7 @@ members = [
     "crates/margin-runtime",
     "crates/margin-vault",
     "crates/margin-vault-cli",
-    "crates/margin-hub",
+    "crates/osom-hub",
     "crates/margin-ui",
     "crates/margin-editor",
     "crates/margin",

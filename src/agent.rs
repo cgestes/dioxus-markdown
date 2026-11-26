@@ -1,6 +1,6 @@
 //! Talking to an agent, whoever it is: what a turn asks, what the agent
 //! reports while it answers, and a stand-in that answers locally. The
-//! editor's comment threads and Osom's chat use this interface; margin-hub
+//! editor's comment threads and Osom's chat use this interface; osom-hub
 //! implements it for ZeroClaw.
 use std::time::Duration;
 

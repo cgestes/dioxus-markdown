@@ -5,7 +5,7 @@
 //! page a channel routes to directly, are topics of their own
 //! (`people/nikki-sample`). The space README maps Slack and Telegram chats to
 //! folders, `reminders.md` holds every deadline, and `<folder>/questions.md`
-//! holds open questions. This crate only parses; `margin-hub` does the I/O.
+//! holds open questions. This crate only parses; `osom-hub` does the I/O.
 //!
 //! `space` has the topics, `routes` the channels that feed them, `planning`
 //! reminders, key dates and questions, `chats` the agent's conversations,

@@ -18,7 +18,7 @@ margin-runtime = { path = "../margin-runtime" }
 margin-ui = { path = "../margin-ui" }
 margin-editor-core = { path = "../.." }
 osom-topics = { path = "../osom-topics" }
-margin-hub = { path = "../margin-hub" }
+osom-hub = { path = "../osom-hub" }
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
 webbrowser = "1.2"
 clap = { version = "4", features = ["derive"] }

@@ -4344,20 +4344,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "margin-hub"
-version = "0.1.0"
-dependencies = [
- "margin-editor-core",
- "osom-topics",
- "percent-encoding",
- "security-framework 3.7.0",
- "serde",
- "serde_json",
- "tungstenite",
- "ureq",
-]
-
-[[package]]
 name = "margin-note"
 version = "0.1.0"
 dependencies = [
@@ -5222,13 +5208,27 @@ dependencies = [
  "dioxus-native",
  "margin-editor",
  "margin-editor-core",
- "margin-hub",
  "margin-runtime",
  "margin-ui",
+ "osom-hub",
  "osom-topics",
  "png 0.18.1",
  "tokio",
  "webbrowser",
+]
+
+[[package]]
+name = "osom-hub"
+version = "0.1.0"
+dependencies = [
+ "margin-editor-core",
+ "osom-topics",
+ "percent-encoding",
+ "security-framework 3.7.0",
+ "serde",
+ "serde_json",
+ "tungstenite",
+ "ureq",
 ]
 
 [[package]]

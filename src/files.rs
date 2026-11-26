@@ -1,5 +1,5 @@
 //! Files kept on a server that versions each one: the interface the editor
-//! saves a page and its comment file through. margin-hub implements it for
+//! saves a page and its comment file through. osom-hub implements it for
 //! the agent's space.
 
 /// Files on a server that versions each one (an etag) and refuses a write
