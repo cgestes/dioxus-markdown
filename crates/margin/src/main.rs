@@ -10,7 +10,7 @@ mod tests;
 use dioxus_native::prelude::*;
 use margin_editor::{Comments, INPUT_CHECK, InMemory, MarkdownView, NoteStore, NotebookOptions, SAMPLE, Store, launch, notebook_view};
 use margin_note::note::Note;
-use margin_ui::gallery::{Gallery, section};
+use margin_ui::gallery::{GRID, Gallery, section};
 use margin_ui::{Card, CardTitle, Icon};
 
 fn main() {
@@ -44,7 +44,7 @@ fn gallery() -> Element {
     rsx! {
         Gallery {
             {section("Markdown", rsx! {
-                div { class: "gallery-grid",
+                div { class: GRID,
                     Card { CardTitle { text: "page", icon: Icon::File } MarkdownView { text: SAMPLE } }
                     Card { CardTitle { text: "compact", icon: Icon::Chat } MarkdownView { text: SAMPLE, compact: true } }
                 }

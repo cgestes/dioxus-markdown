@@ -5,7 +5,8 @@ use super::*;
 use crate::prelude::*;
 
 const ROW: &str = "flex flex-wrap items-center gap-2";
-const GRID: &str = "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0";
+/// Responsive multi-column grid used by gallery sections (including host sections).
+pub const GRID: &str = "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0";
 
 /// One titled group of samples.
 pub fn section(title: &str, children: Element) -> Element {

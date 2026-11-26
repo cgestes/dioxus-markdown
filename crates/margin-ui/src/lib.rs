@@ -55,17 +55,6 @@ pub enum Hue {
 
 impl Hue {
     pub const ALL: [Hue; 6] = [Hue::Slate, Hue::Rose, Hue::Clay, Hue::Ochre, Hue::Plum, Hue::Pine];
-
-    pub fn class(self) -> &'static str {
-        match self {
-            Self::Slate => "hue-slate",
-            Self::Rose => "hue-rose",
-            Self::Clay => "hue-clay",
-            Self::Ochre => "hue-ochre",
-            Self::Plum => "hue-plum",
-            Self::Pine => "hue-pine",
-        }
-    }
 }
 
 /// What a badge or banner says about its content.

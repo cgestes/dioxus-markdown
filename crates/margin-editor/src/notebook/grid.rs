@@ -822,28 +822,28 @@ pub fn EmptyLineBar(writing: Writing, field: Field) -> Element {
             keep_focus: true,
             contain: true,
             style: "left:{x}px; top:{y}px;",
-            Button { id: "empty-h1", class: "empty-tool", variant: Variant::Icon, label: "Heading 1", text: "H1", tip: format!("Heading 1 ({})", shortcut("1")),
+            Button { id: "empty-h1", variant: Variant::Icon, label: "Heading 1", text: "H1", tip: format!("Heading 1 ({})", shortcut("1")),
                 onclick: move |_| { writing.set_heading_level(field, 1); } }
-            Button { id: "empty-h2", class: "empty-tool", variant: Variant::Icon, label: "Heading 2", text: "H2", tip: format!("Heading 2 ({})", shortcut("2")),
+            Button { id: "empty-h2", variant: Variant::Icon, label: "Heading 2", text: "H2", tip: format!("Heading 2 ({})", shortcut("2")),
                 onclick: move |_| { writing.set_heading_level(field, 2); } }
-            Button { id: "empty-h3", class: "empty-tool", variant: Variant::Icon, label: "Heading 3", text: "H3", tip: format!("Heading 3 ({})", shortcut("3")),
+            Button { id: "empty-h3", variant: Variant::Icon, label: "Heading 3", text: "H3", tip: format!("Heading 3 ({})", shortcut("3")),
                 onclick: move |_| { writing.set_heading_level(field, 3); } }
             ToolbarSep {}
-            Button { id: "empty-bullet", class: "empty-tool", variant: Variant::Icon, label: "Bullet list", icon: crate::Icon::List,
+            Button { id: "empty-bullet", variant: Variant::Icon, label: "Bullet list", icon: crate::Icon::List,
                 onclick: move |_| { writing.toggle_line_prefix("- "); } }
-            Button { id: "empty-task", class: "empty-tool", variant: Variant::Icon, label: "Checklist", tip: format!("Checklist ({})", shortcut("Enter")), icon: crate::Icon::Task,
+            Button { id: "empty-task", variant: Variant::Icon, label: "Checklist", tip: format!("Checklist ({})", shortcut("Enter")), icon: crate::Icon::Task,
                 onclick: move |_| { writing.toggle_line_task(field); } }
-            Button { id: "empty-quote", class: "empty-tool", variant: Variant::Icon, label: "Quote", tip: "Blockquote", icon: crate::Icon::Quote,
+            Button { id: "empty-quote", variant: Variant::Icon, label: "Quote", tip: "Blockquote", icon: crate::Icon::Quote,
                 onclick: move |_| { writing.toggle_line_prefix("> "); } }
-            Button { id: "empty-callout", class: "empty-tool", variant: Variant::Icon, label: "Callout", tip: "Callout box", icon: crate::Icon::Info,
+            Button { id: "empty-callout", variant: Variant::Icon, label: "Callout", tip: "Callout box", icon: crate::Icon::Info,
                 onclick: move |_| { writing.insert_callout(margin_editor_core::callout::CalloutKind::Note); } }
-            Button { id: "empty-code", class: "empty-tool", variant: Variant::Icon, label: "Code block", icon: crate::Icon::Code,
+            Button { id: "empty-code", variant: Variant::Icon, label: "Code block", icon: crate::Icon::Code,
                 onclick: move |_| { writing.insert_code_block(); } }
-            Button { id: "empty-table", class: "empty-tool", variant: Variant::Icon, label: "Table", tip: "Insert table", icon: crate::Icon::Table,
+            Button { id: "empty-table", variant: Variant::Icon, label: "Table", tip: "Insert table", icon: crate::Icon::Table,
                 onclick: move |_| { writing.insert_table(false); } }
-            Button { id: "empty-image", class: "empty-tool", variant: Variant::Icon, label: "Image", tip: "Insert image", icon: crate::Icon::Image,
+            Button { id: "empty-image", variant: Variant::Icon, label: "Image", tip: "Insert image", icon: crate::Icon::Image,
                 onclick: move |_| { writing.insert_image(); } }
-            Button { id: "empty-rule", class: "empty-tool", variant: Variant::Icon, label: "Divider", tip: "Horizontal rule", icon: crate::Icon::Rule,
+            Button { id: "empty-rule", variant: Variant::Icon, label: "Divider", tip: "Horizontal rule", icon: crate::Icon::Rule,
                 onclick: move |_| { writing.insert_rule(); } }
         }
     }

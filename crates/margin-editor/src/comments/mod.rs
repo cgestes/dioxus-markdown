@@ -978,7 +978,7 @@ fn ThreadCard(writing: Writing, id: usize, active: bool) -> Element {
                     text: if resolved { "Reopen" } else { "Resolve" }, variant: Variant::Ghost, stop: true,
                     onclick: move |_| writing.toggle_resolve_comment(tid) }
                 Button { id: format!("comment-delete-{tid}"), label: "Delete comment thread", text: "×", variant: Variant::Ghost,
-                    class: "remove", stop: true, onclick: move |_| writing.delete_comment_thread(tid) }
+                    danger: true, stop: true, onclick: move |_| writing.delete_comment_thread(tid) }
             }
             for (mi, m) in thread.file.messages.iter().enumerate() {
                 if thread.pending.as_ref() == Some(&m.id) {
@@ -1031,7 +1031,7 @@ fn ProposalView(writing: Writing, thread: usize, message: usize, proposal: file:
                         onclick: move |_| writing.reply_to_comment(tid, "The selected text changed. Propose the edit again for the current text.") }
                 } else if applied {
                     Button { id: format!("comment-undo-{tid}-{mi}"), label: "Applied · Undo", icon: Icon::Check, text: "Applied · Undo", stop: true,
-                        class: "applied", onclick: move |_| writing.undo_comment_proposal(tid, mi) }
+                        onclick: move |_| writing.undo_comment_proposal(tid, mi) }
                     if !resolved {
                         Button { id: format!("comment-resolve-after-{tid}-{mi}"), label: "Resolve", stop: true,
                             onclick: move |_| writing.toggle_resolve_comment(tid) }
