@@ -25,17 +25,14 @@ futures-util = { version = "0.3", default-features = false, features = ["std"] }
 futures-channel = "0.3"
 web-time = "1"
 
-[features]
-# `margin_editor::testing` (native): drive a rendered editor from another crate's tests.
-testing = ["dep:blitz-traits"]
-
 # Native: Blitz renders the notebook.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
 parley = { version = "=0.12.0", default-features = false }
 webbrowser = "1.2"
-blitz-traits = { version = "=0.3.0-beta.4", optional = true }
+# `margin_editor::testing` drives a rendered editor from another crate's tests.
+blitz-traits = "=0.3.0-beta.4"
 
 # Browser: the same notebook on Dioxus Web (the `margin-web` app).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -51,7 +48,6 @@ dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7
 
 [dev-dependencies]
 tempfile = "3"
-blitz-traits = "=0.3.0-beta.4"
 blitz-paint = { version = "=0.3.0-beta.4", default-features = false }
 anyrender = "=0.14.0"
 anyrender_vello_cpu = { version = "=0.18.0", default-features = false }

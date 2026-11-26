@@ -156,6 +156,7 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 
 | Crate | Holds | Heavy dependencies |
 | --- | --- | --- |
+| `crates/workspace-hack` | No code: it pins the dependency features that builds would otherwise resolve differently, so `cargo run`, a vault build and `cargo test` share one compile of Dioxus, Blitz and the workspace crates | none |
 | `margin-editor-core` (root) | Markdown editing commands, the preview model, the topic and comment formats. No I/O. It builds for native and for wasm. | none |
 | `crates/margin-note` | `Note` (a Loro document) and the standalone sync file | Loro |
 | `crates/margin-projection` | The editor's Markdown model, no UI: what a field shows and how its edits map back to the source, title and body, blocks, list continuation, span styles, link cards. Its tests build no renderer. | none |

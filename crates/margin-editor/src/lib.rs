@@ -5,7 +5,8 @@ mod notebook;
 mod comments;
 mod platform;
 pub mod support;
-#[cfg(all(not(target_arch = "wasm32"), any(test, feature = "testing")))]
+// Always built on native: a feature would make test builds compile the editor twice.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod testing;
 #[cfg(test)]
 mod tests;

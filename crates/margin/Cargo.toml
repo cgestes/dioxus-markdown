@@ -38,7 +38,7 @@ default = []
 vault = ["dep:margin-vault", "dep:anyhow", "dep:futures-channel", "dep:futures-util", "dep:loro", "dep:rfd", "dep:serde_json", "dep:tokio"]
 
 [dev-dependencies]
-margin-editor = { path = "../margin-editor", features = ["testing"] }
+margin-editor = { path = "../margin-editor" }
 anyhow = "1"
 serde_json = "1"
 tempfile = "3"

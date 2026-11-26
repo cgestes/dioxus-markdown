@@ -12,6 +12,8 @@ path = "src/lib.rs"
 margin-editor-core = { path = "../.." }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# One set of features for the dependencies every build shares (see its Cargo.toml).
+workspace-hack = { path = "../workspace-hack" }
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
 parley = { version = "=0.12.0", default-features = false }
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
