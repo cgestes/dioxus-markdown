@@ -8,8 +8,10 @@ mod personal;
 mod tests;
 
 use dioxus_native::prelude::*;
-use margin_editor::{Comments, INPUT_CHECK, InMemory, NoteStore, NotebookOptions, SAMPLE, Store, launch, notebook_view};
+use margin_editor::{Comments, INPUT_CHECK, InMemory, MarkdownView, NoteStore, NotebookOptions, SAMPLE, Store, launch, notebook_view};
 use margin_note::note::Note;
+use margin_ui::gallery::{Gallery, section};
+use margin_ui::{Card, CardTitle, Icon};
 
 fn main() {
     margin_editor::support::restart::answer_build_probe(if cfg!(feature = "vault") { "margin, with the vault" } else { "margin, without the vault" });
@@ -21,7 +23,7 @@ fn main() {
 fn app() -> Element {
     let args = cli::current();
     if args.is_gallery() {
-        return rsx! { margin_editor::Gallery {} };
+        return gallery();
     }
     if args.test_window {
         return notebook_view(INPUT_CHECK, NotebookOptions { inspect: true, ..Default::default() });
@@ -34,6 +36,21 @@ fn app() -> Element {
         return rsx! { SampleEditor { inspect } };
     }
     rsx! { personal::Desktop {} }
+}
+
+/// `margin ui`: the design system's gallery, then Markdown as the editor
+/// reads it. The design system has its styles and knows no Markdown.
+fn gallery() -> Element {
+    rsx! {
+        Gallery {
+            {section("Markdown", rsx! {
+                div { class: "gallery-grid",
+                    Card { CardTitle { text: "page", icon: Icon::File } MarkdownView { text: SAMPLE } }
+                    Card { CardTitle { text: "compact", icon: Icon::Chat } MarkdownView { text: SAMPLE, compact: true } }
+                }
+            })}
+        }
+    }
 }
 
 /// The sample note's options: sample comment threads unless inspecting.

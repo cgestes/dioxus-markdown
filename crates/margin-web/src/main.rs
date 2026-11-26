@@ -4,7 +4,9 @@
 #[cfg(target_arch = "wasm32")]
 mod page {
     use dioxus::prelude::*;
-    use margin_editor::{Comments, INPUT_CHECK, InMemory, NotebookOptions, SAMPLE, Store, notebook_view};
+    use margin_editor::{Comments, INPUT_CHECK, InMemory, MarkdownView, NotebookOptions, SAMPLE, Store, notebook_view};
+    use margin_ui::gallery::{Gallery, section};
+    use margin_ui::{Card, CardTitle, Icon};
 
     /// What the status bar says about the note: a page keeps nothing yet.
     const UNSAVED: &str = "Not saved: the note lasts until this page closes";
@@ -26,10 +28,25 @@ mod page {
         margin_editor::launch("Margin", (920.0, 650.0), app);
     }
 
+    /// `?gallery`: the design system's gallery, then Markdown as the editor
+    /// reads it (as `margin ui` shows it).
+    fn gallery() -> Element {
+        rsx! {
+            Gallery {
+                {section("Markdown", rsx! {
+                    div { class: "gallery-grid",
+                        Card { CardTitle { text: "page", icon: Icon::File } MarkdownView { text: SAMPLE } }
+                        Card { CardTitle { text: "compact", icon: Icon::Chat } MarkdownView { text: SAMPLE, compact: true } }
+                    }
+                })}
+            }
+        }
+    }
+
     fn app() -> Element {
         let options = options();
         if options.gallery {
-            return rsx! { margin_editor::Gallery {} };
+            return gallery();
         }
         if options.test_window {
             return notebook_view(INPUT_CHECK, NotebookOptions { inspect: true, ..Default::default() });

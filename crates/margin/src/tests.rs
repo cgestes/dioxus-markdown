@@ -2,6 +2,15 @@
 use super::*;
 use margin_editor::testing::*;
 
+#[test]
+fn the_gallery_shows_the_components_then_markdown_as_the_editor_reads_it() {
+    let doc = open(VirtualDom::new(|| rsx! { div { id: "gallery", {gallery()} } }));
+    let shown = text(&doc, "gallery");
+    assert!(shown.contains("Buttons") && shown.contains("Icons"), "the design system's sections");
+    assert!(shown.contains("Field notes") && !shown.contains("# Field notes"), "the sample's title, read as a heading");
+    assert!(shown.contains("ten seconds") && !shown.contains("**ten"), "its bold text, read as Markdown");
+}
+
 #[cfg(feature = "vault")]
 #[test]
 fn personal_editor_persists_input_and_keeps_diagnostics_on_device() -> anyhow::Result<()> {

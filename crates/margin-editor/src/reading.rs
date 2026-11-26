@@ -3,7 +3,7 @@
 //! styles are the design system's (`.ui-md`); the Markdown is read here, so
 //! the design system knows none.
 use crate::prelude::*;
-use crate::ui::{self, Card, CardTitle, Icon, Message, icon};
+use crate::ui::{Icon, icon};
 use margin_editor_core::callout::CalloutKind;
 use margin_editor_core::preview::{self, Block, Passage};
 
@@ -91,33 +91,11 @@ pub fn MarkdownView(text: String, #[props(default)] compact: bool) -> Element {
     }
 }
 
-const SAMPLE_PAGE: &str = "# Car — maintenance\n\nOil every **15,000 km** or a year; see `car/log.md` and [the garage](https://example.com).\n\n## Schedule\n\n- [x] Cabin filter, 2026-04\n- [ ] Brakes: check at next service\n\n> Expired = ~135 € fine.\n\n| Item | Interval | Next due |\n| --- | --- | ---: |\n| Oil + filter | 1 year | 2027-04 |\n| CT | 2 years | 2027-06 |\n";
-const SAMPLE_REPLY: &str = "Yes, keep it at **60 °C or above**; see `house/systems.md`.";
-
-/// `margin ui`: the design system's gallery, with the Markdown view added:
-/// a page, the compact form, and a message whose body is Markdown.
-#[component]
-pub fn Gallery() -> Element {
-    rsx! {
-        ui::gallery::Gallery {
-            {ui::gallery::section("Markdown", rsx! {
-                div { class: "gallery-grid",
-                    Card { CardTitle { text: "page", icon: Icon::File } MarkdownView { text: SAMPLE_PAGE } }
-                    Card { CardTitle { text: "compact", icon: Icon::Chat } MarkdownView { text: SAMPLE_PAGE, compact: true } }
-                    div { class: "gallery-stack",
-                        Message { author: "luc", ai: true, body: SAMPLE_REPLY, tools: vec!["file_read".to_string()],
-                            rich: rsx! { MarkdownView { text: SAMPLE_REPLY, compact: true } } }
-                    }
-                }
-            })}
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testing::{open, text};
+    use crate::ui::Message;
 
     const BODY: &str = "Keep it at **60 °C**.";
 
@@ -139,15 +117,5 @@ mod tests {
         for id in ["pending", "failed", "plain"] {
             assert!(text(&doc, id).contains(BODY), "{id}: {}", text(&doc, id));
         }
-    }
-
-    #[test]
-    fn the_gallery_adds_markdown_to_the_design_systems_components() {
-        let doc = open(VirtualDom::new(|| rsx! { div { id: "gallery", Gallery {} } }));
-        let shown = text(&doc, "gallery");
-        // The design system's own sections, then this crate's.
-        assert!(shown.contains("Buttons") && shown.contains("Icons"), "the components");
-        assert!(shown.contains("Car — maintenance") && !shown.contains("# Car"), "the page, read as Markdown");
-        assert!(shown.contains("60 °C or above") && !shown.contains("**60"), "the message body, read as Markdown");
     }
 }

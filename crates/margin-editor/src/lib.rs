@@ -24,8 +24,8 @@ use notebook::*;
 // What an app builds a notebook from.
 pub use comments::{CommentAgent, CommentThread, seed_sample_comments};
 pub use notebook::{Comments, HostAction, HostBar, InMemory, NoteStore, NotebookOptions, Store, View, notebook_view};
-// Markdown to read, and the gallery that shows it with the design system's components.
-pub use reading::{Gallery, MarkdownView};
+// Markdown to read.
+pub use reading::MarkdownView;
 pub(crate) use reading::callout_icon;
 pub use support::page::{PageFiles, PageSource};
 use ui::Icon;

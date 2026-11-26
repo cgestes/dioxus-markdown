@@ -4449,6 +4449,7 @@ version = "0.1.0"
 dependencies = [
  "dioxus",
  "margin-editor",
+ "margin-ui",
  "web-sys",
 ]
 
