@@ -158,7 +158,7 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
                     onclick: move |_| { writing.format(style); } }
             }
             ToolbarSep {}
-            Button { id: "format-comment", class: "format-comment-btn", variant: Variant::Ghost, label: "Add comment", text: "Comment",
+            Button { id: "format-comment", class: "!h-[30px] !px-2 !text-[#fde6b4] !bg-[rgba(236,179,76,0.16)] !type-hint !font-medium hover:!bg-warn hover:!text-on-accent", variant: Variant::Ghost, label: "Add comment", text: "Comment",
                 tip: comment_tip, icon: Icon::Comment, onclick: move |_| { writing.start_comment_from_selection(); } }
         }
     }

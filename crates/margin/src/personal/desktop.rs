@@ -51,8 +51,8 @@ pub(crate) fn open_note(vault: &Vault, requested: Option<&str>) -> Result<String
 #[derive(Clone)]
 pub(crate) struct Menu(pub Signal<bool>);
 
-/// The vault screens' styles (startup, notes menu); the editor brings its own.
-const CSS: &str = include_str!("personal.css");
+const VAULT_BTN: &str = "flex items-center justify-between gap-1.5 h-7 px-2 border border-solid border-transparent rounded-md bg-transparent text-muted type-ui cursor-pointer select-none hover:bg-pale hover:text-accent-deep active:bg-line focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 disabled:text-faint disabled:opacity-36 disabled:bg-transparent disabled:cursor-default";
+const STARTUP_BTN: &str = "flex items-center justify-center gap-1.5 h-7 px-2 border border-solid border-line-strong rounded-md bg-transparent text-muted type-ui cursor-pointer select-none hover:bg-pale hover:text-accent-deep active:bg-line focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1";
 
 #[derive(Clone)]
 pub(super) struct RelayStatus(Arc<Mutex<String>>);
@@ -124,23 +124,22 @@ pub(crate) fn Desktop() -> Element {
     };
     rsx! {
         style { "{margin_ui::CSS}" }
-        style { "{CSS}" }
-        main { class: "vault-startup",
+        main { class: "max-w-[580px] my-16 mx-auto px-6",
             if let Some(error) = error {
-                h1 { "Couldn’t open your notebook" }
-                p { role: "alert", "{error}" }
-                div { class: "vault-actions",
-                    button { id: "vault-retry", aria_label: "Try again", onclick: move |_| {
+                h1 { class: "font-display text-[26px] font-semibold", "Couldn’t open your notebook" }
+                p { class: "text-muted", role: "alert", "{error}" }
+                div { class: "flex gap-2",
+                    button { id: "vault-retry", class: STARTUP_BTN, aria_label: "Try again", onclick: move |_| {
                         if opening.finished() {
                             opening.clear();
                             opening.restart();
                         }
                     }, "Try again" }
-                    button { id: "vault-demo", aria_label: "Open Field notes demo", onclick: move |_| demo.set(true), "Open Field notes demo" }
+                    button { id: "vault-demo", class: STARTUP_BTN, aria_label: "Open Field notes demo", onclick: move |_| demo.set(true), "Open Field notes demo" }
                 }
-                p { "Demo edits last until you close the window." }
+                p { class: "text-muted", "Demo edits last until you close the window." }
             } else {
-                p { role: "status", "Opening your notebook…" }
+                p { class: "text-muted", role: "status", "Opening your notebook…" }
             }
         }
     }
@@ -223,25 +222,25 @@ fn Home() -> Element {
         Ok(Vec::new())
     };
     rsx! {
-        style { "{CSS}" }
         if menu() {
-            div { class: "vault-menu", role: "dialog", aria_label: "Personal notes",
+            div { class: "fixed top-12 left-3 z-[16] flex flex-col gap-1 w-[235px] max-h-[70vh] overflow-auto p-2 bg-page border border-solid border-line rounded-[8px]", role: "dialog", aria_label: "Personal notes",
                 match notes {
                     Ok(ref rows) => rsx! {
                         for (id, title, shared) in rows {
                             button {
-                                key: "{id}", id: "vault-room-{id}",
+                                key: "{id}", id: "vault-room-{id}", class: VAULT_BTN,
                                 onclick: { let id = id.clone(); move |_| pick(Ok(id.clone())) },
                                 "{title}"
-                                small { if *shared { "Paired devices" } else { "Device only" } }
+                                small { class: "text-muted font-sans text-[11px]", if *shared { "Paired devices" } else { "Device only" } }
                             }
                         }
                     },
                     Err(ref error) => rsx! { p { role: "alert", "{error}" } }
                 }
-                button { id: "vault-new", onclick: move |_| pick(v.new_note("", false)), "New private note" }
-                button { id: "vault-publish", onclick: move |_| pick(v.publish(&room.peek())), "Sync a copy of current text" }
+                button { id: "vault-new", class: VAULT_BTN, onclick: move |_| pick(v.new_note("", false)), "New private note" }
+                button { id: "vault-publish", class: VAULT_BTN, onclick: move |_| pick(v.publish(&room.peek())), "Sync a copy of current text" }
                 if FILE_DIALOGS { button {
+                    class: VAULT_BTN,
                     onclick: move |_| {
                         let Some(path) = pick_file() else { return };
                         let room = room();
@@ -256,7 +255,7 @@ fn Home() -> Element {
                     Ok(ref rows) if FILE_DIALOGS => rsx! {
                         for (file, name) in rows {
                             button {
-                                key: "{file}",
+                                key: "{file}", class: VAULT_BTN,
                                 onclick: {
                                     let file = file.clone();
                                     let name = name.clone();

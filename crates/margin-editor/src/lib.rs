@@ -41,8 +41,6 @@ const CSS: &str = concat!(
     include_str!("notebook/editor.css"),
     "\n",
     include_str!("notebook/inspector.css"),
-    "\n",
-    include_str!("comments/comments.css"),
 );
 
 /// The app's name, as `launch` was given it: the notebook's window titles

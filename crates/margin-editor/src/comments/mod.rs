@@ -830,14 +830,23 @@ pub fn CommentInk(writing: Writing, field: Field) -> Element {
     }
     rsx! {
         for (idx, (tid, x, y, w, h, is_active, is_resolved)) in rects.into_iter().enumerate() {
-            span {
-                key: "ci-{tid}-{idx}",
-                id: if idx == 0 { format!("comment-hl-{tid}") } else { format!("comment-hl-{tid}-{idx}") },
-                class: "comment-ink",
-                class: if is_active { "active" },
-                class: if is_resolved { "resolved" },
-                aria_hidden: "true",
-                style: format!("left:{x:.1}px; top:{y:.1}px; width:{w:.1}px; height:{h:.1}px;"),
+            {
+                let ink_cls = if is_resolved {
+                    "bg-[rgba(91,91,214,0.08)] border-b-[rgba(91,91,214,0.28)]"
+                } else if is_active {
+                    "bg-[rgba(236,179,76,0.40)] border-b-warn"
+                } else {
+                    "bg-[rgba(236,179,76,0.22)] border-b-[rgba(201,122,22,0.55)]"
+                };
+                rsx! {
+                    span {
+                        key: "ci-{tid}-{idx}",
+                        id: if idx == 0 { format!("comment-hl-{tid}") } else { format!("comment-hl-{tid}-{idx}") },
+                        class: "comment-ink absolute pointer-events-none select-none border-0 border-b-2 border-solid rounded-[2px] {ink_cls}",
+                        aria_hidden: "true",
+                        style: format!("left:{x:.1}px; top:{y:.1}px; width:{w:.1}px; height:{h:.1}px;"),
+                    }
+                }
             }
         }
     }
@@ -880,29 +889,32 @@ pub fn CommentsPane(writing: Writing) -> Element {
         .collect();
     let empty = visible.is_empty() && draft.is_none();
     rsx! {
-        aside { id: "comments-pane", class: "comments-pane", aria_label: "Document comments",
-            div { class: "comments-head",
-                div { class: "comments-head-row",
-                    span { class: "comments-title", "Comments" }
+        aside {
+            id: "comments-pane",
+            class: "sticky top-9 self-start flex-[0_0_304px] w-[304px] max-h-[calc(100vh-68px)] min-h-0 flex flex-col bg-rail border-0 border-l border-solid border-line select-none max-[720px]:fixed max-[720px]:top-9 max-[720px]:right-0 max-[720px]:bottom-8 max-[720px]:z-[16] max-[720px]:max-h-none max-[720px]:shadow-side",
+            aria_label: "Document comments",
+            div { class: "flex flex-col gap-2 pt-2.5 px-3 pb-2 border-0 border-b border-solid border-line bg-page [&_.ui-segment]:flex-1",
+                div { class: "flex items-center gap-1.5",
+                    span { class: "text-ink type-control", "Comments" }
                     if open_count > 0 { Badge { text: open_count.to_string(), tone: Tone::Warn } }
-                    span { class: "comments-grow" }
+                    span { class: "flex-auto" }
                     Button { id: "close-comments", label: "Close comments", text: "×", variant: Variant::Ghost,
                         onclick: move |_| writing.discussion.open.set(false) }
                 }
                 Segmented { label: "Which threads", items: segments, onselect: move |i: usize| {
                     filter.set([CommentFilter::Open, CommentFilter::Resolved, CommentFilter::All][i]);
                 } }
-                span { class: "comments-counts", "{open_count} open · {resolved_count} resolved" }
+                span { class: "text-faint type-mono-ui", "{open_count} open · {resolved_count} resolved" }
             }
-            div { class: "comments-list",
+            div { class: "flex-auto flex flex-col gap-2.5 p-2.5 overflow-y-auto",
                 if let Some(e) = error { Banner { text: e, tone: Tone::Alert } }
                 if let Some(draft) = draft {
-                    Card { id: "new-comment-card", class: "comment-card draft",
-                        div { class: "comment-card-head",
-                            span { class: "comment-quote", "{draft.quote}" }
+                    Card { id: "new-comment-card", class: "flex flex-col gap-[7px] !p-2.5 !border-warn-line",
+                        div { class: "flex items-center gap-1.5",
+                            span { class: "flex-auto min-w-0 py-0.5 px-1.5 border-0 border-l-[2.5px] border-solid border-l-warn rounded-[3px] bg-warn-wash text-muted type-hint font-medium text-left overflow-hidden whitespace-nowrap text-ellipsis", "{draft.quote}" }
                             Badge { text: writing.discussion.agent.read().alias.clone(), tone: Tone::Accent }
                         }
-                        div { class: "comment-chips",
+                        div { class: "flex flex-wrap gap-1",
                             for (label, ask) in [("Tighten", "Tighten this phrasing"), ("Polish", "Polish and make clearer"), ("Add detail", "Add field detail")] {
                                 Chip { label, onclick: move |_| writing.submit_draft_comment(ask) }
                             }
@@ -911,18 +923,18 @@ pub fn CommentsPane(writing: Writing) -> Element {
                             field_id: "new-comment-input", send_id: "new-comment-post",
                             onsend: move |text: String| writing.submit_draft_comment(&text),
                             onescape: move |_| writing.discussion.draft.set(None) }
-                        div { class: "comment-draft-foot",
+                        div { class: "flex justify-end",
                             Button { id: "new-comment-cancel", label: "Cancel", variant: Variant::Link,
                                 onclick: move |_| writing.discussion.draft.set(None) }
                         }
                     }
                 }
                 if empty {
-                    div { class: "comments-empty",
-                        p { class: "comments-empty-title",
+                    div { class: "py-[18px] px-2.5 text-muted text-center",
+                        p { class: "mt-0 mx-0 mb-1.5 text-ink type-control",
                             if cur_filter == CommentFilter::Resolved { "No resolved comments yet." } else { "No open comments." }
                         }
-                        p { class: "comments-empty-sub", "Select text in the note and click Comment (or " {crate::platform::shortcut("Shift+M")} ") to ask the agent for scoped edits." }
+                        p { class: "m-0 text-muted type-hint leading-[1.5]", "Select text in the note and click Comment (or " {crate::platform::shortcut("Shift+M")} ") to ask the agent for scoped edits." }
                     }
                 }
                 for thread in visible {
@@ -945,12 +957,23 @@ fn ThreadCard(writing: Writing, id: usize, active: bool) -> Element {
     let resolved = thread.file.resolved;
     let current = writing.thread_text(thread);
     let quote = current.clone();
+    let card_state = format!(
+        "flex flex-col gap-[7px] !p-2.5{}{}",
+        if active { " !border-warn-line" } else { "" },
+        if resolved { " opacity-76" } else { "" },
+    );
+    let quote_accent = if resolved {
+        "border-l-accent"
+    } else {
+        "border-l-warn"
+    };
     rsx! {
-        Card { id: format!("comment-thread-{tid}"), class: format!("comment-card{}{}", if active { " active" } else { "" }, if resolved { " resolved" } else { "" }),
+        Card { id: format!("comment-thread-{tid}"), class: card_state,
             onclick: move |_| if *writing.discussion.active.peek() != Some(tid) { writing.discussion.active.set(Some(tid)) },
-            div { class: "comment-card-head",
+            div { class: "flex items-center gap-1.5",
                 Button { id: format!("comment-jump-{tid}"), label: "Jump to anchored text", text: quote, variant: Variant::Bare,
-                    class: "comment-quote-btn", stop: true, onclick: move |_| writing.jump_to_comment(tid) }
+                    class: format!("flex-auto min-w-0 h-auto justify-start py-0.5 px-1.5 border-0 border-l-[2.5px] border-solid {quote_accent} rounded-[3px] bg-warn-wash text-muted hover:text-ink type-hint font-medium text-left overflow-hidden whitespace-nowrap text-ellipsis"),
+                    stop: true, onclick: move |_| writing.jump_to_comment(tid) }
                 Button { id: format!("comment-resolve-{tid}"), label: if resolved { "Reopen thread" } else { "Resolve thread" },
                     text: if resolved { "Reopen" } else { "Resolve" }, variant: Variant::Ghost, stop: true,
                     onclick: move |_| writing.toggle_resolve_comment(tid) }
@@ -971,8 +994,8 @@ fn ThreadCard(writing: Writing, id: usize, active: bool) -> Element {
                 }
             }
             if active {
-                div { class: "comment-reply",
-                    div { class: "comment-chips",
+                div { class: "flex flex-col gap-1.5 mt-0.5 pt-2 border-0 border-t border-solid border-line",
+                    div { class: "flex flex-wrap gap-1",
                         for (label, ask) in [("Shorten", "Shorten this"), ("Polish", "Polish phrasing"), ("Try another", "Try another option")] {
                             Chip { label, stop: true, onclick: move |_| writing.reply_to_comment(tid, ask) }
                         }
@@ -993,15 +1016,17 @@ fn ProposalView(writing: Writing, thread: usize, message: usize, proposal: file:
     let (tid, mi) = (thread, message);
     let applied = proposal.state == ProposalState::Applied;
     rsx! {
-        div { class: "comment-diff",
-            div { class: "comment-diff-head", {Icon::Sparkle.svg("i")} span { "{proposal.label}" } }
-            div { class: "comment-diff-lines",
-                div { class: "comment-diff-del", "- {proposal.old}" }
-                div { class: "comment-diff-add", "+ {proposal.new}" }
+        div { class: "mt-1 overflow-hidden border border-solid border-line rounded-md bg-page",
+            div { class: "flex items-center gap-[5px] py-[5px] px-2 border-0 border-b border-solid border-line bg-wash text-accent-deep type-label [&_.i]:w-3 [&_.i]:h-3",
+                {Icon::Sparkle.svg("i")} span { "{proposal.label}" }
             }
-            div { class: "comment-diff-actions",
+            div { class: "flex flex-col gap-[3px] py-1.5 px-2 type-mono-ui leading-[1.45] select-text",
+                div { class: "py-0.5 px-[5px] rounded-sm bg-alert-wash text-alert line-through", "- {proposal.old}" }
+                div { class: "py-0.5 px-[5px] rounded-sm bg-pale text-accent-deep", "+ {proposal.new}" }
+            }
+            div { class: "flex flex-wrap items-center gap-[5px] py-1.5 px-2 border-0 border-t border-solid border-line bg-surface",
                 if !fits {
-                    span { class: "comment-stale", "The text changed since this suggestion." }
+                    span { class: "flex-[1_1_100%] text-alert type-hint", "The text changed since this suggestion." }
                     Button { id: format!("comment-ask-again-{tid}-{mi}"), label: "Ask again", stop: true,
                         onclick: move |_| writing.reply_to_comment(tid, "The selected text changed. Propose the edit again for the current text.") }
                 } else if applied {
@@ -1012,7 +1037,7 @@ fn ProposalView(writing: Writing, thread: usize, message: usize, proposal: file:
                             onclick: move |_| writing.toggle_resolve_comment(tid) }
                     }
                 } else if proposal.state == ProposalState::Dismissed {
-                    span { class: "comment-stale", "Dismissed." }
+                    span { class: "flex-[1_1_100%] text-alert type-hint", "Dismissed." }
                 } else {
                     Button { id: format!("comment-apply-{tid}-{mi}"), label: "Apply to doc", variant: Variant::Primary, stop: true,
                         onclick: move |_| writing.apply_comment_proposal(tid, mi) }

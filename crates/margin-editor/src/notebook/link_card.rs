@@ -443,13 +443,13 @@ fn LinkEditForm(
     let cancel_edit = move |()| writing.cancel_link_edit();
 
     rsx! {
-        div { class: "ui-link-card-head",
-            span { class: "ui-link-card-edit-heading", "Edit link" }
+        div { class: "flex items-center gap-2 py-[9px] pr-2.5 pl-[13px] border-0 border-b border-solid border-line",
+            span { class: "text-ink-strong type-control leading-[26px]", "Edit link" }
         }
-        div { class: "ui-link-card-form",
-            div { class: "ui-link-card-field",
-                span { class: "ui-link-card-label", "Text" }
-                div { class: "ui-link-card-input",
+        div { class: "flex flex-col gap-[9px] pt-[11px] px-[13px] pb-3",
+            div { class: "flex flex-col gap-1",
+                span { class: "text-faint type-label uppercase", "Text" }
+                div { class: "flex items-center px-[9px] h-[30px] border border-solid border-line-strong rounded-md bg-surface type-ui focus-within:border-accent [&_.ui-field_input]:h-7 [&_.ui-field_input]:leading-7 [&_.ui-field-ph]:leading-7",
                     TextField {
                         id: "link-edit-label",
                         value: edit_label,
@@ -459,9 +459,9 @@ fn LinkEditForm(
                     }
                 }
             }
-            div { class: "ui-link-card-field",
-                span { class: "ui-link-card-label", "Target" }
-                div { class: "ui-link-card-input",
+            div { class: "flex flex-col gap-1",
+                span { class: "text-faint type-label uppercase", "Target" }
+                div { class: "flex items-center px-[9px] h-[30px] border border-solid border-line-strong rounded-md bg-surface type-ui focus-within:border-accent [&_.ui-field_input]:h-7 [&_.ui-field_input]:leading-7 [&_.ui-field-ph]:leading-7",
                     TextField {
                         id: "link-edit-url",
                         value: edit_url,
@@ -471,7 +471,7 @@ fn LinkEditForm(
                     }
                 }
             }
-            div { class: "ui-link-card-form-actions",
+            div { class: "flex items-center justify-end gap-1.5 mt-0.5 [&_.ui-btn]:h-7 [&_.ui-btn]:px-[11px]",
                 Button {
                     id: "link-edit-cancel",
                     variant: Variant::Ghost,
@@ -507,19 +507,24 @@ fn LinkPreviewBody(
     let start_edit_label = current_label;
     let start_edit_url = current_url.clone();
 
+    let target_state = if can_open {
+        "cursor-pointer hover:bg-transparent hover:text-accent-deep [&:hover_.i]:text-accent-deep"
+    } else {
+        "cursor-default hover:bg-transparent hover:text-ink [&:hover_.i]:text-muted"
+    };
+
     rsx! {
-        div { class: "ui-link-card-head",
+        div { class: "flex items-center gap-2 py-[9px] pr-2.5 pl-[13px] border-0 border-b border-solid border-line",
             button {
                 id: "link-card-open",
-                class: "ui-link-card-target",
-                class: if !can_open { "is-static" },
+                class: "flex items-center justify-start gap-[7px] flex-auto min-w-0 h-[26px] m-0 pr-1 pl-0 border-0 rounded-sm bg-transparent text-ink font-sans text-[13.5px] leading-[1.3] font-medium text-left [&_.i]:w-[14px] [&_.i]:h-[14px] [&_.i]:text-muted {target_state}",
                 aria_label: if can_open { format!("Open {}", preview.display_target) } else { preview.display_target.clone() },
                 title: current_url,
                 onclick: move |_| writing.open_link_target(open_target.clone()),
                 {icon(if preview.is_internal { Icon::File } else { Icon::Open })}
-                span { class: "ui-link-card-path", "{preview.display_target}" }
+                span { class: "flex-auto min-w-0 overflow-hidden text-ellipsis whitespace-nowrap", "{preview.display_target}" }
             }
-            div { class: "ui-link-card-actions", role: "group", aria_label: "Link actions",
+            div { class: "flex items-center gap-0.5 flex-none [&_.ui-btn.icon]:w-[26px] [&_.ui-btn.icon]:h-[26px] [&_.ui-btn.icon]:rounded-sm [&_.ui-btn.icon]:text-muted [&_.ui-btn.icon_.tool-icon]:w-[14px] [&_.ui-btn.icon_.tool-icon]:h-[14px] [&_.ui-btn.icon_.tool-icon_svg]:w-[14px] [&_.ui-btn.icon_.tool-icon_svg]:h-[14px]", role: "group", aria_label: "Link actions",
                 Button {
                     id: "link-card-edit",
                     variant: Variant::Icon,
@@ -560,27 +565,27 @@ fn LinkPreviewBody(
                 }
             }
         }
-        div { class: "ui-link-card-body",
-            div { class: "ui-link-card-title", "{preview.title}" }
+        div { class: "flex flex-col gap-[5px] pt-3 px-[14px] pb-[13px]",
+            div { class: "text-ink-strong font-display text-[15px] leading-[1.3] font-semibold tracking-[-0.01em] [overflow-wrap:anywhere]", "{preview.title}" }
             if let Some(sub) = &preview.folder_or_host {
-                div { class: "ui-link-card-sub",
+                div { class: "flex items-center gap-[5px] text-faint font-sans text-[12.5px] leading-[1.3] font-normal [&_.i]:w-[13px] [&_.i]:h-[13px] [&_.i]:text-faint",
                     {icon(if preview.is_internal { Icon::Folder } else { Icon::Link })}
                     span { "{sub}" }
                 }
             }
             if let Some(excerpt) = &preview.excerpt {
-                p { class: "ui-link-card-excerpt", "{excerpt}" }
+                p { class: "mt-[3px] mx-0 mb-0 text-muted font-sans text-[13px] leading-[1.45] font-normal [overflow-wrap:anywhere]", "{excerpt}" }
             }
             if preview.meta_left.is_some() || preview.meta_right.is_some() {
-                div { class: "ui-link-card-meta",
+                div { class: "flex items-center flex-wrap gap-y-1.5 gap-x-[14px] mt-1.5 text-faint type-hint",
                     if let Some(left) = &preview.meta_left {
-                        span { class: "ui-link-card-meta-item",
+                        span { class: "flex items-center gap-[5px] whitespace-nowrap [&_.i]:w-[12.5px] [&_.i]:h-[12.5px] [&_.i]:text-faint",
                             {icon(if preview.is_internal { Icon::Clock } else { Icon::Link })}
                             span { "{left}" }
                         }
                     }
                     if let Some(right) = &preview.meta_right {
-                        span { class: "ui-link-card-meta-item",
+                        span { class: "flex items-center gap-[5px] whitespace-nowrap [&_.i]:w-[12.5px] [&_.i]:h-[12.5px] [&_.i]:text-faint",
                             {icon(if preview.is_internal { Icon::Link } else { Icon::Open })}
                             span { "{right}" }
                         }
@@ -646,7 +651,7 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
     rsx! {
         Popover {
             id: "link-card",
-            class: "ui-link-card link-card",
+            class: "absolute z-[13] !p-0 w-[336px] overflow-hidden",
             role: "dialog",
             label: "Link details",
             keep_focus: !editing,

@@ -630,7 +630,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                         let panel_open = (writing.discussion.open)() && !source();
                         let tip = format!("Toggle comments ({} to comment on selection)", shortcut("Shift+M"));
                         rsx! {
-                            span { class: "dock-comments",
+                            span { class: "relative flex",
                                 ui::Button { id: "toggle-comments", variant: ui::Variant::Icon, label: "Comments", tip, icon: Icon::Comment,
                                     selected: panel_open,
                                     onclick: move |_| {
@@ -644,7 +644,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                                     },
                                 }
                                 if open_comments > 0 {
-                                    span { class: "dock-comments-dot", aria_hidden: "true" }
+                                    span { class: "absolute top-[3px] right-[3px] w-1.5 h-1.5 rounded-full bg-warn pointer-events-none", aria_hidden: "true" }
                                 }
                             }
                         }
@@ -666,8 +666,8 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
             if source() {
                 source::SourceEditor { writing }
             } else {
-                div { class: "editor-shell",
-                    div { class: "editor-main",
+                div { class: "flex-auto flex items-stretch min-h-0 w-full",
+                    div { class: "flex-auto min-w-0 flex flex-col",
                         div { class: "paper", id: "paper",
                     class: if writing.handles.drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
                     onpointerdown: move |e| writing.pointer_down(e),

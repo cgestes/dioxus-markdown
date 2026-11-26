@@ -206,15 +206,16 @@ pub(super) fn Inspector(mut writing: Writing, trace: Signal<Trace>, desktop: boo
     };
     let summary = format!("{field}{where_at}{mismatch}    {last}");
     let status = &history.status;
+    let status_color = if !mismatch.is_empty() { "text-alert" } else { "" };
     rsx! {
-        div { class: "inspect-strip",
-        span { class: "inspect-label", "Inspector" }
-        div { class: "inspect-status", id: "inspect-status", class: if !mismatch.is_empty() { "has-error" }, title: "{summary}  {status}",
+        div { class: "absolute inset-x-0 top-0 h-7 flex items-center gap-3 px-7 max-[650px]:gap-[7px] max-[650px]:px-[14px] bg-wash border-0 border-b border-solid border-line text-accent-deep",
+        span { class: "type-label", "Inspector" }
+        div { class: "flex-1 min-w-0 overflow-hidden whitespace-nowrap type-mono-ui {status_color}", id: "inspect-status", title: "{summary}  {status}",
             "{summary}"
             if !status.is_empty() { "   ·   " }
             span { id: "inspect-save-status", aria_live: "polite", "{status}" }
         }
-        crate::ui::Button { class: "inspect-save", id: "save-inspection", variant: crate::ui::Variant::Ghost, label: "Save inspection report",
+        crate::ui::Button { class: "!flex-none !h-6 !px-2 !text-accent-deep", id: "save-inspection", variant: crate::ui::Variant::Ghost, label: "Save inspection report",
             text: "Save report", tip: "Save Markdown, selection and recent inputs (F9)", keep_focus: true, focusable: false,
             onclick: move |_| {
                 let prior = snapshot(writing);
