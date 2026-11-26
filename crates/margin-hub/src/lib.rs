@@ -34,8 +34,6 @@ fn default_comment_agent() -> String {
     "scribe".into()
 }
 
-/// `Space::write`'s error when the page changed since it was read.
-pub const CONFLICT: &str = "The page changed on the server since it was opened. Reload it before saving.";
 
 impl Endpoints {
     /// Base URLs without a trailing `/`, so paths can be appended.
@@ -240,7 +238,7 @@ impl Space {
     }
 
     /// Write a page if nobody changed it since `etag`. Returns the new version.
-    pub fn write(&self, path: &str, text: &str, etag: Option<&str>) -> Result<Option<String>> {
+    pub fn write(&self, path: &str, text: &str, etag: Option<&str>) -> std::result::Result<Option<String>, WriteError> {
         let mut req = self
             .http
             .put(format!("{}/.fs/{}", self.base, encode_path(path)))
@@ -250,11 +248,11 @@ impl Space {
         if let Some(tag) = etag {
             req = req.header("If-Match", tag);
         }
-        let r = reply(req.send(text))?;
+        let r = reply(req.send(text)).map_err(WriteError::Failed)?;
         if r.status == 412 {
-            return Err(CONFLICT.into());
+            return Err(WriteError::Conflict);
         }
-        Ok(ok(r)?.etag)
+        Ok(ok(r).map_err(WriteError::Failed)?.etag)
     }
 
     pub fn delete(&self, path: &str) -> Result<()> {
@@ -279,7 +277,7 @@ impl PageFiles for Space {
     }
 
     fn write(&self, path: &str, text: &str, etag: Option<&str>) -> std::result::Result<Option<String>, WriteError> {
-        Space::write(self, path, text, etag).map_err(|e| if e == CONFLICT { WriteError::Conflict } else { WriteError::Failed(e) })
+        Space::write(self, path, text, etag)
     }
 
     fn web_url(&self, path: &str) -> String {
