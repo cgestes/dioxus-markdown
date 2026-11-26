@@ -76,7 +76,7 @@ pub fn origin(key: &str) -> Origin {
     if bare == GENERAL_CHAT {
         return Origin::General;
     }
-    if let Some(thread) = bare.strip_prefix(margin_editor_core::comments::request::SESSION_PREFIX) {
+    if let Some(thread) = bare.strip_prefix(margin_core::comments::request::SESSION_PREFIX) {
         return Origin::Comment(thread.into());
     }
     let mut parts = key.split('_');
@@ -273,7 +273,7 @@ pub fn transcript(messages: &[Message]) -> Vec<Turn> {
 
 /// Margin's context ahead of a message: the topic line or a comment's page.
 fn strip_preamble(text: &str) -> &str {
-    if let Some(rest) = margin_editor_core::comments::request::strip_preamble(text) {
+    if let Some(rest) = margin_core::comments::request::strip_preamble(text) {
         return rest;
     }
     text.strip_prefix(PREAMBLE)

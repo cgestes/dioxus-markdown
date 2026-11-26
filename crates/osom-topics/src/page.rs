@@ -1,6 +1,6 @@
 //! Reading a page of the space: its tables, its task items, and the display
 //! text of inline Markdown.
-use margin_editor_core::table;
+use margin_core::table;
 use margin_projection::reading::{self, Block};
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::collections::HashMap;
@@ -39,7 +39,7 @@ pub fn md_tables(md: &str) -> Vec<MdTable> {
         .map(|t| {
             let mut rows = t.texts(md).into_iter();
             MdTable {
-                heading: margin_editor_core::heading::above(md, t.range.start).map(String::from),
+                heading: margin_core::heading::above(md, t.range.start).map(String::from),
                 headers: rows.next().unwrap_or_default(),
                 rows: rows.collect(),
             }

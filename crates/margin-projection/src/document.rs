@@ -104,7 +104,7 @@ pub struct Landmark {
 }
 
 /// The landmarks of a note, in source order.
-pub fn landmarks(md: &str, tables: &[margin_editor_core::table::Table]) -> Vec<Landmark> {
+pub fn landmarks(md: &str, tables: &[margin_core::table::Table]) -> Vec<Landmark> {
     use pulldown_cmark::{Event, Options, Parser, Tag};
     let mut result: Vec<Landmark> = tables
         .iter()

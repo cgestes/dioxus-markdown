@@ -1,8 +1,8 @@
 //! Network access to the topic space (SilverBullet) and the agent (ZeroClaw),
 //! both reached over the tailnet. Every call blocks; the native UI runs them on
 //! worker threads.
-pub use margin_editor_core::agent::{AgentChat, Ask, Canned, ChatEvent};
-use margin_editor_core::files::{PageFiles, Versioned, WriteError};
+pub use margin_core::agent::{AgentChat, Ask, Canned, ChatEvent};
+use margin_core::files::{PageFiles, Versioned, WriteError};
 use osom_topics::{Message, Session, SpaceFile};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::de::DeserializeOwned;

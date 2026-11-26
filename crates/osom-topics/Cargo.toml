@@ -7,7 +7,7 @@ publish = false
 # Osom's model: the topics of the agent's space, its chats and reminders.
 # It parses; osom-hub does the I/O.
 [dependencies]
-margin-editor-core = { path = "../.." }
+margin-core = { path = "../margin-core" }
 # `tasks` reads a page as the notebook does.
 margin-projection = { path = "../margin-projection" }
 pulldown-cmark = { version = "0.13", default-features = false }

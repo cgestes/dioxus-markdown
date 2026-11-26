@@ -1,7 +1,7 @@
 use super::Writing;
 use super::{Field, report};
 use crate::prelude::*;
-use margin_editor_core::checkbox::{Input, Mode, markdown_markers};
+use margin_core::checkbox::{Input, Mode, markdown_markers};
 use crate::platform::text::Cluster;
 
 #[derive(Clone, Copy, PartialEq, Debug)]

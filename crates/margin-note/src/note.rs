@@ -1,5 +1,5 @@
 //! Loro storage for an editable Markdown note.
-use margin_editor_core::checkbox::{Decision, Input, Mode, markdown_markers};
+use margin_core::checkbox::{Decision, Input, Mode, markdown_markers};
 use loro::{
     ExpandType, LoroDoc, LoroResult, LoroValue, StyleConfig, StyleConfigMap, TextDelta, UndoManager,
 };
@@ -11,7 +11,7 @@ use std::{
 
 const CHECKED: &str = "markdown.checked";
 
-pub use margin_editor_core::edit::{Splice, text_change};
+pub use margin_core::edit::{Splice, text_change};
 
 pub struct Note {
     doc: LoroDoc,

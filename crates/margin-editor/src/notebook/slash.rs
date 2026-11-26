@@ -2,7 +2,7 @@
 use super::{Field, Writing, report};
 use crate::Icon;
 use crate::prelude::*;
-use margin_editor_core::callout::CalloutKind;
+use margin_core::callout::CalloutKind;
 
 /// The slash menu: what it offers, and the highlighted row.
 #[derive(Clone, Copy, PartialEq)]

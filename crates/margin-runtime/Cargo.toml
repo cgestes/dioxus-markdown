@@ -9,7 +9,7 @@ publish = false
 # into a newer build (`restart`). Margin's apps and Osom share it; the editor
 # uses its worker and its restart control.
 [dependencies]
-margin-editor-core = { path = "../.." }
+margin-core = { path = "../margin-core" }
 margin-ui = { path = "../margin-ui" }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 futures-channel = "0.3"

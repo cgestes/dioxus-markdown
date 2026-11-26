@@ -15,7 +15,7 @@ pub(crate) use margin_ui::prelude;
 use platform::NodeHandle;
 #[cfg(test)]
 use prelude::*;
-use margin_editor_core::table;
+use margin_core::table;
 use margin_ui as ui;
 #[cfg(test)]
 use margin_ui::typefaces;

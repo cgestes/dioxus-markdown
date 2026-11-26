@@ -11,7 +11,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-margin-editor-core = { path = "../.." }
+margin-core = { path = "../margin-core" }
 margin-note = { path = "../margin-note" }
 margin-projection = { path = "../margin-projection" }
 margin-ui = { path = "../margin-ui" }

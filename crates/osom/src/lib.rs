@@ -33,7 +33,7 @@ use margin_ui::{
 use margin_runtime::worker::{batch, turn, work};
 use margin_editor::{Comments, Host, HostAction, HostBar, MarkdownView, NotebookOptions, View};
 use margin_ui::prelude::*;
-use margin_editor_core::dates;
+use margin_core::dates;
 use osom_hub::{self as hub, Ask, ChatEvent, Endpoints, Page};
 use osom_topics as model;
 use osom_topics::calendar;

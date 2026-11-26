@@ -1,6 +1,6 @@
 //! How the Topics window writes a date: the long form, the short forms, the
 //! two lines of a calendar chip, and how long ago.
-use margin_editor_core::dates::{civil_from_days, iso_date, parse_date};
+use margin_core::dates::{civil_from_days, iso_date, parse_date};
 
 /// Day names from 1970-01-01, a Thursday.
 const WEEKDAYS: [&str; 7] = ["Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"];
@@ -67,7 +67,7 @@ pub fn ago(now: i64, t: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use margin_editor_core::dates::parse_time;
+    use margin_core::dates::parse_time;
 
     #[test]
     fn dates_read_as_the_window_shows_them() {

@@ -6,7 +6,7 @@ publish = false
 
 # A note as a Loro document, and its standalone sync file.
 [dependencies]
-margin-editor-core = { path = "../.." }
+margin-core = { path = "../margin-core" }
 loro = { version = "1.18.0", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

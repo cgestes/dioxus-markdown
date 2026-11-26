@@ -7,7 +7,7 @@ use super::Writing;
 use crate::ui::{Button, Variant};
 use margin_runtime::worker::work;
 use crate::prelude::*;
-pub use margin_editor_core::files::{PageFiles, WriteError};
+pub use margin_core::files::{PageFiles, WriteError};
 use std::sync::Arc;
 
 /// The page a notebook edits.

@@ -1,5 +1,5 @@
 use crate::*;
-use margin_editor_core::{dates, heading::split_heading};
+use margin_core::{dates, heading::split_heading};
 
 const README: &str = "# Procedures\n\n## Channel → folder map\n\n| Slack channel | Channel ID   | Folder |\n|---------------|--------------|--------|\n| DM with luc   | D0DM0000001  | `dm/`  |\n| #car          | C0CAR000001  | `car/` |\n| Telegram car group | -1001000001 | `car/` |\n| Telegram Nikki group | -1001000002 | `people/nikki-sample.md` — everything about Nikki. |\n| Telegram Nikki group (wedding topics) | -1001000002 | `wedding/` — its own project |\n| _(all channels)_ | —         | `people/` — global people registry |\n";
 

@@ -2,7 +2,7 @@
 use super::{Field, Writing, report};
 use crate::table;
 use crate::prelude::*;
-use margin_editor_core::edit::text_change;
+use margin_core::edit::text_change;
 
 impl Writing {
     fn edit_range(mut self, range: std::ops::Range<usize>, text: &str) {
@@ -144,7 +144,7 @@ impl Writing {
                 e.stop_propagation();
                 return true;
             }
-            use margin_editor_core::format::Style;
+            use margin_core::format::Style;
             let style = match (k.to_ascii_lowercase().as_str(), mods.shift()) {
                 ("b", false) => Some(Style::Bold),
                 ("i", false) => Some(Style::Italic),

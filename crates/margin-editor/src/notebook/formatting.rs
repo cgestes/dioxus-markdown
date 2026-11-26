@@ -3,7 +3,7 @@ use crate::platform::text;
 use crate::Icon;
 use crate::ui::{Button, Toolbar, ToolbarLook, ToolbarSep, Variant};
 use crate::prelude::*;
-use margin_editor_core::format::{InlineSelection, Style};
+use margin_core::format::{InlineSelection, Style};
 
 impl Writing {
     fn format_position(self) -> Option<[i32; 2]> {

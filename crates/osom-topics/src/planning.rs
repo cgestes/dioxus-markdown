@@ -1,7 +1,7 @@
 //! What is due and what is open: reminders, key dates and questions.
 use crate::page::{blank, md_tables, plain};
 use crate::space::{Kind, Topic, all};
-use margin_editor_core::dates;
+use margin_core::dates;
 use pulldown_cmark::{Event, Parser, Tag};
 
 /// One row of `reminders.md` "Active items".

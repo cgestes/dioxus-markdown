@@ -836,7 +836,7 @@ pub fn EmptyLineBar(writing: Writing, field: Field) -> Element {
             Button { id: "empty-quote", variant: Variant::Icon, label: "Quote", tip: "Blockquote", icon: crate::Icon::Quote,
                 onclick: move |_| { writing.toggle_line_prefix("> "); } }
             Button { id: "empty-callout", variant: Variant::Icon, label: "Callout", tip: "Callout box", icon: crate::Icon::Info,
-                onclick: move |_| { writing.insert_callout(margin_editor_core::callout::CalloutKind::Note); } }
+                onclick: move |_| { writing.insert_callout(margin_core::callout::CalloutKind::Note); } }
             Button { id: "empty-code", variant: Variant::Icon, label: "Code block", icon: crate::Icon::Code,
                 onclick: move |_| { writing.insert_code_block(); } }
             Button { id: "empty-table", variant: Variant::Icon, label: "Table", tip: "Insert table", icon: crate::Icon::Table,

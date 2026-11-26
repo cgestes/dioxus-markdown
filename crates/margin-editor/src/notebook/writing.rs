@@ -4,8 +4,8 @@ use crate::table::{self, Table};
 use super::{ByteSelection, Field, FocusRequest, Sections, report, selection};
 use crate::NodeHandle;
 use crate::prelude::*;
-use margin_editor_core::checkbox::{Input, Marker, Mode};
-use margin_editor_core::edit::text_change;
+use margin_core::checkbox::{Input, Marker, Mode};
+use margin_core::edit::text_change;
 use margin_note::note::Note;
 use std::ops::Range;
 
@@ -832,7 +832,7 @@ impl Writing {
         report(result, self.message);
     }
 
-    pub fn insert_callout(mut self, kind: margin_editor_core::callout::CalloutKind) {
+    pub fn insert_callout(mut self, kind: margin_core::callout::CalloutKind) {
         let Some(field) = *self.active.peek() else {
             return;
         };

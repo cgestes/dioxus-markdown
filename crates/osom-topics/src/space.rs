@@ -1,7 +1,7 @@
 //! The space's files as topics: a folder, a page in a registry, or a page a
 //! channel routes to.
 use crate::routes::Route;
-use margin_editor_core::heading::{h1, split_heading};
+use margin_core::heading::{h1, split_heading};
 use serde::Deserialize;
 
 /// One entry of SilverBullet's `GET /.fs` listing.
@@ -34,7 +34,7 @@ pub struct Topic {
 
 /// Roots that belong to SilverBullet itself, not to the agent's topics.
 /// Margin's own files (`_margin/comments/…`) are not a topic either.
-const HIDDEN: [&str; 3] = ["Library", "Repositories", margin_editor_core::comments::ROOT];
+const HIDDEN: [&str; 3] = ["Library", "Repositories", margin_core::comments::ROOT];
 /// Folders whose pages are each a topic (one file per person). Their README
 /// relates each page to its owner (`Relationship…` and `File` columns).
 pub const REGISTRIES: [&str; 1] = ["people"];

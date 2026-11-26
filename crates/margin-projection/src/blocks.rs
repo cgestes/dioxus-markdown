@@ -1,5 +1,5 @@
 //! Top-level logical Markdown blocks for left-handle block actions (move, duplicate, delete).
-use margin_editor_core::{edit::Splice, table};
+use margin_core::{edit::Splice, table};
 use std::ops::Range;
 
 /// Split a Markdown document into byte ranges of top-level logical blocks

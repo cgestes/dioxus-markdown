@@ -2,7 +2,7 @@
 //! events stream back to the UI.
 use futures_channel::mpsc::{UnboundedReceiver, unbounded};
 use futures_util::StreamExt;
-use margin_editor_core::agent::{AgentChat, Ask, ChatEvent};
+use margin_core::agent::{AgentChat, Ask, ChatEvent};
 use std::sync::Arc;
 
 /// Run blocking work on a thread and await it from the UI.

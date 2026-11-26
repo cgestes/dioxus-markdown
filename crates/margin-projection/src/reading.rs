@@ -2,7 +2,7 @@
 //! the read-only views. Each displayed run remembers the source bytes that
 //! produced it, including escaped punctuation.
 use crate::syntax::{HighlightSpan, highlight_code};
-use margin_editor_core::{checkbox::markdown_markers, table};
+use margin_core::{checkbox::markdown_markers, table};
 use pulldown_cmark::{
     Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
 };
@@ -128,7 +128,7 @@ fn text_event(lines: &mut [Passage], md: &str, range: Range<usize>, value: &str,
     }
 }
 
-fn split_markers(line: &mut Passage, md: &str, markers: &[margin_editor_core::checkbox::Marker]) {
+fn split_markers(line: &mut Passage, md: &str, markers: &[margin_core::checkbox::Marker]) {
     let first = markers.partition_point(|m| m.open < line.from);
     let markers = &markers[first..markers.partition_point(|m| m.open < line.to)];
     if markers.is_empty() {
@@ -427,7 +427,7 @@ pub fn read(md: &str) -> Vec<Block> {
             }
         }
     }
-    for callout in margin_editor_core::callout::parse_callouts(md) {
+    for callout in margin_core::callout::parse_callouts(md) {
         let first = line_of(&lines, callout.range.start);
         let last = line_of(&lines, callout.range.end.saturating_sub(1));
         let cls = callout.kind.css_class();

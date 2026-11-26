@@ -2320,7 +2320,7 @@ fn comment_files_round_trip_and_reattach_after_outside_edits() {
     other.vdom.in_scope(ScopeId::APP, || {
         let w = consume_context::<Writing>();
         let json = saved.to_json();
-        w.load_comment_file(margin_editor_core::comments::Sidecar::parse(&json).unwrap());
+        w.load_comment_file(margin_core::comments::Sidecar::parse(&json).unwrap());
         let threads = w.discussion.threads.peek();
         let md = w.note.peek().markdown();
         assert_eq!(threads.len(), 2);

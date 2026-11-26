@@ -1,7 +1,7 @@
 //! Source view: one native text input owns the entire Markdown document.
 use super::{ByteSelection, Field, Writing, lists, mounted_field, report, selection};
 use crate::prelude::*;
-use margin_editor_core::edit::text_change;
+use margin_core::edit::text_change;
 
 fn track(writing: Writing, range: ByteSelection) {
     writing.track(range);
@@ -33,7 +33,7 @@ fn key(mut writing: Writing, event: KeyboardEvent) {
         return;
     }
     if mods.intersects(Modifiers::CONTROL | Modifiers::META) {
-        use margin_editor_core::format::{InlineSelection, Style};
+        use margin_core::format::{InlineSelection, Style};
         let Key::Character(k) = &key else {
             return;
         };

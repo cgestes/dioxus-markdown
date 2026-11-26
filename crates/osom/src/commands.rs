@@ -3,7 +3,7 @@
 use crate::cli::{Cli, Command};
 use crate::live::{Live, load};
 use margin_runtime::worker;
-use margin_editor_core::comments as file;
+use margin_core::comments as file;
 use osom_hub::{self as hub, Ask, Endpoints, Space};
 
 /// Run a command that needs no window. Returns an exit code when one ran.

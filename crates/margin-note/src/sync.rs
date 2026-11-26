@@ -397,7 +397,7 @@ impl NoteSync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use margin_editor_core::checkbox::{Input, Mode};
+    use margin_core::checkbox::{Input, Mode};
 
     #[test]
     fn note_sync_persists_pending_and_rebases_comment_anchors_across_epochs() {

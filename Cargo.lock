@@ -4302,6 +4302,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "margin-core"
+version = "0.1.0"
+dependencies = [
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "web-time",
+]
+
+[[package]]
 name = "margin-editor"
 version = "0.1.0"
 dependencies = [
@@ -4316,7 +4326,7 @@ dependencies = [
  "elsa",
  "js-sys",
  "loro",
- "margin-editor-core",
+ "margin-core",
  "margin-note",
  "margin-projection",
  "margin-runtime",
@@ -4334,21 +4344,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "margin-editor-core"
-version = "0.1.0"
-dependencies = [
- "pulldown-cmark",
- "serde",
- "serde_json",
- "web-time",
-]
-
-[[package]]
 name = "margin-note"
 version = "0.1.0"
 dependencies = [
  "loro",
- "margin-editor-core",
+ "margin-core",
  "serde",
  "serde_json",
 ]
@@ -4357,7 +4357,7 @@ dependencies = [
 name = "margin-projection"
 version = "0.1.0"
 dependencies = [
- "margin-editor-core",
+ "margin-core",
  "pulldown-cmark",
  "two-face",
 ]
@@ -4373,7 +4373,7 @@ dependencies = [
  "dioxus-native",
  "futures-channel",
  "futures-util",
- "margin-editor-core",
+ "margin-core",
  "margin-ui",
 ]
 
@@ -5206,8 +5206,8 @@ dependencies = [
  "blitz-traits",
  "clap",
  "dioxus-native",
+ "margin-core",
  "margin-editor",
- "margin-editor-core",
  "margin-runtime",
  "margin-ui",
  "osom-hub",
@@ -5221,7 +5221,7 @@ dependencies = [
 name = "osom-hub"
 version = "0.1.0"
 dependencies = [
- "margin-editor-core",
+ "margin-core",
  "osom-topics",
  "percent-encoding",
  "security-framework 3.7.0",
@@ -5235,7 +5235,7 @@ dependencies = [
 name = "osom-topics"
 version = "0.1.0"
 dependencies = [
- "margin-editor-core",
+ "margin-core",
  "margin-projection",
  "pulldown-cmark",
  "serde",

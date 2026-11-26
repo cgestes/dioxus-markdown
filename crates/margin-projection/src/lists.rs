@@ -1,5 +1,5 @@
-use margin_editor_core::table::eol;
-use margin_editor_core::{callout::strip_quote_marker, edit::Splice};
+use margin_core::table::eol;
+use margin_core::{callout::strip_quote_marker, edit::Splice};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
 

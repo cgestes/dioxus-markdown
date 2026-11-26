@@ -7,7 +7,7 @@ publish = false
 # Markdown as it is shown, for editing and for reading, without Dioxus:
 # `cargo test -p margin-projection` builds no renderer.
 [dependencies]
-margin-editor-core = { path = "../.." }
+margin-core = { path = "../margin-core" }
 pulldown-cmark = { version = "0.13", default-features = false }
 
 # Native builds highlight code blocks; a browser build leaves the grammars out

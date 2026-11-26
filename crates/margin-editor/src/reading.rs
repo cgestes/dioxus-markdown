@@ -4,7 +4,7 @@
 //! the design system knows none.
 use crate::prelude::*;
 use crate::ui::{Icon, icon};
-use margin_editor_core::callout::CalloutKind;
+use margin_core::callout::CalloutKind;
 use margin_projection::reading::{self, Block, Passage};
 
 /// The glyph of a GFM/Obsidian callout, in the editor and in reading.

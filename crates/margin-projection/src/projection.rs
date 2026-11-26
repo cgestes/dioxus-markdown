@@ -11,7 +11,7 @@ use crate::style::{
     INLINE, PUNCTUATION, QUOTE, QUOTE_MARK, RULE, STRIKE, STRONG, callout_style, syntax_style,
 };
 use crate::syntax::highlight_code;
-use margin_editor_core::{
+use margin_core::{
     callout::{ParsedCallout, parse_callouts, strip_quote_marker},
     checkbox::{Marker, marker_beside},
     edit::{Splice, text_change},
@@ -1106,7 +1106,7 @@ impl Projection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use margin_editor_core::checkbox::markdown_markers;
+    use margin_core::checkbox::markdown_markers;
 
     #[test]
     fn markdown_mode_is_tight_at_rest_and_expands_only_the_active_span() {

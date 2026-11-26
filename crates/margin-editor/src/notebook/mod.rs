@@ -19,9 +19,9 @@ pub(crate) use margin_projection::{blocks, document, link_preview, lists, projec
 
 use crate::platform::NodeHandle;
 use crate::prelude::*;
-use margin_editor_core::checkbox::markdown_markers;
+use margin_core::checkbox::markdown_markers;
 use margin_note::note::Note;
-use margin_editor_core::table;
+use margin_core::table;
 use margin_ui::Icon;
 pub(crate) use writing::Writing;
 pub(crate) use document::{LandmarkKind, Sections};

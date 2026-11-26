@@ -160,7 +160,7 @@ mod tests {
     use super::*;
     use margin_editor::CommentAgent;
     use margin_editor::testing::{ask_about, comment_file, threads};
-    use margin_editor_core::comments as file;
+    use margin_core::comments as file;
     use osom_hub::{Endpoints, Space};
 
     /// The notebook asks the real comment agent on a real page of the space,
