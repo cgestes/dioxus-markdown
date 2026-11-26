@@ -10,7 +10,7 @@ use crate::support::worker::{batch, turn, work};
 use crate::{Field, MarkdownView, Writing, report};
 use crate::prelude::*;
 use loro::cursor::Cursor;
-use margin_editor_core::comments::{self as file, ProposalState};
+use margin_editor_core::comments::{self as file, ProposalState, request};
 use margin_editor_core::agent::{self, AgentChat, Canned, ChatEvent};
 use margin_note::note::Note;
 use margin_editor_core::{dates, table};
@@ -229,9 +229,9 @@ pub fn seed_sample_comments(note: &Note) -> Vec<CommentThread> {
 /// The stand-in's answer, written the way an agent writes one: the reply,
 /// then a `margin-edit` block.
 fn mock_reply(ask: &agent::Ask) -> String {
-    let (quote, request) = file::parse_request(&ask.content);
+    let (quote, request) = request::parse_request(&ask.content);
     let (body, label, new) = mock_edit(&quote.unwrap_or_default(), &request, ask.content.contains("table cell:"));
-    format!("{body}\n\n{}\n{label}\n---\n{new}\n```", file::FENCE)
+    format!("{body}\n\n{}\n{label}\n---\n{new}\n```", request::FENCE)
 }
 
 /// A grounded reply and edit from the quote and the request.
@@ -444,7 +444,7 @@ impl Writing {
             let md = self.contents.peek();
             let range = thread_range(&self.note.peek(), &md, t).unwrap_or(0..0);
             let quote = md[range.clone()].to_string();
-            let next = file::turn(&t.file.id, &page, &md, range, prompt, t.seen.clone());
+            let next = request::turn(&t.file.id, &page, &md, range, prompt, t.seen.clone());
             t.file.messages.push(message("You", false, prompt));
             let reply = message(&agent.alias, true, "");
             t.pending = Some(reply.id.clone());
@@ -477,7 +477,7 @@ impl Writing {
                         _ => {}
                     }
                 }
-                let shown = file::visible(&text);
+                let shown = request::visible(&text);
                 if stream.peek().get(&reply).map(String::as_str) != Some(shown) {
                     stream.write().insert(reply.clone(), shown.to_string());
                 }
@@ -491,8 +491,8 @@ impl Writing {
                 };
                 match outcome {
                     Ok(full) => {
-                        m.body = file::visible(&full).to_owned();
-                        m.proposal = file::edit(&full).map(|e| file::Proposal {
+                        m.body = request::visible(&full).to_owned();
+                        m.proposal = request::edit(&full).map(|e| file::Proposal {
                             label: e.label,
                             old: quote.clone(),
                             new: e.replacement,

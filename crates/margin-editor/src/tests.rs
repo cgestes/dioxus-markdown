@@ -3175,9 +3175,9 @@ fn live_comment_streams_a_reply_and_saves_the_thread() {
     let saved = space.read(&file::sidecar_path(page));
     // Clean up before asserting.
     let _ = space.delete(&file::sidecar_path(page));
-    let _ = e.zeroclaw().delete_session(&file::session_id(&thread.file.id));
+    let _ = e.zeroclaw().delete_session(&file::request::session_id(&thread.file.id));
     assert!(!thread.failed.contains(&reply.id) && !reply.body.is_empty(), "the agent answered: {}", reply.body);
-    assert!(!reply.body.contains(file::FENCE), "the edit block never shows");
+    assert!(!reply.body.contains(file::request::FENCE), "the edit block never shows");
     let saved = file::Sidecar::parse(&saved.expect("comment file written").text).unwrap();
     assert_eq!(saved.threads.len(), 1);
     assert_eq!(saved.threads[0].anchor.exact, quote);

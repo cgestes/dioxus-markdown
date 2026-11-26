@@ -49,7 +49,7 @@ fn comment_test(page: &str, quote: &str, request: &str) -> Result<(), String> {
     let zc = e.zeroclaw();
     let md = Space::new(&e.space).read(page)?.text;
     let at = md.find(quote).ok_or_else(|| format!("`{quote}` is not in {page}"))?;
-    let t = file::turn("connection-test", page, &md, at..at + quote.len(), request, None);
+    let t = file::request::turn("connection-test", page, &md, at..at + quote.len(), request, None);
     let ask = Ask {
         agent: e.comment_agent.clone(),
         session: t.session.clone(),
@@ -65,8 +65,8 @@ fn comment_test(page: &str, quote: &str, request: &str) -> Result<(), String> {
     if let Some(err) = &answer.error {
         println!("[error] {err}");
     }
-    println!("── reply ──\n{}", file::visible(&answer.text));
-    match file::edit(&answer.text) {
+    println!("── reply ──\n{}", file::request::visible(&answer.text));
+    match file::request::edit(&answer.text) {
         Some(edit) => println!("── proposal: {} ──\n- {quote}\n+ {}", edit.label, edit.replacement),
         None => println!("── no proposal ──"),
     }
