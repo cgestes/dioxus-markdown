@@ -4,6 +4,7 @@ use super::{Field, Writing, report};
 use dioxus_native::prelude::*;
 use margin_editor_core::callout::CalloutKind;
 use parley::Cluster;
+#[cfg(test)]
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
 
@@ -46,12 +47,14 @@ fn callout_kind_from_style(style: u32) -> Option<CalloutKind> {
         .find(|&kind| style & callout_style(kind) != 0)
 }
 
+#[cfg(test)]
 #[derive(Clone, PartialEq)]
 pub struct Token {
     range: Range<usize>,
     style: u32,
 }
 
+#[cfg(test)]
 pub fn syntax(md: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut links: Vec<(Range<usize>, usize)> = Vec::new();
@@ -325,9 +328,8 @@ impl CalloutBox {
                     },
                     onclick: move |e| {
                         e.stop_propagation();
-                        let mut w = writing;
-                        let next = (*w.callout_menu.peek() != Some(start)).then_some(start);
-                        w.callout_menu.set(next);
+                        let next = (*writing.callout_menu.peek() != Some(start)).then_some(start);
+                        writing.show_callout_menu(next);
                     },
                     span { class: "callout-tag-inner",
                         {icon(Icon::for_callout(kind))}
@@ -525,13 +527,8 @@ const INLINE_STYLES: u32 = STRONG | ITALIC | CODE | LINK | STRIKE | HIGHLIGHT | 
 impl Writing {
     pub fn inline_fields(self) -> Vec<Field> {
         let mut fields = Vec::new();
-        for token in self
-            .syntax
-            .read()
-            .iter()
-            .filter(|t| t.style & INLINE_STYLES != 0)
-        {
-            let field = self.field_at(token.range.start);
+        for start in self.parsed.read().inline_token_starts(INLINE_STYLES) {
+            let field = self.field_at(start);
             if !matches!(field, Field::Body(_)) && !fields.contains(&field) {
                 fields.push(field);
             }

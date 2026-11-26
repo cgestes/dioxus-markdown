@@ -14,6 +14,8 @@ mod grid;
 mod inspector;
 #[path = "native/link_card.rs"]
 mod link_card;
+#[path = "native/link_preview.rs"]
+mod link_preview;
 #[path = "native/lists.rs"]
 mod lists;
 #[cfg(target_os = "macos")]
@@ -509,7 +511,6 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         heights: use_signal(Vec::new),
         heading_heights: use_signal(Vec::new),
         caret_line_col: use_signal(|| None),
-        syntax: use_memo(move || markdown::syntax(&contents.read())),
         ink: use_signal(Vec::new),
         callout_boxes: use_signal(Vec::new),
         code_boxes: use_signal(Vec::new),

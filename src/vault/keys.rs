@@ -215,7 +215,7 @@ impl Locked {
                 let key_path = dir.join("dev-wrapping.key");
                 if create {
                     OsRng.fill_bytes(key.as_mut());
-                    write_dev_key(&key_path, key.as_ref())?;
+                    write_secret(&key_path, key.as_ref())?;
                 } else {
                     let bytes = Zeroizing::new(fs::read(&key_path).with_context(|| {
                         format!(
@@ -249,21 +249,6 @@ impl Locked {
         }
         Ok(key)
     }
-}
-
-#[cfg(debug_assertions)]
-fn write_dev_key(path: &Path, data: &[u8]) -> Result<()> {
-    let mut opts = fs::OpenOptions::new();
-    opts.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
-    }
-    let mut f = opts.open(path)?;
-    f.write_all(data)?;
-    f.sync_all()?;
-    Ok(())
 }
 
 pub fn save_identity(dir: &Path, id: &Identity, pass: Option<&Path>, create: bool) -> Result<()> {

@@ -3095,20 +3095,71 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
     click(&mut doc, "undo");
     assert_eq!(markdown(&doc), MD);
 
-    // 5. Cmd+Shift+H toggles `==highlight==` around selected text.
+    // 5. Cmd+Shift+H toggles `==highlight==` around selected text — both wrap and unwrap,
+    //    including right beside multi-byte UTF-8 characters (no char-boundary panic).
+    let toggle_highlight_key = |doc: &mut DioxusDocument| {
+        doc.handle_ui_event(UiEvent::KeyDown(BlitzKeyEvent {
+            key: Key::Character("h".into()),
+            code: Code::Unidentified,
+            modifiers: Modifiers::META | Modifiers::SHIFT,
+            location: Location::Standard,
+            is_auto_repeating: false,
+            is_composing: false,
+            state: KeyState::Pressed,
+            text: None,
+        }));
+        render(doc);
+    };
     open_body_at(&mut doc, [today_start, today_start + "today".len()]);
-    doc.handle_ui_event(UiEvent::KeyDown(BlitzKeyEvent {
-        key: Key::Character("h".into()),
-        code: Code::Unidentified,
-        modifiers: Modifiers::META | Modifiers::SHIFT,
-        location: Location::Standard,
-        is_auto_repeating: false,
-        is_composing: false,
-        state: KeyState::Pressed,
-        text: None,
-    }));
-    render(&mut doc);
+    toggle_highlight_key(&mut doc);
     assert_eq!(markdown(&doc), MD.replace("today", "==today=="));
+    // Pressing Cmd+Shift+H again unwraps `==today==` back to `today`.
+    toggle_highlight_key(&mut doc);
+    assert_eq!(markdown(&doc), MD);
+
+    // 6. Multi-byte UTF-8 neighbors around toggle_highlight, indented closing code fence body_range,
+    //    and inline_fields() covering highlights and bare URLs in headings & table cells.
+    const EDGE_MD: &str = "# Notes\n\n## ==Bright==\n\nSee —café— here.\n\n| Link | Note |\n| :--- | :--- |\n| https://example.com/cell | ==Hot== |\n\n```rust\nlet x = 1;\n  ```";
+    let mut edge_doc = DioxusDocument::new(
+        VirtualDom::new(|| notebook(EDGE_MD)),
+        dioxus_native::DocumentConfig {
+            font_ctx: Some(typefaces::notebook_fonts()),
+            viewport: Some(Viewport {
+                window_size: (860, 620),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    edge_doc.initial_build();
+    render(&mut edge_doc);
+    edge_doc.inner.borrow_mut().shell_provider = clipboard.clone();
+
+    // Selecting `café` right between 3-byte em-dashes (`—café—`) wraps and unwraps without panicking.
+    let cafe_start = EDGE_MD.find("café").unwrap();
+    edge_doc.vdom.in_scope(ScopeId::APP, || {
+        let w = consume_context::<Writing>();
+        w.open(w.field_at(cafe_start), [cafe_start, cafe_start + "café".len()]);
+    });
+    render(&mut edge_doc);
+    toggle_highlight_key(&mut edge_doc);
+    assert_eq!(markdown(&edge_doc), EDGE_MD.replace("café", "==café=="));
+    toggle_highlight_key(&mut edge_doc);
+    assert_eq!(markdown(&edge_doc), EDGE_MD);
+
+    // Heading highlight and table cell bare URL / highlight are discovered by inline_fields() and painted.
+    edge_doc.vdom.in_scope(ScopeId::APP, || {
+        let w = consume_context::<Writing>();
+        let fields = w.inline_fields();
+        assert!(fields.contains(&Field::Heading(0)), "heading highlight missing: {fields:?}");
+        assert!(fields.contains(&Field::Cell(0, 1, 0)), "cell bare URL missing: {fields:?}");
+        assert!(fields.contains(&Field::Cell(0, 1, 1)), "cell highlight missing: {fields:?}");
+    });
+
+    // Indented closing code fence copies exact code body without trailing whitespace/newline.
+    let indented_code_start = EDGE_MD.find("```rust").unwrap();
+    click(&mut edge_doc, &format!("code-copy-{indented_code_start}"));
+    assert_eq!(clipboard.0.lock().unwrap().as_str(), "let x = 1;");
 }
 
 #[path = "tests/live_workflows.rs"]

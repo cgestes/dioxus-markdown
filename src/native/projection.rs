@@ -118,6 +118,15 @@ pub struct ParsedMarkdown {
     pub code_blocks: Vec<ParsedCodeBlock>,
 }
 
+impl ParsedMarkdown {
+    pub fn inline_token_starts(&self, mask: u32) -> impl Iterator<Item = usize> + '_ {
+        self.tokens
+            .iter()
+            .filter(move |t| t.style & mask != 0)
+            .map(|t| t.range.start)
+    }
+}
+
 fn find_bare_urls(text: &str, base: usize) -> Vec<Range<usize>> {
     let mut out = Vec::new();
     let mut at = 0;
@@ -368,7 +377,8 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                             if last.len() >= ticks && last.bytes().all(|b| b == ch) {
                                 let close =
                                     range.start + tail.len() - last.len()..range.start + tail.len();
-                                body_end = close.start.saturating_sub(1).max(body_start);
+                                let close_line_start = range.start + tail.len() - final_line.len();
+                                body_end = close_line_start.saturating_sub(1).max(body_start);
                                 if body_end > body_start && md.as_bytes().get(body_end - 1) == Some(&b'\r') {
                                     body_end -= 1;
                                 }

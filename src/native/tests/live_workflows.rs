@@ -769,10 +769,11 @@ fn ux_polish_showcase_renders_rich_markdown_and_table_controls() {
 
 #[test]
 fn only_one_menu_is_open_at_a_time() {
-    const MD: &str = "Intro\n\n\n| Stop | Take |\n| --- | --- |\n| North | 45 s |";
+    const MD: &str = "Intro\n\n> [!NOTE]\n> Callout body\n\n\n| Stop | Take |\n| --- | --- |\n| North | 45 s |";
     run("one-menu", MD, (900, 680), 1, |s| {
         let shown = |s: &Session, id: &str| s.doc.inner.borrow().get_element_by_id(id).is_some();
         let blank = MD.find("\n\n\n").unwrap() + 2;
+        let callout_start = MD.find("> [!NOTE]").unwrap();
         s.click_at_text("cell-0-1-0", 2);
         s.button("row-menu-btn-0-1");
         assert!(shown(s, "row-menu-0-1"));
@@ -790,6 +791,14 @@ fn only_one_menu_is_open_at_a_time() {
         // Menus of the same table replace each other too.
         s.button("col-menu-btn-0-1");
         assert!(shown(s, "col-menu-0-1") && !shown(s, "row-menu-0-1"));
+        // Opening the callout type picker closes the table menu, and vice versa.
+        s.button(&format!("callout-badge-{callout_start}"));
+        assert!(shown(s, "callout-menu"), "callout menu opens");
+        assert!(!shown(s, "col-menu-0-1"), "table menu closed");
+        s.hover("cell-0-1-1");
+        s.button("row-menu-btn-0-1");
+        assert!(shown(s, "row-menu-0-1"), "row menu opens");
+        assert!(!shown(s, "callout-menu"), "callout menu closed");
     });
 }
 

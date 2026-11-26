@@ -315,11 +315,8 @@ impl Writing {
             return false;
         }
         self.note.peek().remember_selection([anchor, head]);
-        let (range, replacement, next_sel) = if lo >= 2
-            && hi + 2 <= md.len()
-            && &md[lo - 2..lo] == "=="
-            && &md[hi..hi + 2] == "=="
-        {
+        let (range, replacement, next_sel) =
+            if md[..lo].ends_with("==") && md[hi..].starts_with("==") {
             let inner = selected.to_owned();
             let s = lo - 2;
             let e = s + inner.len();
