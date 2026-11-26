@@ -166,6 +166,27 @@ These touch the most files.
 
 One check fails today for a reason outside this plan: `test:web` stops at the phone column handle (`#col-menu-btn-0-2`), since commit `b4c2cc3` removed the handle shown after a tap. Until that is fixed or the test is changed, the gate for check 5 is "no new failure".
 
+## Result
+
+All checks pass after the last step: no warnings natively or for wasm, 168 tests with default features and with all features, the headless editor suite, the offline browser suite, and every app and test build resolves each shared crate to the same features.
+
+Rebuilding the four binaries after an edit in one crate, in seconds:
+
+| Crate edited | Time | Crate edited | Time |
+| --- | ---: | --- | ---: |
+| `margin-core` | 4.3 | `osom-topics` | 2.6 |
+| `margin-ui` | 4.7 | `osom-hub` | 2.2 |
+| `margin-runtime` | 4.5 | `margin-vault` | 1.6 |
+| `margin-note` | 3.7 | `margin` | 1.2 |
+| `margin-projection` | 3.5 | `osom` | 1.1 |
+| `margin-editor` | 3.1 | | |
+
+Not checked:
+
+- `test:web` still stops at the phone column handle, as before the plan (see the checks section).
+- The real-window key test (`scripts/test-editor` without `--headless`) was not run after step 4.2, which moved the macOS key bridge: it takes over the keyboard. Run it once by hand.
+- The live comment test (`cargo test -p osom live_comment -- --ignored`) was moved and compiles, but was not run: it needs the tailnet and a token. An editor test checks the hooks it uses against the stand-in agent.
+
 ## Decisions
 
 | # | Decision | Taken |
