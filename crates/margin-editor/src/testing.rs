@@ -1,6 +1,6 @@
 //! Drive a rendered document from tests: render it, find elements, click,
-//! select, type and read fields. The editor's own tests use it; other crates
-//! enable the `testing` feature in their dev-dependencies.
+//! select, type and read fields. The editor's own tests use it, and so do the
+//! tests of the apps that embed the editor.
 use blitz_dom::Document;
 use blitz_traits::events::{BlitzImeEvent, BlitzKeyEvent, KeyState, MouseEventButtons, UiEvent};
 use blitz_traits::shell::Viewport;

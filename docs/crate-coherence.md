@@ -1,6 +1,6 @@
 # Crate coherence: audit and plan
 
-Status: proposed, 2026-11-26. Nothing in this plan is done yet.
+Status: in progress, 2026-11-26. Phase 1 is done; the decisions below are taken.
 
 The question: does each crate provide one thing, contain only what serves it, and expose an interface that matches? Eight of the thirteen crates do. Four do not, and one has a duplicated concept. This document lists every finding, the layout to aim for, and the steps to get there.
 
@@ -103,7 +103,7 @@ What changes in the dependency graph: the core loses its optional feature and th
 
 Every step is one commit and leaves the workspace building and green. Sizes: S is under an hour, M a few hours, L a day.
 
-### Phase 1: clean up, no interface change
+### Phase 1: clean up, no interface change (done)
 
 | Step | Change | Findings | Size |
 | --- | --- | --- | --- |
@@ -146,11 +146,11 @@ These touch the most files. Do them when no other branch is in flight.
 | 4.3 | Rename `margin-hub` to `osom-hub` | H1 | S |
 | 4.4 | Move the root crate to `crates/margin-core` and rename it. The root `Cargo.toml` becomes a workspace manifest only. 50 references in 27 files and 6 manifests change. | C1 | M |
 
-### Phase 5: after a decision
+### Phase 5: last
 
 | Step | Change | Findings | Size |
 | --- | --- | --- | --- |
-| 5.1 | `NoteSync`: either keep it and say in its doc that it is the vault's planned recovery layer, not yet used, or remove the protocol and keep a small note file for `--sync-file` | N1 | S or M |
+| 5.1 | Remove `NoteSync`'s protocol and keep a small note file for `--sync-file`. It can be rebuilt if the vault needs it. | N1 | M |
 | 5.2 | Optional renames for the shared names (`Message`, `Thread`, `Turn`) | X1 | M |
 
 ## Checks after every step
@@ -166,16 +166,16 @@ These touch the most files. Do them when no other branch is in flight.
 
 One check fails today for a reason outside this plan: `test:web` stops at the phone column handle (`#col-menu-btn-0-2`), since commit `b4c2cc3` removed the handle shown after a tap. Until that is fixed or the test is changed, the gate for check 5 is "no new failure".
 
-## Decisions needed
+## Decisions
 
-| # | Decision | Recommendation |
+| # | Decision | Taken |
 | --- | --- | --- |
-| D1 | Rename and move the root crate to `crates/margin-core` (step 4.4)? | Yes, last, as a rename with no other change |
-| D2 | `NoteSync`'s protocol: keep for the vault's recovery, or remove (step 5.1)? | Keep and label it, if the vault is going to adopt it; otherwise remove |
-| D3 | Name of the new runtime crate (step 4.2) | `margin-runtime` |
-| D4 | Rename the hub to `osom-hub` (step 4.3)? | Yes |
-| D5 | Highlighting chosen by target instead of a Cargo feature (step 4.1)? | Yes: no build can then disagree about it |
-| D6 | Rename the shared names (step 5.2)? | Only the two `Ask` types (step 2.3); leave the rest |
+| D1 | Rename and move the root crate to `crates/margin-core` (step 4.4)? | Yes: `margin-core`, as the last boundary step, a rename with no other change |
+| D2 | `NoteSync`'s protocol: keep for the vault's recovery, or remove (step 5.1)? | Remove; rebuild it if it is needed |
+| D3 | Name of the new runtime crate (step 4.2) | `margin-runtime` (default) |
+| D4 | Rename the hub to `osom-hub` (step 4.3)? | Yes (default) |
+| D5 | Highlighting chosen by target instead of a Cargo feature (step 4.1)? | Yes (default): no build can then disagree about it |
+| D6 | Rename the shared names (step 5.2)? | Only the two `Ask` types (step 2.3); the rest stay (default) |
 
 ## What stays as it is
 

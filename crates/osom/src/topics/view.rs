@@ -1,5 +1,5 @@
 //! What the Topics window shows, whatever it came from: the live space
-//! (SilverBullet + ZeroClaw) or the demo data in `topics_demo`.
+//! (SilverBullet + ZeroClaw) or the demo data in `demo`.
 pub use osom_topics::{KeyDate, Question as QuestionRow, Source, Turn as ChatLine};
 
 pub use margin_ui::{Channel, Hue, Icon};

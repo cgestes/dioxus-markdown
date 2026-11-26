@@ -1,5 +1,5 @@
 //! Where the Topics window's data comes from: the live space and agent, or
-//! the demo. Both end as a `topics_view::Workspace`.
+//! the demo. Both end as a `view::Workspace`.
 use crate::topics::demo;
 use crate::topics::view::*;
 use margin_editor_core::dates;

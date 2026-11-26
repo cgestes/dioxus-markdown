@@ -282,7 +282,7 @@ pub struct Ask {
     pub seen: Option<String>,
 }
 
-/// Opens Margin's comment preamble; `topics::transcript` hides it.
+/// Opens Margin's comment preamble; `osom_topics::transcript` hides it.
 pub const PREAMBLE_MARK: &str = "[Margin comment]";
 
 /// What a new comment session learns before its first message: how to
