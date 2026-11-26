@@ -3,7 +3,7 @@
 //! has no vault yet, so the note lives in memory.
 #[cfg(target_arch = "wasm32")]
 mod page {
-    use dioxus::prelude::*;
+    use margin_ui::prelude::*;
     use margin_editor::{Comments, INPUT_CHECK, InMemory, MarkdownView, NotebookOptions, SAMPLE, Store, notebook_view};
     use margin_ui::gallery::{GRID, Gallery, section};
     use margin_ui::{Card, CardTitle, Icon};

@@ -11,7 +11,7 @@ use dioxus_native::{DioxusDocument, NodeId};
 /// fonts in an 820 × 520 window.
 pub fn open(dom: VirtualDom) -> DioxusDocument {
     let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(margin_ui::typefaces::notebook_fonts()),
+        font_ctx: Some(margin_ui::typefaces::fonts()),
         viewport: Some(Viewport {
             window_size: (820, 520),
             ..Default::default()

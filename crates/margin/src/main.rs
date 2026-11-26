@@ -7,7 +7,7 @@ mod personal;
 #[cfg(test)]
 mod tests;
 
-use dioxus_native::prelude::*;
+use margin_ui::prelude::*;
 use margin_editor::{Comments, INPUT_CHECK, InMemory, MarkdownView, NoteStore, NotebookOptions, SAMPLE, Store, launch, notebook_view};
 use margin_note::note::Note;
 use margin_ui::gallery::{GRID, Gallery, section};

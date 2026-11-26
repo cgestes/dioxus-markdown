@@ -296,7 +296,7 @@ pub fn launch(title: &str, size: (f64, f64), root: fn() -> Element) {
     {
         let config = dioxus_native::Config::new()
             .with_window_attributes(window)
-            .with_font_ctx(margin_ui::typefaces::notebook_fonts());
+            .with_font_ctx(margin_ui::typefaces::fonts());
         dioxus_native::launch_cfg(root, vec![], vec![Box::new(config)]);
     }
 }

@@ -2,7 +2,7 @@
 //! the Dioxus thread.
 use margin_editor::notebook_view;
 use anyhow::{Result, ensure};
-use dioxus_native::prelude::*;
+use margin_ui::prelude::*;
 use futures_util::StreamExt;
 use loro::LoroDoc;
 use margin_note::note::Note;

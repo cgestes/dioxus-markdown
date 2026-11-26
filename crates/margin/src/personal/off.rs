@@ -1,6 +1,6 @@
 //! Built without the `vault` feature: there is no personal notebook, and
 //! `margin` opens the Field notes sample in its place.
-use dioxus_native::prelude::*;
+use margin_ui::prelude::*;
 
 /// What the status bar says about a note kept nowhere: here, every note.
 pub(crate) const UNSAVED: &str = "Not saved: this build has no vault (build with --features vault)";

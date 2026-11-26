@@ -251,7 +251,7 @@ mod tests {
         use dioxus_native::DioxusDocument;
         let (w, h) = (1180u32, 2200u32);
         let config = dioxus_native::DocumentConfig {
-            font_ctx: Some(crate::typefaces::notebook_fonts()),
+            font_ctx: Some(crate::typefaces::fonts()),
             viewport: Some(Viewport { window_size: (w, h), ..Default::default() }),
             ..Default::default()
         };

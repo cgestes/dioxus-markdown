@@ -16,7 +16,6 @@ margin-editor = { path = "../margin-editor" }
 margin-note = { path = "../margin-note" }
 margin-ui = { path = "../margin-ui" }
 clap = { version = "4", features = ["derive"] }
-dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude"] }
 # The personal notebook only (the `vault` feature).
 margin-vault = { path = "../margin-vault", optional = true }
 anyhow = { version = "1", optional = true }

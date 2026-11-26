@@ -30,7 +30,7 @@ use margin_ui::{
 };
 use margin_editor::support::worker::{batch, turn, work};
 use margin_editor::{Comments, HostAction, HostBar, MarkdownView, NotebookOptions};
-use dioxus_native::prelude::*;
+use margin_ui::prelude::*;
 use margin_editor_core::dates;
 use margin_hub::{self as hub, Ask, ChatEvent, Endpoints, Page};
 use osom_topics as model;
@@ -495,7 +495,7 @@ mod tests {
             let start = Start::new(!live, Some(open), Some(tab), Some(doc));
             let (w, h) = (1320u32, 860u32);
             let config = dioxus_native::DocumentConfig {
-                font_ctx: Some(margin_ui::typefaces::notebook_fonts()),
+                font_ctx: Some(margin_ui::typefaces::fonts()),
                 viewport: Some(Viewport { window_size: (w, h), ..Default::default() }),
                 ..Default::default()
             };

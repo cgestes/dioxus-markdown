@@ -128,7 +128,7 @@ pub(crate) fn launch(window: WindowAttributes, root: fn() -> Element) {
     let doc = DioxusDocument::new(
         VirtualDom::new(root),
         DocumentConfig {
-            font_ctx: Some(margin_ui::typefaces::notebook_fonts()),
+            font_ctx: Some(margin_ui::typefaces::fonts()),
             ..Default::default()
         },
     );

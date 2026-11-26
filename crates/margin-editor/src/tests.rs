@@ -9,7 +9,7 @@ use dioxus_native::{DioxusDocument, NodeId};
 
 fn editor() -> DioxusDocument {
     let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
+        font_ctx: Some(typefaces::fonts()),
         viewport: Some(Viewport {
             window_size: (820, 520),
             ..Default::default()
@@ -1219,7 +1219,7 @@ fn arrows_follow_the_visible_caret_on_a_long_retina_page() {
     let mut doc = DioxusDocument::new(
         VirtualDom::new(|| notebook(SAMPLE)),
         dioxus_native::DocumentConfig {
-            font_ctx: Some(typefaces::notebook_fonts()),
+            font_ctx: Some(typefaces::fonts()),
             viewport: Some(Viewport {
                 window_size: (1200, 720),
                 hidpi_scale: 2.0,
@@ -1721,7 +1721,7 @@ fn rich_mode_has_no_global_toolbar_and_empty_line_shows_inline_icons() {
 #[test]
 fn live_mode_displays_bold_edits_striked_and_paints_visible_caret() {
     // Both JetBrains Mono and Geist must register weight 400 and 600 under their CSS family names.
-    let mut fonts = crate::typefaces::notebook_fonts();
+    let mut fonts = crate::typefaces::fonts();
     for name in ["JetBrains Mono", "Geist"] {
         let id = fonts
             .collection
@@ -1993,7 +1993,7 @@ fn selecting_on_title_and_formatted_prose_keeps_delimiters_steady_without_wiggle
 #[test]
 fn table_buttons_work_at_retina_and_hover() {
     let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
+        font_ctx: Some(typefaces::fonts()),
         viewport: Some(Viewport {
             window_size: (1840, 1300),
             hidpi_scale: 2.0,
@@ -2342,7 +2342,7 @@ fn long_table_cell_wraps_around_its_caret_and_craft_handles_sit_on_edges() {
 
     for scale in [1.0_f32, 2.0_f32] {
         let config = dioxus_native::DocumentConfig {
-            font_ctx: Some(typefaces::notebook_fonts()),
+            font_ctx: Some(typefaces::fonts()),
             viewport: Some(Viewport {
                 window_size: ((820.0 * scale) as u32, (560.0 * scale) as u32),
                 hidpi_scale: scale,
@@ -2511,7 +2511,7 @@ fn long_table_cell_wraps_around_its_caret_and_craft_handles_sit_on_edges() {
 fn link_card_preview_copy_edit_remove_dismiss_and_anchor_jump() {
     const MD: &str = "# Field notes\n\nSee [Work Log](brain/log \"Append-only audit trail. Add one dated entry per turn.\") and [canal guide](https://example.com/guide) or jump to [Listening stops](#listening-stops).\n\n## Listening stops\n\nMorning fog along the lock gate.\n\n| Stop | Notes |\n| :--- | :--- |\n| [North lock](locks/north) | 45 s |";
     let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
+        font_ctx: Some(typefaces::fonts()),
         viewport: Some(Viewport {
             window_size: (820, 560),
             ..Default::default()
@@ -2740,7 +2740,7 @@ fn enter_continues_and_exits_blockquotes_in_live_rich_and_source() {
 fn callouts_render_insert_via_slash_and_empty_bar_and_continue_on_enter() {
     const MD: &str = "# Field notes\n\n> [!NOTE]\n> Recorder packed with **fresh** batteries.\n\n> [!TIP] Quick check\n> Press `/` on an empty line.\n\n> [!WARNING]\n> Check the lock gate.\n\n";
     let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
+        font_ctx: Some(typefaces::fonts()),
         viewport: Some(Viewport {
             window_size: (860, 620),
             ..Default::default()
@@ -2842,7 +2842,7 @@ fn callouts_render_insert_via_slash_and_empty_bar_and_continue_on_enter() {
 fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
     const MD: &str = "# Notes\n\nCheck ==key phrase== and https://example.com/docs today.\n\n> Line one\n> Line two\n\n```rust\nfn main() {}\n```";
     let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
+        font_ctx: Some(typefaces::fonts()),
         viewport: Some(Viewport {
             window_size: (860, 620),
             ..Default::default()
@@ -3051,7 +3051,7 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
     let mut edge_doc = DioxusDocument::new(
         VirtualDom::new(|| notebook(EDGE_MD)),
         dioxus_native::DocumentConfig {
-            font_ctx: Some(typefaces::notebook_fonts()),
+            font_ctx: Some(typefaces::fonts()),
             viewport: Some(Viewport {
                 window_size: (860, 620),
                 ..Default::default()
@@ -3136,7 +3136,7 @@ fn live_comment_streams_a_reply_and_saves_the_thread() {
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(LiveEditor, LiveEditorProps { text: text.clone(), options }),
         dioxus_native::DocumentConfig {
-            font_ctx: Some(margin_ui::typefaces::notebook_fonts()),
+            font_ctx: Some(margin_ui::typefaces::fonts()),
             ..Default::default()
         },
     );

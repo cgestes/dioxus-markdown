@@ -4287,7 +4287,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "dioxus-native",
  "futures-channel",
  "futures-util",
  "loro",
@@ -4393,8 +4392,6 @@ dependencies = [
  "dioxus-native",
  "parley",
  "png 0.18.1",
- "wasm-bindgen",
- "web-sys",
  "workspace-hack",
 ]
 
@@ -4447,7 +4444,6 @@ dependencies = [
 name = "margin-web"
 version = "0.1.0"
 dependencies = [
- "dioxus",
  "margin-editor",
  "margin-ui",
  "web-sys",

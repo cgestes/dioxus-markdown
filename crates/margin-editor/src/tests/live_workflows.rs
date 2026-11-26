@@ -229,7 +229,7 @@ fn run(
     steps: impl FnOnce(&mut Session),
 ) {
     let config = dioxus_native::DocumentConfig {
-        font_ctx: Some(typefaces::notebook_fonts()),
+        font_ctx: Some(typefaces::fonts()),
         viewport: Some(Viewport {
             window_size: (logical.0 * scale, logical.1 * scale),
             hidpi_scale: scale as f32,
