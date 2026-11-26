@@ -323,6 +323,7 @@ fn table_pointer_edit_tab_delete_and_undo() {
             "cell-0-1-0",
             [edited.find("old").unwrap(), edited.find("old").unwrap() + 3],
         );
+        s.hover("slot-0-1-0");
         s.button("col-menu-btn-0-0");
         s.button("col-menu-delete-0-0");
         let one = "# Table\n\n| B |\n| --- |\n| s!ix |\n\nTail";
@@ -338,6 +339,7 @@ fn table_pointer_edit_tab_delete_and_undo() {
             .push("Click the right rail beside the column button".into());
         click_at(&mut s.doc, "grid-scroll-0", Some((width as f32 + 9., 8.)));
         s.expect(&edited, "cell-0-0-1", [edited.find("B |").unwrap() + 1; 2]);
+        s.hover("slot-0-0-1");
         s.button("col-menu-btn-0-1");
         s.button("col-menu-insert-right-0-1");
         let wider =
@@ -739,6 +741,50 @@ fn floating_format_bar_keeps_text_selection_focus_and_undo_in_prose_and_cells() 
 }
 
 #[test]
+fn floating_format_bar_stays_close_to_selected_table_cell() {
+    const MD: &str = "# Sheet\n\n| Item | Note |\n| --- | --- |\n| Row 1 | Alpha |\n| Row 2 | Beta |\n| Row 3 | Gamma |\n| Row 4 | Delta |\n| Row 5 | Epsilon |";
+    run("table-format-bar", MD, (840, 620), 1, |s| {
+        s.click_at_text("cell-0-5-1", 2);
+        select(&s.doc, "cell-0-5-1", [0, "Epsilon".len()]);
+        send_key(
+            &mut s.doc,
+            Key::Named(NamedKey::Shift),
+            KeyState::Released,
+            false,
+        );
+        let (bar, cell, table) = {
+            let inner = s.doc.inner.borrow();
+            let bar_id = inner
+                .get_element_by_id("format-bar")
+                .expect("format-bar should be visible for cell selection");
+            let cell_id = inner.get_element_by_id("cell-0-5-1").unwrap();
+            let table_id = inner.get_element_by_id("grid-scroll-0").unwrap();
+            (
+                inner.get_client_bounding_rect(bar_id).unwrap(),
+                inner.get_client_bounding_rect(cell_id).unwrap(),
+                inner.get_client_bounding_rect(table_id).unwrap(),
+            )
+        };
+        let gap_above = cell.y - (bar.y + bar.height);
+        assert!(
+            (2.0..=16.0).contains(&gap_above),
+            "expected format-bar right above cell-0-5-1 (cell.y={:.1}, bar.y={:.1}, bar.h={:.1}, table.y={:.1}, gap={:.1})",
+            cell.y,
+            bar.y,
+            bar.height,
+            table.y,
+            gap_above,
+        );
+        assert!(
+            bar.y > table.y,
+            "format-bar should stay near row 5 rather than jumping above the table header (bar.y={:.1}, table.y={:.1})",
+            bar.y,
+            table.y,
+        );
+    });
+}
+
+#[test]
 fn ux_polish_showcase_renders_rich_markdown_and_table_controls() {
     const MD: &str = "# Field notes\n\nRecorder packed [ ]. Rain cover ready [x]. Visit [canal](https://example.com).\n\n\n> Morning fog along the lock gate.\n\n---\n\n## Listening stops\n\n| Stop | Listen for | Take |\n| :--- | :--- | ---: |\n| North lock | **Water** through the gate | 45 s |\n| Footbridge | Steps on `steel` deck | 30 s |\n\n- [ ] Leave **ten seconds** of silence.\n- [x] Set the recorder to `48 kHz`.";
     run("ux-showcase", MD, (900, 680), 1, |s| {
@@ -898,5 +944,134 @@ fn callouts_visual_showcase() {
         let tip_pos = MD.find("[!TIP]").unwrap() + 3;
         open_body_at(&mut s.doc, [tip_pos; 2]);
         s.capture("live-callouts-editing-tag");
+    });
+}
+
+#[test]
+fn code_block_visual_showcase() {
+    const MD: &str = "# Notes\n\n```rust\n// greet\nfn main() {\n    let msg = \"hello\";\n}\n```\n\n| Item | Description |\n| --- | --- |\n| Lock | Water rushing steadily through the north lock gate and down the stone basin |";
+    run("code-block-showcase", MD, (860, 560), 2, |s| {
+        s.button("rich-mode");
+        s.capture("rich-code-and-table");
+
+        let code_start = MD.find("```rust").unwrap();
+        let trigger_id = format!("code-lang-{code_start}");
+        s.button(&trigger_id);
+        assert!(s.doc.inner.borrow().get_element_by_id("code-lang-menu").is_some());
+        let trig_r = bounds(&s.doc, &trigger_id);
+        let menu_r0 = bounds(&s.doc, "code-lang-menu");
+        assert!(
+            menu_r0[1] >= trig_r[1] + trig_r[3],
+            "popover {menu_r0:?} should sit cleanly below trigger {trig_r:?}"
+        );
+        assert!(
+            menu_r0[0] >= 8.0 && menu_r0[0] + menu_r0[2] <= 852.0 && menu_r0[1] + menu_r0[3] <= 552.0,
+            "popover {menu_r0:?} must stay inside viewport"
+        );
+        s.capture("rich-code-lang-open");
+
+        s.hover("code-lang-pick-tsx");
+        assert_eq!(bounds(&s.doc, "code-lang-menu"), menu_r0);
+        s.capture("rich-code-lang-hover");
+
+        // Diagonal wheel over list: must scroll vertically only, never sideways, never chain to page.
+        let list_r = bounds(&s.doc, "code-lang-menu-list");
+        let cx = (list_r[0] + list_r[2] / 2.) as f32;
+        let cy = (list_r[1] + list_r[3] / 2.) as f32;
+        s.hover("code-lang-pick-tsx");
+        s.doc.handle_ui_event(UiEvent::Wheel(blitz_traits::events::BlitzWheelEvent {
+            delta: blitz_traits::events::BlitzWheelDelta::Pixels(-80.0, -140.0),
+            coords: blitz_traits::events::PointerCoords {
+                page_x: cx,
+                page_y: cy,
+                screen_x: cx,
+                screen_y: cy,
+                client_x: cx,
+                client_y: cy,
+            },
+            buttons: MouseEventButtons::None,
+            mods: Modifiers::empty(),
+            element: Default::default(),
+        }));
+        render(&mut s.doc);
+        let (scroll_after_wheel, vp_scroll) = {
+            let dom = s.doc.inner.borrow();
+            let lid = dom.get_element_by_id("code-lang-menu-list").unwrap();
+            (*dom.get_node(lid).unwrap().scroll_offset(), dom.viewport_scroll())
+        };
+        assert_eq!(scroll_after_wheel.x, 0.0, "combobox list must never scroll horizontally");
+        assert!(
+            (scroll_after_wheel.y - 140.0).abs() < 1.0,
+            "combobox list should scroll vertically by 140px, got {scroll_after_wheel:?}"
+        );
+        assert_eq!(vp_scroll.y, 0.0, "wheeling inside combobox must not scroll the page");
+        s.capture("rich-code-lang-wheel");
+
+        // Hover a visible scrolled item: scroll must stay put.
+        s.hover("code-lang-pick-json");
+        let scroll_after_hover = {
+            let dom = s.doc.inner.borrow();
+            let lid = dom.get_element_by_id("code-lang-menu-list").unwrap();
+            *dom.get_node(lid).unwrap().scroll_offset()
+        };
+        assert_eq!(scroll_after_hover, scroll_after_wheel);
+        s.capture("rich-code-lang-wheel-hover");
+
+        // Typing a filter must reset list scroll back to top so filtered items stay visible.
+        s.commit("py");
+        let scroll_after_type = {
+            let dom = s.doc.inner.borrow();
+            let lid = dom.get_element_by_id("code-lang-menu-list").unwrap();
+            *dom.get_node(lid).unwrap().scroll_offset()
+        };
+        assert_eq!(
+            scroll_after_type.y, 0.0,
+            "filtering must reset list scroll to top, got {scroll_after_type:?}"
+        );
+        let list_r_filt = bounds(&s.doc, "code-lang-menu-list");
+        let py_r = bounds(&s.doc, "code-lang-pick-python");
+        assert!(
+            py_r[1] >= list_r_filt[1] - 0.5 && py_r[1] + py_r[3] <= list_r_filt[1] + list_r_filt[3] + 0.5,
+            "Python row {py_r:?} must be visible inside filtered list {list_r_filt:?}"
+        );
+        s.capture("rich-code-lang-filtered");
+
+        // Clear filter and press ArrowDown 10 times: list must scroll to keep active item in view.
+        s.named(NamedKey::Backspace);
+        s.named(NamedKey::Backspace);
+        for _ in 0..10 {
+            s.named(NamedKey::ArrowDown);
+        }
+        let scroll_after_arrows = {
+            let dom = s.doc.inner.borrow();
+            let lid = dom.get_element_by_id("code-lang-menu-list").unwrap();
+            *dom.get_node(lid).unwrap().scroll_offset()
+        };
+        assert!(
+            scroll_after_arrows.y > 0.0,
+            "ArrowDown past visible items must scroll the list, got {scroll_after_arrows:?}"
+        );
+        s.capture("rich-code-lang-arrows");
+    });
+
+    // Near the bottom of the window, the combobox popover must flip above the trigger
+    // so it stays completely on top of the window without clipping.
+    const BOTTOM_MD: &str = "# Notes\n\nLine 1\n\nLine 2\n\nLine 3\n\nLine 4\n\nLine 5\n\nLine 6\n\n```rust\nfn main() {}\n```";
+    run("code-block-bottom-flip", BOTTOM_MD, (860, 460), 2, |s| {
+        s.button("rich-mode");
+        let code_start = BOTTOM_MD.find("```rust").unwrap();
+        let trigger_id = format!("code-lang-{code_start}");
+        s.button(&trigger_id);
+        let trig_r = bounds(&s.doc, &trigger_id);
+        let menu_r = bounds(&s.doc, "code-lang-menu");
+        assert!(
+            menu_r[1] + menu_r[3] <= trig_r[1] + 0.5,
+            "near bottom of viewport, popover {menu_r:?} should flip above trigger {trig_r:?}"
+        );
+        assert!(
+            menu_r[1] >= 8.0 && menu_r[1] + menu_r[3] <= 452.0,
+            "flipped popover {menu_r:?} must stay inside viewport"
+        );
+        s.capture("rich-code-lang-flipped-above");
     });
 }

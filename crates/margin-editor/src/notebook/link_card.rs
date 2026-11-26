@@ -175,6 +175,7 @@ impl Writing {
             || self.table_menu.peek().is_some()
             || self.block_menu.peek().is_some()
             || self.callout_menu.peek().is_some()
+            || self.code_lang_menu.peek().is_some()
             || self.marker.peek().is_some()
         {
             return None;

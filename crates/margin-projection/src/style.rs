@@ -1,6 +1,7 @@
 //! The style flags of a display token: one bit per kind of Markdown span or
 //! marker, so a token inside bold link text carries `STRONG | LINK`.
 use margin_editor_core::callout::CalloutKind;
+use margin_editor_core::syntax::HighlightKind;
 
 pub const STRONG: u32 = 1;
 pub const ITALIC: u32 = 2;
@@ -22,8 +23,19 @@ pub const CALLOUT_IMPORTANT: u32 = 1 << 18;
 pub const CALLOUT_WARNING: u32 = 1 << 19;
 pub const CALLOUT_CAUTION: u32 = 1 << 20;
 pub const HIGHLIGHT: u32 = 1 << 21;
+/// 4-bit syntax token kind stored in bits 24..28 (`0` = none, `1..=10` = `HighlightKind`).
+pub const SYNTAX_SHIFT: u32 = 24;
+pub const SYNTAX_MASK: u32 = 0xF << SYNTAX_SHIFT;
 pub const CALLOUT_ANY: u32 =
     CALLOUT_NOTE | CALLOUT_TIP | CALLOUT_IMPORTANT | CALLOUT_WARNING | CALLOUT_CAUTION;
+
+pub const fn syntax_style(kind: HighlightKind) -> u32 {
+    (kind as u32) << SYNTAX_SHIFT
+}
+
+pub const fn syntax_kind(style: u32) -> HighlightKind {
+    HighlightKind::from_u8(((style & SYNTAX_MASK) >> SYNTAX_SHIFT) as u8)
+}
 
 pub fn callout_style(kind: CalloutKind) -> u32 {
     match kind {

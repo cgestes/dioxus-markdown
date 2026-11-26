@@ -236,7 +236,11 @@ impl Writing {
             if *self.heading_heights.peek() != heading_heights {
                 self.heading_heights.set(heading_heights);
             }
-            let row_heights = (self.tables.peek().iter().enumerate())
+            let row_heights = self
+                .tables
+                .peek()
+                .iter()
+                .enumerate()
                 .map(|(t, grid)| {
                     (0..grid.rows.len())
                         .map(|r| {
@@ -338,6 +342,11 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
         FieldEvent::Composing => {
             if writing.cells.peek().is_some() {
                 writing.cell_editing.set(true);
+            }
+        }
+        FieldEvent::ViewportChanged => {
+            if writing.code_lang_menu.peek().is_some() {
+                writing.code_lang_menu.set(None);
             }
         }
         FieldEvent::Changed => {

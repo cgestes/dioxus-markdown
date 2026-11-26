@@ -82,21 +82,20 @@ impl Writing {
         if matches!(field, Field::Body(_)) && above < rect.y - 6. && bottom + 48. <= f64::from(h) {
             above = min_top - 1.;
         }
-        if let Field::Cell(t, ..) = field
-            && let Some(table) = doc
-                .get_element_by_id(&format!("grid-scroll-{t}"))
-                .and_then(|id| doc.get_client_bounding_rect(id))
-        {
-            if table.y >= min_top + 46. {
-                above = table.y - 46.;
-            } else if table.y + table.height + 46. <= f64::from(h) {
-                above = min_top - 1.;
-                bottom = table.y + table.height;
-            }
+        if matches!(field, Field::Cell(..)) {
+            // Anchor tightly above (or below) the active cell rather than jumping
+            // to the top/bottom of the whole table.
+            above = rect.y - 46.;
+            bottom = rect.y + rect.height;
         }
+        let anchor_x = if matches!(field, Field::Cell(..)) {
+            (x + line_x / scale).clamp(rect.x, rect.x + rect.width)
+        } else {
+            x + line_x / scale
+        };
         let bar_w = 276.;
         Some([
-            (x + line_x / scale - bar_w / 2.)
+            (anchor_x - bar_w / 2.)
                 .clamp(8., (f64::from(w) - bar_w - 8.).max(8.))
                 .round() as i32,
             (if above >= min_top { above } else { bottom + 8. })

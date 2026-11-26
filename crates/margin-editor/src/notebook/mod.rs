@@ -337,6 +337,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         callout_boxes: use_signal(Vec::new),
         code_boxes: use_signal(Vec::new),
         callout_menu: use_signal(|| None),
+        code_lang_menu: use_signal(|| None),
         caret: use_signal(|| None),
         active: use_signal(|| initial_field.filter(|f| *f != Field::Source)),
         body: use_signal(|| None),
@@ -461,6 +462,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         writing.callout_boxes.read();
         writing.code_boxes.read();
         writing.callout_menu.read();
+        writing.code_lang_menu.read();
         writing.boxes.read();
         writing.format_position.read();
         writing.empty_line.read();

@@ -1121,6 +1121,7 @@ pub fn use_field_watch(_root: Signal<Option<NodeHandle>>, on_event: impl FnMut(F
         let doc: web_sys::EventTarget = page().into();
         listeners.add(&doc, "selectionchange", false, notify(|| {}));
         listeners.add(&doc, "compositionstart", false, {
+            let on_event = on_event.clone();
             let changed = changed.clone();
             move |_| {
                 set_composing(true);
@@ -1130,7 +1131,14 @@ pub fn use_field_watch(_root: Signal<Option<NodeHandle>>, on_event: impl FnMut(F
         });
         listeners.add(&doc, "compositionend", false, notify(|| set_composing(false)));
         listeners.add(&doc, "scroll", true, notify(|| {}));
-        listeners.add(&window().into(), "resize", false, notify(|| {}));
+        listeners.add(&window().into(), "resize", false, {
+            let on_event = on_event.clone();
+            let changed = changed.clone();
+            move |_| {
+                (on_event.borrow_mut())(FieldEvent::ViewportChanged);
+                changed.request();
+            }
+        });
         // A face that arrives after its text was measured moves every glyph.
         listeners.add(&page().fonts().into(), "loadingdone", false, notify(text::forget_layouts));
         Rc::new(listeners)

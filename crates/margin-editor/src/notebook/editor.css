@@ -27,11 +27,6 @@
 .restart-app { color: var(--accent-deep); border-color: var(--accent-deep); }
 .history-tools { padding-left: 5px; border-left: 1px solid var(--line); gap: 1px; }
 .mode-dock .ui-btn.icon { width: 26px; height: 24px; border-radius: 5px; }
-.rich-mode .body-editor, .rich-mode .prose-block .md-ink { font: var(--font-prose); }
-.rich-mode .prose-block .md-ink.strong,
-.rich-mode .prose-block .md-ink.callout-title-ink { font-weight: 600; }
-/* Rich mode: code keeps the field's face so the chip spans exactly its text. */
-.rich-mode .prose-block .md-ink.code { font: var(--font-prose); }
 /* The empty-line tools are a ui::Toolbar (inline); placed next to the caret. */
 .empty-line-tools { position: absolute; z-index: 4; }
 
@@ -41,6 +36,7 @@
 .title-row, .sheet-body, .prose-block, .block-wrap { position: relative; }
 .prose-block { overflow: hidden; }
 .paper input, .paper textarea { caret-color: var(--accent-deep); }
+.paper .note-title, .paper textarea.body-editor, .paper .grid-cell { caret-color: transparent; }
 .note-title {
     display: block; width: 100%; min-height: 44px; margin: 0; padding: 0;
     border: 0; background: transparent; color: var(--ink);
@@ -113,6 +109,17 @@ textarea.body-editor {
 .md-ink.code { font-family: var(--mono); background: var(--pale); color: var(--accent-deep); border-radius: 3px; }
 .cell-field .md-ink.code, .title-row .md-ink.code { font-family: inherit; }
 .md-ink.code-block { font-family: var(--mono); background: var(--rail); color: var(--ink); }
+.md-ink.code-block.punctuation { color: var(--punct); }
+.md-ink.code-block.tok-comment { color: var(--syn-comment); font-style: italic; }
+.md-ink.code-block.tok-keyword { color: var(--syn-keyword); }
+.md-ink.code-block.tok-string { color: var(--syn-string); }
+.md-ink.code-block.tok-number { color: var(--syn-number); }
+.md-ink.code-block.tok-type { color: var(--syn-type); }
+.md-ink.code-block.tok-function { color: var(--syn-function); }
+.md-ink.code-block.tok-constant { color: var(--syn-constant); }
+.md-ink.code-block.tok-attribute { color: var(--syn-attribute); }
+.md-ink.code-block.tok-operator { color: var(--syn-operator); }
+.md-ink.code-block.tok-tag { color: var(--syn-tag); }
 .md-ink.link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .md-ink.highlight { background: var(--warn-wash); border-radius: 3px; }
 .md-ink.strike { text-decoration: line-through; }
@@ -173,13 +180,12 @@ textarea.body-editor {
 .notebook.embedded .code-bg { left: -8px; right: -8px; }
 .code-tools {
     position: absolute; right: -4px; z-index: 4;
-    display: flex; align-items: center; gap: 4px;
+    display: flex; align-items: center; gap: 3px;
+    padding: 0 2px; border-radius: var(--radius-s);
+    background: rgba(243, 242, 239, .9);
 }
+.code-tools.menu-open { z-index: 30; }
 .notebook.embedded .code-tools { right: 0; }
-.code-lang {
-    padding: 2px 6px; border-radius: var(--radius-s);
-    color: var(--faint); font: var(--font-mono-ui); user-select: none; pointer-events: none;
-}
 .code-tools .ui-btn.icon { width: 24px; height: 24px; border-radius: var(--radius-s); color: var(--muted); }
 .code-tools .ui-btn.icon .tool-icon,
 .code-tools .ui-btn.icon .tool-icon svg { width: 13px; height: 13px; }
@@ -192,7 +198,7 @@ textarea.body-editor {
 /* Match Blitz's native text-input selection highlight (rgb(180, 213, 255)) over --page. */
 .selection-ink { background: rgba(81, 161, 255, 0.42); }
 .caret-ink {
-    position: absolute; z-index: 3; width: 1.5px;
+    position: absolute; z-index: 3; width: 2px;
     background: var(--accent-deep); pointer-events: none; user-select: none;
 }
 .ledger-head .caret-ink { background: var(--accent-deep); }
@@ -220,7 +226,7 @@ textarea.body-editor {
 .paper .grid-cell {
     position: absolute; left: 0; top: 0; width: 100%; height: 100%;
     margin: 0; padding: 0 2px 0 0; border: 0; border-radius: 0; outline: 0;
-    color: inherit; caret-color: currentColor; background: transparent; font: inherit;
+    color: inherit; caret-color: transparent; background: transparent; font: inherit;
     white-space: pre-wrap; overflow: hidden; resize: none;
 }
 .cell-field .md-ink { background: var(--cell-paper); }
@@ -235,7 +241,13 @@ textarea.body-editor {
 }
 .ledger.engaged .ledger-col-handle, .ledger:hover .ledger-col-handle,
 .ledger.engaged .ledger-row-handle, .ledger:hover .ledger-row-handle {
-    opacity: 1; pointer-events: auto;
+    opacity: 0.72; pointer-events: auto;
+}
+.ledger.engaged .ledger-col-handle:hover, .ledger.engaged .ledger-col-handle:focus-visible, .ledger.engaged .ledger-col-handle.open,
+.ledger:hover .ledger-col-handle:hover, .ledger:hover .ledger-col-handle:focus-visible, .ledger:hover .ledger-col-handle.open,
+.ledger.engaged .ledger-row-handle:hover, .ledger.engaged .ledger-row-handle:focus-visible, .ledger.engaged .ledger-row-handle.open,
+.ledger:hover .ledger-row-handle:hover, .ledger:hover .ledger-row-handle:focus-visible, .ledger:hover .ledger-row-handle.open {
+    opacity: 1;
 }
 .ledger.engaged .ledger-axis-btn, .ledger:hover .ledger-axis-btn {
     opacity: 0.55; pointer-events: auto;
@@ -264,9 +276,8 @@ textarea.body-editor {
     opacity: 1; pointer-events: auto;
 }
 .ledger .cell-slot.is-editing { outline: 0; }
-.range-outline, .cell-outline { position: absolute; inset: 0 -1px -1px 0; pointer-events: none; border-style: solid; border-color: var(--ledger-ring); }
-.cell-outline { border-width: 2px; border-color: var(--cell-ring); }
-.cell-slot:last-child .range-outline, .cell-slot:last-child .cell-outline { right: 0; }
+.range-outline, .cell-outline { position: absolute; inset: 0; pointer-events: none; border-style: solid; border-color: var(--ledger-ring); }
+.cell-outline { border-width: 1px; border-color: var(--cell-ring); }
 /* The format bar is a ui::Toolbar (floating); placed over the selection. */
 .format-bar { position: fixed; z-index: 9; width: auto; min-width: 190px; max-width: calc(100vw - 16px); }
 

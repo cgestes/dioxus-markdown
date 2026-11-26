@@ -22,6 +22,30 @@ fn editor() -> DioxusDocument {
     doc
 }
 
+fn hover(doc: &mut DioxusDocument, name: &str) {
+    let element = id(doc, name);
+    let mut pointer = doc
+        .inner
+        .borrow()
+        .get_node(element)
+        .unwrap()
+        .synthetic_click_event_data(Modifiers::empty());
+    {
+        let dom = doc.inner.borrow();
+        let rect = dom.get_client_bounding_rect(element).unwrap();
+        let scroll = dom.viewport_scroll();
+        let x = (rect.x + rect.width * 0.5) as f32;
+        let y = (rect.y + rect.height * 0.5) as f32;
+        pointer.coords.page_x = x + scroll.x as f32;
+        pointer.coords.client_x = x;
+        pointer.coords.screen_x = x;
+        pointer.coords.page_y = y + scroll.y as f32;
+        pointer.coords.client_y = y;
+        pointer.coords.screen_y = y;
+    }
+    doc.handle_ui_event(UiEvent::PointerMove(pointer));
+    render(doc);
+}
 fn move_body(doc: &mut DioxusDocument, range: ByteSelection) {
     select(doc, "note-body", range);
     send_key(doc, Key::Named(NamedKey::Shift), KeyState::Released, false);
@@ -751,6 +775,24 @@ fn arrows_visit_each_blank_heading_and_table_row_once_in_both_directions() {
         press(&mut doc, Key::Named(NamedKey::ArrowUp), false);
         assert_focus(&doc, field, [at; 2]);
     }
+    // ArrowDown on the last line moves to the end of the line (and Shift+ArrowDown selects to end);
+    // ArrowUp on the first line moves to the start of the line (and Shift+ArrowUp selects to start).
+    open_markdown(&mut doc, md, md.find("End").unwrap() + 1);
+    assert_focus(&doc, "note-body-2", [2; 2]);
+    chord(&mut doc, Key::Named(NamedKey::ArrowDown), Modifiers::SHIFT);
+    assert_focus(&doc, "note-body-2", [2, 4]);
+    open_markdown(&mut doc, md, md.find("End").unwrap() + 1);
+    press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
+    assert_focus(&doc, "note-body-2", [4; 2]);
+    press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
+    assert_focus(&doc, "note-body-2", [4; 2]);
+    open_markdown(&mut doc, md, 4);
+    assert_focus(&doc, "note-title", [4; 2]);
+    chord(&mut doc, Key::Named(NamedKey::ArrowUp), Modifiers::SHIFT);
+    assert_focus(&doc, "note-title", [4, 0]);
+    open_markdown(&mut doc, md, 4);
+    press(&mut doc, Key::Named(NamedKey::ArrowUp), false);
+    assert_focus(&doc, "note-title", [0; 2]);
     click(&mut doc, "source-mode");
     assert_eq!(value(&doc, "markdown"), md);
 }
@@ -819,10 +861,22 @@ fn grid_growth_controls_occupy_the_right_and_bottom_edges_only_on_engagement() {
     let earlier = bounds(&doc, "note-body-1");
     press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
     press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
-    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_some());
+    // Navigating into a table with the keyboard keeps the `...` handles hidden.
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_none());
     press(&mut doc, Key::Named(NamedKey::ArrowDown), false);
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_none());
+    // Hovering a cell reveals the column and row `...` handles without shifting layout.
+    hover(&mut doc, "slot-0-1-0");
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_some());
     assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_some());
     assert_eq!(bounds(&doc, "note-body-1"), earlier);
+    // Typing in the cell hides the `...` handles again; moving the mouse brings them back.
+    commit_text(&mut doc, "!");
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_none());
+    hover(&mut doc, "slot-0-1-0");
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_some());
     click(&mut doc, "note-title");
     assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_none());
     assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-1").is_none());
@@ -1360,8 +1414,10 @@ fn delete_selected_column_is_scoped_undoable_and_keeps_a_caret() {
         .replace("| :--- | --- | ---: |", "| :--- | ---: |")
         .replace("| 🌿 | c |", "| c |");
     assert_focus(&doc, "cell-1-1-1", [0, 1]);
+    hover(&mut doc, "slot-1-1-1");
     click(&mut doc, "col-menu-btn-1-1");
     click(&mut doc, remove);
+    hover(&mut doc, "slot-1-1-0");
     click(&mut doc, "col-menu-btn-1-0");
     assert_eq!(
         doc.inner
@@ -1538,7 +1594,10 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     // Alt+Right moves column right directly from the keyboard!
     chord(&mut doc, Key::Named(NamedKey::ArrowRight), Modifiers::ALT);
     assert!(markdown(&doc).contains("| Take | Stop |"), "{}", markdown(&doc));
-    // Only the hovered/active column & row show chevron menus (no floating toolbar or + buttons).
+    // Keyboard navigation hides the `...` handles; hovering a cell reveals only that column & row.
+    assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-1").is_none());
+    assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-2").is_none());
+    hover(&mut doc, "slot-0-2-1");
     assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-1").is_some());
     assert!(doc.inner.borrow().get_element_by_id("col-menu-btn-0-0").is_none());
     assert!(doc.inner.borrow().get_element_by_id("row-menu-btn-0-2").is_some());
@@ -1551,9 +1610,11 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "col-menu-move-left-0-1");
     assert!(markdown(&doc).contains("| Stop | Take |"));
+    hover(&mut doc, "slot-0-2-0");
     click(&mut doc, "col-menu-btn-0-0");
     click(&mut doc, "col-menu-move-right-0-0");
     assert!(markdown(&doc).contains("| Take | Stop |"));
+    hover(&mut doc, "slot-0-2-1");
     click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "col-menu-move-left-0-1");
     assert!(markdown(&doc).contains("| Stop | Take |"));
@@ -1563,15 +1624,19 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-right-0");
     assert!(markdown(&doc).contains("| --- | ---: |"));
+    hover(&mut doc, "slot-0-1-1");
     click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-center-0");
     assert!(markdown(&doc).contains("| --- | :---: |"));
+    hover(&mut doc, "slot-0-1-1");
     click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "align-left-0");
     assert!(markdown(&doc).contains("| --- | :--- |"));
+    hover(&mut doc, "slot-0-1-1");
     click(&mut doc, "col-menu-btn-0-1");
     click(&mut doc, "col-menu-insert-right-0-1");
     assert!(markdown(&doc).contains("| Stop | Take | Column 3 |"));
+    hover(&mut doc, "slot-0-1-2");
     click(&mut doc, "col-menu-btn-0-2");
     click(&mut doc, "col-menu-delete-0-2");
     assert!(markdown(&doc).contains("| Stop | Take |"));
@@ -1580,6 +1645,7 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     click(&mut doc, "col-menu-insert-left-0-0");
     assert!(markdown(&doc).contains("| Column 3 | Stop | Take |"));
     assert!(doc.inner.borrow().get_element_by_id("delete-column-0").is_none());
+    hover(&mut doc, "slot-0-1-0");
     click(&mut doc, "col-menu-btn-0-0");
     click(&mut doc, "col-menu-delete-0-0");
     assert!(markdown(&doc).contains("| Stop | Take |"));
@@ -1589,15 +1655,19 @@ fn docked_table_bar_and_alt_arrows_move_align_and_insert_rows_and_cols() {
     click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "row-menu-insert-above-0-1");
     assert!(markdown(&doc).contains("| --- | :--- |\n|  |  |\n| Bridge | 30 s |"));
+    hover(&mut doc, "slot-0-1-0");
     click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "row-menu-delete-0-1");
     assert!(!markdown(&doc).contains("|  |  |"));
+    hover(&mut doc, "slot-0-1-0");
     click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "row-menu-move-down-0-1");
     assert!(markdown(&doc).contains("| Lock | 45 s |\n| Bridge | 30 s |"));
+    hover(&mut doc, "slot-0-2-0");
     click(&mut doc, "row-menu-btn-0-2");
     click(&mut doc, "row-menu-move-up-0-2");
     assert!(markdown(&doc).contains("| Bridge | 30 s |\n| Lock | 45 s |"));
+    hover(&mut doc, "slot-0-1-0");
     click(&mut doc, "row-menu-btn-0-1");
     click(&mut doc, "row-menu-insert-below-0-1");
     assert!(markdown(&doc).contains("| Bridge | 30 s |\n|  |  |\n| Lock | 45 s |"));
@@ -2001,6 +2071,13 @@ fn table_buttons_work_at_retina_and_hover() {
         "real click on col-menu-move-left-0-1 failed: {}",
         markdown(&doc)
     );
+    let b0 = bounds(&doc, "slot-0-1-0");
+    send_ptr(
+        &mut doc,
+        (b0[0] + b0[2] * 0.5) as f32,
+        (b0[1] + b0[3] * 0.5) as f32,
+        "move",
+    );
     real_click(&mut doc, "col-menu-btn-0-0");
     assert!(
         doc.inner.borrow().get_element_by_id("col-menu-0-0").is_some(),
@@ -2282,6 +2359,7 @@ fn long_table_cell_wraps_around_its_caret_and_craft_handles_sit_on_edges() {
         doc.initial_build();
         render(&mut doc);
         open_markdown(&mut doc, &md, md.find(long_left).unwrap());
+        hover(&mut doc, "slot-0-1-1");
 
         // 1. Craft-inspired triple-dot handles sit straddling the top edge of col 1 and left edge of row 1.
         let grid_rect = bounds(&doc, "grid-scroll-0");
@@ -2805,6 +2883,131 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
     );
     click(&mut doc, &format!("code-copy-{code_start}"));
     assert_eq!(clipboard.0.lock().unwrap().as_str(), "fn main() {}");
+
+    // 3b. Syntax highlighting emits semantic `.tok-*` ink overlays when enabled.
+    let fn_at = MD.find("fn main").unwrap();
+    let main_at = MD.find("main()").unwrap();
+    let (fn_class, main_class) = {
+        let inner = doc.inner.borrow();
+        let class_of = |offset: usize| {
+            inner
+                .get_element_by_id(&format!("ink-{offset}"))
+                .and_then(|id| inner.get_node(id))
+                .and_then(|n| n.attr("class".into()))
+                .unwrap_or("")
+                .to_owned()
+        };
+        (class_of(fn_at), class_of(main_at))
+    };
+    #[cfg(feature = "syntax-highlighting")]
+    {
+        assert!(
+            fn_class.contains("code-block") && fn_class.contains("tok-keyword"),
+            "expected `fn` ink to have code-block + tok-keyword, got: {fn_class:?}"
+        );
+        assert!(
+            main_class.contains("code-block") && main_class.contains("tok-function"),
+            "expected `main` ink to have code-block + tok-function, got: {main_class:?}"
+        );
+    }
+    #[cfg(not(feature = "syntax-highlighting"))]
+    {
+        assert!(
+            fn_class.contains("code-block") && !fn_class.contains("tok-"),
+            "expected plain code-block ink when feature disabled, got: {fn_class:?}"
+        );
+        let _ = main_class;
+    }
+
+    // 3c. Caret inside a code block keeps a constant width across every character
+    //     (never oscillating between 1px and 2px on fractional monospace advances),
+    //     and closing fences blend into the code-block surface.
+    let close_fence_at = MD.rfind("```").unwrap();
+    let close_fence_class = {
+        let inner = doc.inner.borrow();
+        inner
+            .get_element_by_id(&format!("ink-{close_fence_at}"))
+            .and_then(|id| inner.get_node(id))
+            .and_then(|n| n.attr("class".into()))
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert!(
+        close_fence_class.contains("code-block") && close_fence_class.contains("punctuation"),
+        "expected closing fence to carry code-block + punctuation, got: {close_fence_class:?}"
+    );
+    open_body_at(&mut doc, [fn_at; 2]);
+    let expected_w = bounds(&doc, "caret-ink")[2];
+    assert!(
+        (expected_w - 2.0).abs() < 0.01,
+        "expected crisp 2px caret width, got {expected_w}"
+    );
+    for step in 1..=8 {
+        press(&mut doc, Key::Named(NamedKey::ArrowRight), false);
+        let w = bounds(&doc, "caret-ink")[2];
+        assert!(
+            (w - expected_w).abs() < 0.01,
+            "caret width changed at step {step}: got {w}, expected {expected_w}"
+        );
+    }
+
+    // 3d. Rich mode hides ``` fences and offers a searchable language combobox.
+    click(&mut doc, "rich-mode");
+    assert!(
+        !value(&doc, "note-body").contains("```"),
+        "Rich mode should hide fenced code block backticks: {:?}",
+        value(&doc, "note-body")
+    );
+    assert!(value(&doc, "note-body").contains("fn main() {}"));
+    click(&mut doc, &format!("code-lang-{code_start}"));
+    assert!(
+        doc.inner.borrow().get_element_by_id("code-lang-menu").is_some(),
+        "clicking language pill must open the searchable combobox"
+    );
+    assert_eq!(
+        doc.inner.borrow().get_focussed_node_id(),
+        doc.inner.borrow().get_element_by_id("code-lang-search"),
+        "opening language combobox must focus the search input"
+    );
+    let search_rect = bounds(&doc, "code-lang-search");
+    let ph_rect = bounds(&doc, "code-lang-ph");
+    assert!(
+        (ph_rect[0] - search_rect[0]).abs() <= 2.0
+            && ph_rect[1] >= search_rect[1] - 1.0
+            && ph_rect[1] + ph_rect[3] <= search_rect[1] + search_rect[3] + 1.0,
+        "placeholder must align inside search input: ph={ph_rect:?}, search={search_rect:?}"
+    );
+    let ph_cy = ph_rect[1] + ph_rect[3] * 0.5;
+    let search_cy = search_rect[1] + search_rect[3] * 0.5;
+    assert!(
+        (ph_cy - search_cy).abs() <= 2.0,
+        "placeholder must be vertically centered in search input: ph_cy={ph_cy}, search_cy={search_cy}"
+    );
+    commit_text(&mut doc, "py");
+    assert!(
+        doc.inner
+            .borrow()
+            .get_element_by_id("code-lang-pick-python")
+            .is_some(),
+        "typing 'py' should filter to Python"
+    );
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert!(
+        doc.inner.borrow().get_element_by_id("code-lang-menu").is_none(),
+        "pressing Enter should select the language and close the combobox"
+    );
+    assert!(
+        markdown(&doc).contains("```python\nfn main() {}\n```"),
+        "selecting Python should update the fence info: {}",
+        markdown(&doc)
+    );
+    click(&mut doc, "undo");
+    assert!(markdown(&doc).contains("```rust\nfn main() {}\n```"));
+    click(&mut doc, &format!("code-lang-{code_start}"));
+    assert!(doc.inner.borrow().get_element_by_id("code-lang-menu").is_some());
+    press(&mut doc, Key::Named(NamedKey::Escape), false);
+    assert!(doc.inner.borrow().get_element_by_id("code-lang-menu").is_none());
+    click(&mut doc, "live-mode");
 
     // 4. Smart URL paste onto selected text wraps it as `[selection](url)` in one undoable edit.
     *clipboard.0.lock().unwrap() = "https://margin.example/guide".into();

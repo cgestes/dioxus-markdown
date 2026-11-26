@@ -20,6 +20,8 @@ pub enum FieldEvent {
     Composing,
     /// The focused field's caret, text or position changed, or the window resized.
     Changed,
+    /// The window resized or the page viewport scrolled.
+    ViewportChanged,
 }
 
 /// How many inputs `use_input_trace` reports at most between two frames.

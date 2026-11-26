@@ -8,20 +8,19 @@
 //!   inline so its Markdown delimiters can be edited directly.
 use crate::style::{
     BULLET, CALLOUT_ANY, CALLOUT_TITLE, CODE, CODE_BLOCK, DONE, HEADING, HIGHLIGHT, ITALIC, LINK,
-    INLINE, PUNCTUATION, QUOTE, QUOTE_MARK, RULE, STRIKE, STRONG, callout_style,
+    INLINE, PUNCTUATION, QUOTE, QUOTE_MARK, RULE, STRIKE, STRONG, callout_style, syntax_style,
 };
 use margin_editor_core::{
     callout::{ParsedCallout, parse_callouts, strip_quote_marker},
     checkbox::{Marker, marker_beside},
     edit::{Splice, text_change},
+    syntax::highlight_code,
     table,
 };
 use pulldown_cmark::{CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
 
-/// 3-byte UTF-8 EM SPACE used in proportional Rich mode (1em square checkbox slot).
-pub const CHECKBOX_SLOT_RICH: &str = "\u{2003}";
-/// 2 ASCII spaces used in monospace Markdown mode (~18px slot for a 15×15 square checkbox).
+/// 2 ASCII spaces used in monospace prose (~18px slot for a 15×15 square checkbox).
 pub const CHECKBOX_SLOT_MONO: &str = "  ";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +33,9 @@ pub enum EditMode {
 pub enum PieceKind {
     Text,
     Hidden,
+    /// Hidden block-opening syntax (e.g. a code fence header in Rich mode) where
+    /// a caret at the seam belongs inside the content that follows.
+    HiddenPrefix,
     Checkbox(usize),
     EscapedPipe,
 }
@@ -91,6 +93,19 @@ struct CollapseGroup {
     open: Range<usize>,
     close: Option<Range<usize>>,
     is_heading_prefix: bool,
+    rich_only: bool,
+}
+
+impl CollapseGroup {
+    fn inline(outer: Range<usize>, open: Range<usize>, close: Option<Range<usize>>) -> Self {
+        Self {
+            outer,
+            open,
+            close,
+            is_heading_prefix: false,
+            rich_only: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -106,6 +121,7 @@ pub struct ParsedLink {
 pub struct ParsedCodeBlock {
     pub range: Range<usize>,
     pub lang: String,
+    pub lang_range: Range<usize>,
     pub body_range: Range<usize>,
 }
 
@@ -367,11 +383,12 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                         let header_end = raw[..first_line_end].trim_end_matches('\r').len();
                         tokens.push(RawToken {
                             range: range.start..range.start + header_end,
-                            style: PUNCTUATION,
+                            style: PUNCTUATION | CODE_BLOCK,
                         });
                         let tail = raw.trim_end_matches(['\n', '\r', ' ', '\t']);
                         let body_start = (range.start + first_line_end + usize::from(first_line_end < raw.len())).min(range.end);
                         let mut body_end = range.start + tail.len();
+                        let mut close_hide = None;
                         if let Some((_, final_line)) = tail.rsplit_once('\n') {
                             let last = final_line.trim_start();
                             if last.len() >= ticks && last.bytes().all(|b| b == ch) {
@@ -382,6 +399,11 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                                 if body_end > body_start && md.as_bytes().get(body_end - 1) == Some(&b'\r') {
                                     body_end -= 1;
                                 }
+                                close_hide = Some(if body_start < body_end {
+                                    body_end..close.end
+                                } else {
+                                    close_line_start..close.end
+                                });
                                 pair = Some((
                                     range.clone(),
                                     range.start..range.start + header_end,
@@ -389,10 +411,29 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                                 ));
                             }
                         }
+                        if first_line_end < raw.len() {
+                            groups.push(CollapseGroup {
+                                outer: range.start..range.start + tail.len(),
+                                open: range.start..body_start,
+                                close: close_hide,
+                                is_heading_prefix: false,
+                                rich_only: true,
+                            });
+                        }
                         let lang = info.split_whitespace().next().unwrap_or("").to_owned();
+                        let after_ticks = range.start + ticks;
+                        let header_slice = &md[after_ticks..range.start + header_end];
+                        let lead_ws = header_slice.len() - header_slice.trim_start().len();
+                        let lang_start = after_ticks + lead_ws;
+                        let lang_range = if lang.is_empty() {
+                            after_ticks..after_ticks
+                        } else {
+                            lang_start..(lang_start + lang.len()).min(range.start + header_end)
+                        };
                         code_blocks.push(ParsedCodeBlock {
                             range: range.start..range.start + tail.len(),
                             lang,
+                            lang_range,
                             body_range: body_start..body_end.max(body_start),
                         });
                     }
@@ -411,6 +452,7 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                             open: hash_start..prefix_end,
                             close: None,
                             is_heading_prefix: true,
+                            rich_only: false,
                         });
                         tokens.push(RawToken {
                             range: hash_start..hash_end,
@@ -438,12 +480,7 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                                 style: PUNCTUATION,
                             });
                         }
-                        groups.push(CollapseGroup {
-                            outer: active.outer.clone(),
-                            open,
-                            close,
-                            is_heading_prefix: false,
-                        });
+                        groups.push(CollapseGroup::inline(active.outer.clone(), open, close));
                     }
                     if let Some((url, title, is_autolink)) = active.meta {
                         parsed_links.push(ParsedLink {
@@ -460,15 +497,14 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                         || md[open.clone()].starts_with("~~~");
                     tokens.push(RawToken {
                         range: close.clone(),
-                        style: PUNCTUATION,
+                        style: if is_fence {
+                            PUNCTUATION | CODE_BLOCK
+                        } else {
+                            PUNCTUATION
+                        },
                     });
                     if !is_fence {
-                        groups.push(CollapseGroup {
-                            outer,
-                            open,
-                            close: Some(close),
-                            is_heading_prefix: false,
-                        });
+                        groups.push(CollapseGroup::inline(outer, open, Some(close)));
                     }
                 }
                 continue;
@@ -478,12 +514,11 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                 if ticks > 0 && range.len() > 2 * ticks {
                     let open = range.start..range.start + ticks;
                     let close = range.end - ticks..range.end;
-                    groups.push(CollapseGroup {
-                        outer: range.clone(),
-                        open: open.clone(),
-                        close: Some(close.clone()),
-                        is_heading_prefix: false,
-                    });
+                    groups.push(CollapseGroup::inline(
+                        range.clone(),
+                        open.clone(),
+                        Some(close.clone()),
+                    ));
                     tokens.push(RawToken {
                         range: open,
                         style: PUNCTUATION,
@@ -517,12 +552,11 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                     }
                     for (outer, open, close) in find_highlights(slice, range.start) {
                         let inner = open.end..close.start;
-                        groups.push(CollapseGroup {
+                        groups.push(CollapseGroup::inline(
                             outer,
-                            open: open.clone(),
-                            close: Some(close.clone()),
-                            is_heading_prefix: false,
-                        });
+                            open.clone(),
+                            Some(close.clone()),
+                        ));
                         tokens.push(RawToken {
                             range: open,
                             style: PUNCTUATION | (inherited & CALLOUT_ANY),
@@ -573,6 +607,7 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
             });
         }
     }
+    apply_code_highlights(md, &code_blocks, &mut tokens);
     // Tag punctuation/bullet tokens that sit inside a callout so their overlay
     // background blends seamlessly into the callout wash.
     for t in &mut tokens {
@@ -593,6 +628,67 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
         links: parsed_links,
         callouts,
         code_blocks,
+    }
+}
+
+fn apply_code_highlights(md: &str, code_blocks: &[ParsedCodeBlock], tokens: &mut Vec<RawToken>) {
+    let mut highlighted = Vec::new();
+    for cb in code_blocks {
+        if cb.lang.is_empty() || cb.body_range.is_empty() {
+            continue;
+        }
+        let spans = highlight_code(&cb.lang, &md[cb.body_range.clone()]);
+        if !spans.is_empty() {
+            highlighted.push((cb.body_range.clone(), spans));
+        }
+    }
+    if highlighted.is_empty() {
+        return;
+    }
+    let old = std::mem::take(tokens);
+    tokens.reserve(old.len() + highlighted.iter().map(|(_, s)| s.len() * 2).sum::<usize>());
+    for tok in old {
+        if tok.style & CODE_BLOCK == 0 || tok.style & PUNCTUATION != 0 {
+            tokens.push(tok);
+            continue;
+        }
+        let Some((body_range, spans)) = highlighted
+            .iter()
+            .find(|(br, _)| tok.range.start < br.end && tok.range.end > br.start)
+        else {
+            tokens.push(tok);
+            continue;
+        };
+        let base = body_range.start;
+        let first = spans.partition_point(|s| base + s.range.end <= tok.range.start);
+        let mut at = tok.range.start;
+        for span in &spans[first..] {
+            let s_start = (base + span.range.start).max(tok.range.start);
+            let s_end = (base + span.range.end).min(tok.range.end);
+            if s_start >= tok.range.end {
+                break;
+            }
+            if s_start >= s_end {
+                continue;
+            }
+            if s_start > at {
+                tokens.push(RawToken {
+                    range: at..s_start,
+                    style: tok.style,
+                });
+            }
+            tokens.push(RawToken {
+                range: s_start..s_end,
+                style: tok.style | syntax_style(span.kind),
+            });
+            at = s_end;
+        }
+        if at < tok.range.end {
+            tokens.push(RawToken {
+                range: at..tok.range.end,
+                style: tok.style,
+            });
+        }
     }
 }
 
@@ -625,13 +721,17 @@ impl Projection {
         #[derive(Clone, Debug)]
         enum Override {
             Hidden(Range<usize>),
+            HiddenPrefix(Range<usize>),
             Checkbox(Range<usize>),
             EscapedPipe(Range<usize>),
         }
         impl Override {
             fn range(&self) -> Range<usize> {
                 match self {
-                    Self::Hidden(r) | Self::Checkbox(r) | Self::EscapedPipe(r) => r.clone(),
+                    Self::Hidden(r)
+                    | Self::HiddenPrefix(r)
+                    | Self::Checkbox(r)
+                    | Self::EscapedPipe(r) => r.clone(),
                 }
             }
         }
@@ -650,7 +750,9 @@ impl Projection {
             let expanded = match mode {
                 EditMode::Rich => false,
                 EditMode::Markdown => {
-                    if g.is_heading_prefix {
+                    if g.rich_only {
+                        true
+                    } else if g.is_heading_prefix {
                         active_sel.is_some()
                     } else {
                         sel_range
@@ -665,13 +767,17 @@ impl Projection {
                     if g.is_heading_prefix && open.start == field_range.start {
                         has_hidden_heading_prefix = true;
                     }
-                    overrides.push(Override::Hidden(open.clone()));
+                    if g.rich_only {
+                        overrides.push(Override::HiddenPrefix(open.clone()));
+                    } else {
+                        overrides.push(Override::Hidden(open.clone()));
+                    }
                 }
                 if let Some(close) = &g.close {
                     let c = close.start.max(field_range.start)..close.end.min(field_range.end);
                     if !c.is_empty() {
                         overrides.push(Override::Hidden(c.clone()));
-                        if !open.is_empty() {
+                        if !open.is_empty() && !g.rich_only {
                             hidden_pairs.push(DelimPair {
                                 outer: g.outer.clone(),
                                 open,
@@ -742,12 +848,15 @@ impl Projection {
                         kind: PieceKind::Hidden,
                     });
                 }
-                Override::Checkbox(_) => {
-                    display.push_str(if mode == EditMode::Rich {
-                        CHECKBOX_SLOT_RICH
-                    } else {
-                        CHECKBOX_SLOT_MONO
+                Override::HiddenPrefix(_) => {
+                    pieces.push(Piece {
+                        source: r.clone(),
+                        display: d_start..d_start,
+                        kind: PieceKind::HiddenPrefix,
                     });
+                }
+                Override::Checkbox(_) => {
+                    display.push_str(CHECKBOX_SLOT_MONO);
                     pieces.push(Piece {
                         source: r.clone(),
                         display: d_start..display.len(),
@@ -847,7 +956,7 @@ impl Projection {
             if src <= p.source.end {
                 return match p.kind {
                     PieceKind::Text => p.display.start + (src - p.source.start),
-                    PieceKind::Hidden => p.display.start,
+                    PieceKind::Hidden | PieceKind::HiddenPrefix => p.display.start,
                     PieceKind::Checkbox(_) => {
                         if src <= p.source.start {
                             p.display.start
@@ -882,19 +991,18 @@ impl Projection {
                 return match p.kind {
                     PieceKind::Text => p.source.start + (disp - p.display.start),
                     PieceKind::Checkbox(_) | PieceKind::EscapedPipe => p.source.start,
-                    PieceKind::Hidden => p.source.start,
+                    PieceKind::Hidden | PieceKind::HiddenPrefix => p.source.start,
                 };
             }
-            if disp == p.display.end && p.kind != PieceKind::Hidden {
-                // If followed by a hidden closing delimiter, prefer staying at the end of the text
-                // piece so typing continues cleanly inside the active word; if followed by a hidden
-                // opening delimiter, stay before the opening delimiter.
-                let next_is_hidden = self
-                    .pieces
-                    .get(i + 1)
-                    .is_some_and(|n| n.kind == PieceKind::Hidden);
-                if !next_is_hidden {
-                    return p.source.end;
+            if disp == p.display.end
+                && !matches!(p.kind, PieceKind::Hidden | PieceKind::HiddenPrefix)
+            {
+                // When followed by a hidden block-opening prefix (e.g. a code fence header
+                // in Rich mode), a caret at the seam belongs inside the content after it.
+                if let Some(next) = self.pieces.get(i + 1)
+                    && next.kind == PieceKind::HiddenPrefix
+                {
+                    return next.source.end;
                 }
                 return p.source.end;
             }
@@ -973,21 +1081,21 @@ impl Projection {
     fn display_to_source_edge(&self, disp: usize, is_start: bool) -> usize {
         let disp = self.display.floor_char_boundary(disp.min(self.display.len()));
         for p in &self.pieces {
-            if p.kind == PieceKind::Hidden {
+            if matches!(p.kind, PieceKind::Hidden | PieceKind::HiddenPrefix) {
                 continue;
             }
             if is_start && disp >= p.display.start && disp < p.display.end {
                 return match p.kind {
                     PieceKind::Text => p.source.start + (disp - p.display.start),
                     PieceKind::Checkbox(_) | PieceKind::EscapedPipe => p.source.start,
-                    PieceKind::Hidden => unreachable!(),
+                    PieceKind::Hidden | PieceKind::HiddenPrefix => unreachable!(),
                 };
             }
             if !is_start && disp > p.display.start && disp <= p.display.end {
                 return match p.kind {
                     PieceKind::Text => p.source.start + (disp - p.display.start),
                     PieceKind::Checkbox(_) | PieceKind::EscapedPipe => p.source.end,
-                    PieceKind::Hidden => unreachable!(),
+                    PieceKind::Hidden | PieceKind::HiddenPrefix => unreachable!(),
                 };
             }
         }
@@ -1129,5 +1237,69 @@ mod tests {
             out.replace_range(s.range, &s.text);
         }
         assert_eq!(out, "Leave  here.");
+    }
+
+    #[test]
+    fn rich_mode_hides_code_fences_and_edits_inside_body_cleanly() {
+        let md = "Before\n\n```rust\nfn main() {}\n```\n\nAfter";
+        let parsed = parse_markdown(md);
+        let markers = markdown_markers(md);
+        let live = Projection::build(
+            md,
+            &parsed,
+            0..md.len(),
+            &markers,
+            EditMode::Markdown,
+            None,
+            None,
+            None,
+            true,
+            false,
+        );
+        assert!(live.display.contains("```rust"));
+        let rich = Projection::build(
+            md,
+            &parsed,
+            0..md.len(),
+            &markers,
+            EditMode::Rich,
+            None,
+            None,
+            None,
+            true,
+            false,
+        );
+        assert_eq!(rich.display, "Before\n\nfn main() {}\n\nAfter");
+
+        // Typing at the start of line 0 of the code block inserts inside the code block.
+        let (splices, _) = rich.map_input("Before\n\npub fn main() {}\n\nAfter").unwrap();
+        let mut out = md.to_owned();
+        for s in splices.into_iter().rev() {
+            out.replace_range(s.range, &s.text);
+        }
+        assert_eq!(out, "Before\n\n```rust\npub fn main() {}\n```\n\nAfter");
+
+        // Empty code block in Rich mode retains 1 editable empty line and accepts typing inside.
+        let empty = "```\n\n```";
+        let ep = parse_markdown(empty);
+        let erich = Projection::build(
+            empty,
+            &ep,
+            0..empty.len(),
+            &[],
+            EditMode::Rich,
+            None,
+            None,
+            None,
+            true,
+            false,
+        );
+        assert_eq!(erich.display, "\n");
+        let (splices, _) = erich.map_input("let x = 1;\n").unwrap();
+        let mut eout = empty.to_owned();
+        for s in splices.into_iter().rev() {
+            eout.replace_range(s.range, &s.text);
+        }
+        assert_eq!(eout, "```\nlet x = 1;\n```");
     }
 }

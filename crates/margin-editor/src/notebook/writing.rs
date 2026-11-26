@@ -84,6 +84,7 @@ pub(crate) struct Writing {
     pub callout_boxes: Signal<Vec<super::markdown::CalloutBox>>,
     pub code_boxes: Signal<Vec<super::markdown::CodeBox>>,
     pub callout_menu: Signal<Option<usize>>,
+    pub code_lang_menu: Signal<Option<usize>>,
     pub caret: Signal<Option<super::markdown::CaretInk>>,
     pub active: Signal<Option<Field>>,
     // Keep the origin of an open body stable when its first text becomes a heading.
@@ -389,6 +390,9 @@ impl Writing {
         if self.callout_menu.peek().is_some() {
             self.callout_menu.set(None);
         }
+        if self.code_lang_menu.peek().is_some() {
+            self.code_lang_menu.set(None);
+        }
     }
 
     pub(super) fn show_table_menu(mut self, menu: Option<TableMenu>) {
@@ -406,6 +410,11 @@ impl Writing {
         self.callout_menu.set(callout_start);
     }
 
+    pub(super) fn show_code_lang_menu(mut self, code_start: Option<usize>) {
+        self.close_menus();
+        self.code_lang_menu.set(code_start);
+    }
+
     pub fn reset(mut self) {
         self.clear_cells();
         self.selected_text.set(None);
@@ -421,6 +430,7 @@ impl Writing {
         self.callout_boxes.set(Vec::new());
         self.code_boxes.set(Vec::new());
         self.callout_menu.set(None);
+        self.code_lang_menu.set(None);
         self.caret.set(None);
         self.table_menu.set(None);
         self.mouse_box.set(None);
@@ -1066,6 +1076,11 @@ impl Writing {
         if event.key() == Key::Named(NamedKey::Escape) && self.callout_menu.peek().is_some() {
             event.prevent_default();
             self.callout_menu.set(None);
+            return;
+        }
+        if event.key() == Key::Named(NamedKey::Escape) && self.code_lang_menu.peek().is_some() {
+            event.prevent_default();
+            self.code_lang_menu.set(None);
             return;
         }
         if event.key() == Key::Named(NamedKey::Escape) && self.link_card.peek().is_some() {

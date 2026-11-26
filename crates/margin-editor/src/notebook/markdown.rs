@@ -1,12 +1,14 @@
 //! Presentation ranges live in the same UTF-8 source coordinate space as Parley and Loro.
-use super::ui::{Button, Icon, Menu, MenuItem, Variant, icon};
+use super::ui::{Button, Combobox, ComboboxItem, Icon, Menu, MenuItem, Variant, icon};
 use super::{Field, Writing, report};
-use crate::prelude::*;
-use margin_editor_core::callout::CalloutKind;
-use margin_projection::style::*;
 use crate::platform::text::{self, Cluster};
+use crate::prelude::*;
+use margin_editor_core::{
+    callout::CalloutKind,
+    syntax::{available_languages, display_language},
+};
+use margin_projection::style::*;
 use std::ops::Range;
-
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct CaretInk {
     pub field: Field,
@@ -28,7 +30,7 @@ pub fn CaretOverlay(writing: Writing, field: Field) -> Element {
             id: "caret-ink",
             class: "caret-ink",
             aria_hidden: "true",
-            style: format!("left:{:.2}px; top:{:.2}px; height:{:.2}px;", caret.x, caret.y, caret.height),
+            style: format!("left:{}px; top:{}px; height:{}px;", caret.x, caret.y, caret.height),
         }
     }
 }
@@ -203,16 +205,61 @@ fn CodeBlockTools(
     top: f32,
 ) -> Element {
     let mut copied = use_signal(|| false);
+    let open = *writing.code_lang_menu.read() == Some(start);
+    let rich = *writing.edit_mode.read() == super::projection::EditMode::Rich;
+    let show_lang_btn = rich || !lang.is_empty() || open;
+    let current_label = display_language(&lang);
+    let items: Vec<ComboboxItem> = if open {
+        available_languages()
+            .iter()
+            .map(|opt| ComboboxItem {
+                value: opt.token.clone(),
+                label: opt.name.clone(),
+                hint: (!opt.token.is_empty()).then(|| opt.token.clone()),
+                keywords: opt.aliases.clone(),
+                id: Some(if opt.token.is_empty() {
+                    "code-lang-pick-plain".to_owned()
+                } else {
+                    format!("code-lang-pick-{}", opt.token.to_ascii_lowercase())
+                }),
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     rsx! {
         div {
             class: "code-tools",
+            class: if open { "menu-open" },
             style: format!("top:{top:.1}px;"),
             onpointerdown: move |e| {
-                e.prevent_default();
                 e.stop_propagation();
             },
-            if !lang.is_empty() {
-                span { class: "code-lang", "{lang}" }
+            if show_lang_btn {
+                Combobox {
+                    label: "Code language".to_owned(),
+                    value_label: current_label,
+                    selected: lang,
+                    items,
+                    open,
+                    placeholder: "Search language…".to_owned(),
+                    empty_label: "No matching language".to_owned(),
+                    allow_custom: true,
+                    tip: "Select syntax language".to_owned(),
+                    trigger_id: format!("code-lang-{start}"),
+                    menu_id: "code-lang-menu".to_owned(),
+                    search_id: "code-lang-search".to_owned(),
+                    placeholder_id: "code-lang-ph".to_owned(),
+                    ontoggle: move |next: bool| {
+                        writing.show_code_lang_menu(next.then_some(start));
+                    },
+                    onselect: move |tok: String| {
+                        writing.set_code_block_lang(start, &tok);
+                    },
+                    onescape: move |_| {
+                        writing.close_code_lang_menu(start);
+                    },
+                }
             }
             Button {
                 id: format!("code-copy-{start}"),
@@ -250,9 +297,6 @@ pub struct Ink {
     y: f32,
     width: f32,
     height: f32,
-    /// Letter spacing that makes the painted run exactly as wide as the
-    /// regular text beneath it (Rich mode bold and italic).
-    letter: f32,
 }
 
 impl Ink {
@@ -265,16 +309,16 @@ impl Ink {
             y,
             width,
             height,
-            letter,
             ..
         } = self;
         let callout = callout_kind(style);
         let callout_cls = callout.map_or("", CalloutKind::css_class);
+        let syn_cls = syntax_kind(style).css_class();
         let is_callout_quote_mark = callout.is_some() && style & QUOTE_MARK != 0;
         let is_callout_title = callout.is_some() && style & CALLOUT_TITLE != 0;
         rsx! {
             span {
-                key: "{at}", id: "ink-{at}", class: "md-ink {callout_cls}", aria_hidden: "true",
+                key: "{at}", id: "ink-{at}", class: "md-ink {callout_cls} {syn_cls}", aria_hidden: "true",
                 class: if style & (STRONG | HEADING) != 0 { "strong" },
                 class: if style & ITALIC != 0 { "emphasis" },
                 class: if style & CODE != 0 { "code" },
@@ -289,11 +333,9 @@ impl Ink {
                 class: if style & RULE != 0 { "rule" },
                 class: if style & PUNCTUATION != 0 { "punctuation" },
                 class: if style & DONE != 0 { "done" },
-                style: if letter != 0.0 {
-                    format!("left:{x}px; top:{y}px; width:{width}px; height:{height}px; line-height:{height}px; letter-spacing:{letter:.3}px;")
-                } else {
-                    format!("left:{x}px; top:{y}px; width:{width}px; height:{height}px; line-height:{height}px;")
-                },
+                style: format!(
+                    "left:{x}px; top:{y}px; width:{width}px; height:{height}px; line-height:{height}px;"
+                ),
                 if is_callout_quote_mark {
                     ""
                 } else if style & BULLET != 0 {
@@ -395,7 +437,7 @@ impl Writing {
                     let start = run_range.start.max(token.display.start);
                     let end = run_range.end.min(token.display.end);
                     let slice = text[start..end].trim_end_matches(['\n', '\r']);
-                    let reveal_syntax = token.style == PUNCTUATION
+                    let reveal_syntax = token.style & PUNCTUATION != 0
                         || (!rich
                             && token.style & CALLOUT_ANY != 0
                             && token.style & QUOTE_MARK != 0);
@@ -431,18 +473,6 @@ impl Writing {
                     } else {
                         (last_x + right.advance() - x) / scale
                     };
-                    let fitted = rich
-                        && token.style & (STRONG | ITALIC) != 0
-                        && token.style & (HEADING | CODE | PUNCTUATION) == 0;
-                    let letter = fitted
-                        .then(|| {
-                            let weight = if token.style & STRONG != 0 { 600.0 } else { 400.0 };
-                            let natural = crate::typefaces::prose_width(slice, run.font_size(), weight, token.style & ITALIC != 0)?;
-                            let chars = slice.chars().count().max(1) as f32;
-                            Some((width * scale - natural) / chars / scale)
-                        })
-                        .flatten()
-                        .unwrap_or(0.0);
                     result.push(Ink {
                         field,
                         at: token.source_start + (start - token.display.start),
@@ -452,7 +482,6 @@ impl Writing {
                         y: top_inset + (m.block_min_coord - top) / scale,
                         width,
                         height: (m.block_max_coord - m.block_min_coord) / scale,
-                        letter,
                     });
                 }
             }
@@ -581,11 +610,12 @@ impl Writing {
             .iter()
             .filter(|cb| cb.range.start >= field_range.start && cb.range.end <= field_range.end)
             .map(|cb| {
+                let band_range = if rich { &cb.body_range } else { &cb.range };
                 let (top, height) = Self::vertical_band(
                     layout,
                     &proj,
                     raw_len,
-                    &cb.range,
+                    band_range,
                     scroll_top,
                     scale,
                     top_inset,
@@ -603,6 +633,44 @@ impl Writing {
             .collect();
 
         (callouts, code_blocks)
+    }
+
+    pub fn close_code_lang_menu(mut self, code_start: usize) {
+        self.code_lang_menu.set(None);
+        let target = self
+            .parsed
+            .read()
+            .code_blocks
+            .iter()
+            .find(|cb| cb.range.start == code_start)
+            .map(|cb| cb.body_range.start);
+        if let Some(pos) = target {
+            self.open(self.field_at(pos), [pos; 2]);
+        }
+    }
+
+    pub fn set_code_block_lang(mut self, code_start: usize, new_lang: &str) {
+        self.code_lang_menu.set(None);
+        let found = self
+            .parsed
+            .read()
+            .code_blocks
+            .iter()
+            .find(|cb| cb.range.start == code_start)
+            .map(|cb| (cb.lang_range.clone(), cb.body_range.start));
+        let Some((lang_range, old_body_start)) = found else {
+            return;
+        };
+        let delta = new_lang.len() as isize - lang_range.len() as isize;
+        let next_caret = (old_body_start as isize + delta).max(0) as usize;
+        if let Some(sel) = self.absolute_selection() {
+            self.note.peek().remember_selection(sel);
+        }
+        let result = self.note.write().replace(lang_range, new_lang);
+        if result.is_ok() {
+            self.open(self.field_at(next_caret), [next_caret; 2]);
+        }
+        report(result, self.message);
     }
 
     pub fn set_callout_kind(mut self, callout_start: usize, kind: CalloutKind) {
@@ -649,7 +717,7 @@ impl Writing {
             return None;
         }
         let layout = input.editor.try_layout()?;
-        let cursor = input.editor.cursor_geometry(1.5)?;
+        let cursor = input.editor.cursor_geometry(2.0)?;
         let scale = layout.scale();
         let l = node.final_layout();
         let top = if input.is_multiline {
@@ -666,16 +734,16 @@ impl Writing {
         let top_inset = l.border.top
             + l.padding.top
             + node.text_input_v_centering_offset(f64::from(scale)) as f32;
-        let x = left_inset + cursor.x0 as f32 / scale;
-        let y = top_inset + (cursor.y0 as f32 - top) / scale;
-        let height = ((cursor.y1 - cursor.y0) as f32 / scale).max(12.0);
+        let x = (left_inset + cursor.x0 as f32 / scale).round();
+        let y = (top_inset + (cursor.y0 as f32 - top) / scale).round();
+        let height = ((cursor.y1 - cursor.y0) as f32 / scale).max(12.0).round();
         let max_x = l.content_box_width() + l.padding.left + l.padding.right;
         let max_y = l.content_box_height() + l.padding.top + l.padding.bottom;
-        if y + height < 0.0 || y > max_y || x + 1.5 < 0.0 || x > max_x {
+        if y + height < 0.0 || y > max_y || x + 2.0 < 0.0 || x > max_x {
             return None;
         }
         let x = if !input.is_multiline {
-            x.clamp(0.0, (max_x - 1.5).max(0.0))
+            x.clamp(0.0, (max_x - 2.0).max(0.0)).round()
         } else {
             x
         };

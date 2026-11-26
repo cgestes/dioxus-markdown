@@ -16,6 +16,7 @@ use platform::NodeHandle;
 use prelude::*;
 use margin_editor_core::table;
 use margin_ui as ui;
+#[cfg(test)]
 use margin_ui::typefaces;
 use notebook::*;
 

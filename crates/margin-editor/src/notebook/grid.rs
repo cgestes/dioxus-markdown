@@ -224,6 +224,13 @@ impl Writing {
         {
             self.callout_menu.set(None);
         }
+        let lang_menu = *self.code_lang_menu.peek();
+        if let Some(start) = lang_menu
+            && !inside("code-lang-menu")
+            && !inside(&format!("code-lang-{start}"))
+        {
+            self.code_lang_menu.set(None);
+        }
         if self.link_card.peek().is_some() && !inside("link-card") {
             if *self.link_editing.peek() || !inside("paper") {
                 self.dismiss_link_card();
@@ -871,7 +878,6 @@ fn ColStrip(
     alignments: Vec<Alignment>,
     width_count: usize,
     active_row: usize,
-    single_active_col: Option<usize>,
     multi_active: bool,
     open_col: Option<usize>,
     scroll_x: Signal<f64>,
@@ -880,7 +886,7 @@ fn ColStrip(
     let target_col = if multi_active {
         None
     } else {
-        open_col.or(hover_c).or(single_active_col)
+        open_col.or(hover_c)
     };
     let Some(c) = target_col.filter(|&c| c < width_count) else {
         return rsx! {};
@@ -981,7 +987,6 @@ fn RowStrip(
     mut hovered_row: Signal<Option<usize>>,
     row_count: usize,
     active_col: usize,
-    single_active_row: Option<usize>,
     multi_active: bool,
     open_row: Option<usize>,
 ) -> Element {
@@ -989,7 +994,7 @@ fn RowStrip(
     let target_row = if multi_active {
         None
     } else {
-        open_row.or(hover_r).or(single_active_row)
+        open_row.or(hover_r)
     };
     // Rows grow with wrapped text; until they are measured the stylesheet's fixed heights apply.
     let heights = writing.row_heights.read().get(index).cloned().unwrap_or_default();
@@ -1074,6 +1079,7 @@ fn GridRow(
     last: bool,
     open_col: Option<usize>,
     open_row: Option<usize>,
+    mut hovered: Signal<bool>,
     mut hovered_col: Signal<Option<usize>>,
     mut hovered_row: Signal<Option<usize>>,
     values: Vec<(String, &'static str, usize)>,
@@ -1089,6 +1095,26 @@ fn GridRow(
                     let active = *writing.active.read() == Some(field) && writing.span.read().is_none();
                     let whole_cell = selected && active && !*writing.cell_editing.read();
                     let col_targeted = open_col == Some(col);
+                    let next_row = (row > 0).then_some(row);
+                    let mut mark_hovered = move || {
+                        if !*hovered.peek() {
+                            hovered.set(true);
+                        }
+                        if *hovered_col.peek() != Some(col) {
+                            hovered_col.set(Some(col));
+                        }
+                        if *hovered_row.peek() != next_row {
+                            hovered_row.set(next_row);
+                        }
+                    };
+                    let mut clear_hovered = move || {
+                        if hovered_col.peek().is_some() {
+                            hovered_col.set(None);
+                        }
+                        if hovered_row.peek().is_some() {
+                            hovered_row.set(None);
+                        }
+                    };
                     rsx! {
                         div { key: "{col}", id: "slot-{index}-{row}-{col}", class: "cell-slot ledger-cell align-{alignment}",
                             class: if row == 0 { "ledger-head" } else { "ledger-data" },
@@ -1098,15 +1124,8 @@ fn GridRow(
                             class: if whole_cell { "range-target" },
                             class: if col_targeted { "col-menu-target" },
                             aria_selected:selected.to_string(), flex_grow: weight.to_string(), role: if row == 0 { "columnheader" } else { "cell" },
-                            onpointerenter: move |_| {
-                                if *hovered_col.peek() != Some(col) {
-                                    hovered_col.set(Some(col));
-                                }
-                                let next_row = (row > 0).then_some(row);
-                                if *hovered_row.peek() != next_row {
-                                    hovered_row.set(next_row);
-                                }
-                            },
+                            onpointerenter: move |_| mark_hovered(),
+                            onpointermove: move |_| mark_hovered(),
                             div { class: "cell-field",
                                 // Long values wrap. A Blitz textarea doesn't grow with its text, so this hidden
                                 // copy wraps the same way and gives the cell, and so the row, its height. Its
@@ -1123,9 +1142,26 @@ fn GridRow(
                                     },
                                     onfocus: move |_| writing.track_field(field),
                                     onpointerup: move |_| writing.track_field(field),
-                                    onkeydown: move |e| writing.cell_key(index, row, col, e),
+                                    onkeydown: move |e| {
+                                        let is_modifier = matches!(
+                                            e.key(),
+                                            Key::Named(
+                                                NamedKey::Shift
+                                                    | NamedKey::Control
+                                                    | NamedKey::Alt
+                                                    | NamedKey::Meta
+                                            )
+                                        );
+                                        if !is_modifier {
+                                            clear_hovered();
+                                        }
+                                        writing.cell_key(index, row, col, e);
+                                    },
                                     onkeyup: move |_| writing.track_field(field),
-                                    oninput: move |e| writing.cell_input(index, row, col, &e.value()),
+                                    oninput: move |e| {
+                                        clear_hovered();
+                                        writing.cell_input(index, row, col, &e.value());
+                                    },
                                     "{value}"
                                 }
                                 {(writing.ink)().into_iter().filter(|ink| ink.field == field).map(|ink| ink.draw())}
@@ -1135,7 +1171,7 @@ fn GridRow(
                             }
                             if let Some(s) = selected_rect {
                                 span { class:"range-outline", aria_hidden:"true",
-                                    style:format!("border-width:{}px {}px {}px {}px;",2*u8::from(row==s.rows().start),2*u8::from(col+1==s.cols().end),2*u8::from(row+1==s.rows().end),2*u8::from(col==s.cols().start)) }
+                                    style:format!("border-width:{}px {}px {}px {}px;",u8::from(row==s.rows().start),u8::from(col+1==s.cols().end),u8::from(row+1==s.rows().end),u8::from(col==s.cols().start)) }
                             } else if active {
                                 span { class: "cell-outline", aria_hidden: "true" }
                             }
@@ -1174,18 +1210,6 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                 longest.max(7) + 5
             })
             .collect::<Vec<_>>()
-    });
-    // Reset hovered column/row whenever active focus moves (e.g. Tab, arrows, reorder)
-    // so hover state from an earlier click never fights keyboard or button navigation.
-    use_effect(move || {
-        writing.active.read();
-        writing.cells.read();
-        if hovered_col.peek().is_some() {
-            hovered_col.set(None);
-        }
-        if hovered_row.peek().is_some() {
-            hovered_row.set(None);
-        }
     });
     // Programmatic caret restoration updates Blitz focus directly, including
     // when a key crosses into a grid. Normal focusin/out cover pointer and Tab.
@@ -1259,9 +1283,6 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
     let row_count = grid.rows.len();
     let active_row = selected.map_or(0, |(r, _)| r);
     let active_col = selected.map_or(0, |(_, c)| c);
-    let single_active = rect.filter(|r| r.count() == 1);
-    let single_active_col = single_active.map(|rc| rc.head[1]);
-    let single_active_row = single_active.map(|rc| rc.head[0]).filter(|&r| r > 0);
     let multi_active = rect.is_some_and(|r| r.count() > 1);
     let open_col = match active_menu {
         Some(super::writing::TableMenu::Column(t, c)) if t == index && c < width_count => Some(c),
@@ -1307,8 +1328,8 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
             if let Some(bidx) = table_block_idx {
                 BlockHandle { writing, block_idx: bidx, total: total_blocks, top: 6 }
             }
-            ColStrip { writing, index, hovered, hovered_col, hovered_row, weights: weights_vec.clone(), alignments: alignments_vec, width_count, active_row, single_active_col, multi_active, open_col, scroll_x }
-            RowStrip { writing, index, hovered, hovered_col, hovered_row, row_count, active_col, single_active_row, multi_active, open_row }
+            ColStrip { writing, index, hovered, hovered_col, hovered_row, weights: weights_vec.clone(), alignments: alignments_vec, width_count, active_row, multi_active, open_col, scroll_x }
+            RowStrip { writing, index, hovered, hovered_col, hovered_row, row_count, active_col, multi_active, open_row }
             div { id: "grid-scroll-{index}", class: "grid-scroll", role: "table", aria_label: "Markdown table",
                 onscroll: move |_| {
                     if let Some(handle) = writing.root.peek().as_ref() {
@@ -1326,7 +1347,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                     writing.refresh_link_card();
                 },
                 for (r, _) in grid.rows.iter().enumerate() {
-                    GridRow { key: "{r}", writing, index, row: r, last: r + 1 == grid.rows.len(), open_col, open_row, hovered_col, hovered_row,
+                    GridRow { key: "{r}", writing, index, row: r, last: r + 1 == grid.rows.len(), open_col, open_row, hovered, hovered_col, hovered_row,
                         values: weights_vec.iter().enumerate().map(|(c, &weight)| (writing.projection(Field::Cell(index, r, c)).display, align(grid, c), weight)).collect()
                     }
                 }

@@ -102,6 +102,20 @@ impl Writing {
                 i.checked_sub(1)
             };
             let Some(next) = next.and_then(|i| stops.get(i)).copied() else {
+                // On the last visual line of the document (down) or first line (up),
+                // move to the end / start of the line instead of swallowing the key.
+                let target_pos = if down { from.editor.raw_text().len() } else { 0 };
+                drop(doc);
+                self.clear_goal();
+                let abs = self.projection(field).display_to_source(target_pos);
+                let anchor = if extend {
+                    self.absolute_selection().map_or(abs, |s| s[0])
+                } else {
+                    abs
+                };
+                if self.absolute_selection() != Some([anchor, abs]) {
+                    self.open(field, [anchor, abs]);
+                }
                 return true;
             };
             (next, None)

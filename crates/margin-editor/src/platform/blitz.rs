@@ -165,8 +165,13 @@ pub fn use_field_watch(root: Signal<Option<NodeHandle>>, mut on_event: impl FnMu
                 || settled_scroll != prev_scroll
                 || cur_scroll != prev_scroll
             {
+                let viewport_moved = settled_scroll.0 != prev_scroll.0
+                    || settled_scroll.1 != prev_scroll.1;
                 previous = settled;
                 prev_scroll = settled_scroll;
+                if changed_size || viewport_moved {
+                    on_event(FieldEvent::ViewportChanged);
+                }
                 on_event(FieldEvent::Changed);
             }
         }
