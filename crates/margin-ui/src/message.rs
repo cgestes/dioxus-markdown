@@ -39,28 +39,55 @@ pub fn Message(
         (false, true) => Some(format!("{}…", tools.join(", "))),
         (false, false) => Some(format!("used {}", tools.join(", "))),
     };
-    let text = match rich {
-        _ if pending => rsx! { div { class: "ui-msg-text plain", if body.is_empty() { "Thinking…" } else { "{body}" } } },
-        Some(rich) if !failed => rich,
-        _ => rsx! { div { class: "ui-msg-text", "{body}" } },
+    let text_color = if pending {
+        "text-faint"
+    } else if failed {
+        "text-alert"
+    } else if style == MessageStyle::Bubble && !ai {
+        "text-accent-deep"
+    } else {
+        "text-ink"
     };
-    let kind = match style {
-        MessageStyle::Bubble => "bubble",
-        MessageStyle::Card => "card",
-        MessageStyle::Thread => "thread",
+    let text_size = if style == MessageStyle::Thread {
+        "text-[12px]"
+    } else {
+        "text-[13px]"
+    };
+    let text = match rich {
+        Some(rich) if !pending && !failed => rich,
+        _ => {
+            let content = if pending && body.is_empty() { "Thinking…" } else { body.as_str() };
+            rsx! {
+                div { class: "font-sans {text_size} leading-[1.45] whitespace-pre-wrap [overflow-wrap:anywhere] {text_color}",
+                    "{content}"
+                }
+            }
+        }
+    };
+    let wrap_cls = match (style, ai) {
+        (MessageStyle::Bubble, false) => "self-end max-w-[88%] py-2 px-[11px] rounded-[12px_12px_3px_12px] bg-pale",
+        (MessageStyle::Bubble, true) => "max-w-[96%]",
+        (MessageStyle::Card, false) => "ml-12 py-2.5 px-[14px] border border-solid border-line rounded-lg bg-pale",
+        (MessageStyle::Card, true) => "py-2.5 px-[14px] border border-solid border-line rounded-lg bg-surface",
+        (MessageStyle::Thread, _) => "[&_.ui-md]:text-[12px]",
+    };
+    let author_cls = match (style, ai) {
+        (MessageStyle::Thread, _) => "text-ink font-sans text-[11px] leading-none font-semibold tracking-normal normal-case",
+        (MessageStyle::Card, false) => "text-accent-deep font-sans text-[10.5px] font-semibold tracking-[0.06em] uppercase",
+        _ => "text-accent font-sans text-[10.5px] font-semibold tracking-[0.06em] uppercase",
     };
     let initial = author.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
     rsx! {
-        div { class: "ui-msg {kind}", class: if ai { "ai" } else { "you" }, class: if pending { "pending" }, class: if failed { "failed" },
+        div { class: "flex flex-col gap-[3px] min-w-0 text-[13px] {wrap_cls}",
             if style == MessageStyle::Bubble && !ai {
                 {text}
             } else {
-                div { class: "ui-msg-meta",
+                div { class: "flex items-center gap-1.5 [&>.i]:w-3 [&>.i]:h-3 [&>.i]:text-accent",
                     if style == MessageStyle::Thread { Avatar { ai, initial } }
                     else if ai { {Icon::Sparkle.svg("i")} }
-                    span { class: "ui-msg-author", "{author}" }
-                    if let Some(at) = at { span { class: "ui-msg-note", "{at}" } }
-                    if let Some(t) = tools { span { class: "ui-msg-note", "{t}" } }
+                    span { class: "{author_cls}", "{author}" }
+                    if let Some(at) = at { span { class: "text-faint font-mono text-[10.5px] font-normal", "{at}" } }
+                    if let Some(t) = tools { span { class: "text-faint font-mono text-[10.5px] font-normal", "{t}" } }
                 }
                 {text}
             }

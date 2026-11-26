@@ -92,7 +92,7 @@ pub fn Gallery(children: Element) -> Element {
             })}
             {section("Cards and rows", rsx! {
                 div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
-                    div { class: "flex flex-col gap-0.5 !flex-[0_0_220px] p-2.5 rounded-l bg-rail",
+                    div { class: "flex flex-col gap-0.5 !flex-[0_0_220px] p-2.5 rounded-lg bg-rail",
                         NavItem { label: "Today", leading: icon(Icon::Calendar), count: (4, Tone::Accent), selected: true, onclick: noop }
                         NavItem { label: "Unfiled", leading: icon(Icon::Inbox), count: (3, Tone::Alert), onclick: noop }
                         NavItem { label: "House", hint: "Plumber · Thu", leading: rsx! { Tile { icon: Icon::Home, hue: Hue::Clay } }, dot: true, onclick: noop }
@@ -144,13 +144,13 @@ pub fn Gallery(children: Element) -> Element {
             })}
             {section("Messages", rsx! {
                 div { class: "flex flex-wrap items-start gap-4 [&>*]:flex-[1_1_360px] [&>*]:min-w-0",
-                    div { class: "flex flex-col gap-3 p-3 border border-solid border-line rounded-l bg-surface",
+                    div { class: "flex flex-col gap-3 p-3 border border-solid border-line rounded-lg bg-surface",
                         Message { author: "you", body: "Is 60 °C the right setpoint?" }
                         Message { author: "luc", ai: true, body: "Yes, keep it at 60 °C or above; see house/systems.md.", tools: vec!["file_read".to_string()] }
                         Message { author: "luc", ai: true, pending: true, body: "" }
                         Message { author: "luc", ai: true, failed: true, body: "luc couldn’t answer: the connection closed" }
                     }
-                    div { class: "flex flex-col gap-3 p-3 border border-solid border-line rounded-l bg-surface",
+                    div { class: "flex flex-col gap-3 p-3 border border-solid border-line rounded-lg bg-surface",
                         Message { author: "you", body: "Shorten this to a few words.", style: MessageStyle::Thread }
                         Message { author: "scribe", ai: true, body: "The rest of the bullet gives the context, so the lead-in only names the part.", style: MessageStyle::Thread, tools: vec!["file_read".to_string()] }
                         Message { author: "scribe", ai: true, pending: true, body: "The rest of the bullet gives", style: MessageStyle::Thread }
@@ -225,7 +225,7 @@ pub fn Gallery(children: Element) -> Element {
             {children}
             {section("Icons", rsx! {
                 div { class: "flex flex-wrap gap-2 text-ink",
-                    for i in Icon::ALL { span { class: "flex items-center justify-center w-8 h-8 border border-solid border-line rounded-m bg-surface", title: "{i:?}", {icon(i)} } }
+                    for i in Icon::ALL { span { class: "flex items-center justify-center w-8 h-8 border border-solid border-line rounded-md bg-surface", title: "{i:?}", {icon(i)} } }
                 }
             })}
         }

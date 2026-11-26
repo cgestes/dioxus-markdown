@@ -101,11 +101,11 @@
   --font-display: "Geist", -apple-system, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* Radii */
-  --radius-s: 4px;
-  --radius-m: 7px;
-  --radius-l: 10px;
-  --radius-pill: 999px;
+  /* Radii (use standard Tailwind sm/md/lg/full names to avoid colliding with rounded-l) */
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-full: 999px;
 
   /* Shadows */
   --shadow-pop: 0 6px 20px rgba(22, 21, 44, .14);
