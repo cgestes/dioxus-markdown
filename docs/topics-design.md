@@ -10,7 +10,7 @@ The real setup already had most of the plan's pieces, so the implementation is s
 - **Reminders** come from `reminders.md` (the agent's single deadline table, pinged by its sweeper crons), not from per-reminder cron jobs.
 - **Tailscale:** nothing to set up. ZeroClaw's `[tunnel] tunnel_provider = "tailscale"` (`funnel = false`) runs `tailscale serve --https=443 42617` itself; SilverBullet is a persistent `serve` on `:8443`.
 - **Questions** (`questions.md`) became their own facet; **Known facts** (memory) and **Code** are rendered when present but not yet read from the live space.
-- **Code:** `crates/osom-topics` (parsing, no I/O), `crates/margin-hub/src/lib.rs` (SilverBullet, ZeroClaw REST + `/ws/chat`, Keychain), `crates/osom/src/topics/` (window, CLI, live adapter, `view.rs` the shared view model, `demo.rs` the mockup's sample data).
+- **Code:** `crates/osom-topics` (parsing, no I/O), `crates/margin-hub/src/lib.rs` (SilverBullet, ZeroClaw REST + `/ws/chat`, Keychain), `crates/osom/src/` (window, CLI, live adapter, `view.rs` the shared view model, `demo.rs` the mockup's sample data).
 
 **Later: anchored comments on the real backend.** Main has anchored AI comment threads (`crates/margin-editor/src/comments/mod.rs`) answered by `mock_llm_reply`, which returns a reply and an optional before/after edit proposal. Once vault docs open in the editor here, comments can go to the agent instead. To decide then:
 

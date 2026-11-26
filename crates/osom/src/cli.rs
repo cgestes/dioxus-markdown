@@ -1,5 +1,5 @@
 //! Command-line interface for `osom`.
-use crate::topics::Tab;
+use crate::Tab;
 use clap::{Args, Parser, Subcommand};
 use std::sync::OnceLock;
 

@@ -1,6 +1,6 @@
 # Crate coherence: audit and plan
 
-Status: in progress, 2026-11-26. Phase 1 is done; the decisions below are taken.
+Status: in progress, 2026-11-26. Phases 1 and 2 are done; the decisions below are taken.
 
 The question: does each crate provide one thing, contain only what serves it, and expose an interface that matches? Eight of the thirteen crates do. Four do not, and one has a duplicated concept. This document lists every finding, the layout to aim for, and the steps to get there.
 
@@ -65,7 +65,7 @@ Each finding has an id; the plan refers to them, and the last table maps every i
 
 ### `margin-ui`
 
-- **U1. Editor helpers.** `typefaces::prose_width` exists so Rich mode can fit a styled run over a field. `notebook_fonts` is named after the notebook, and the gallery and Osom use it too.
+- **U1. Editor helpers.** `typefaces::prose_width` was written so Rich mode could fit a styled run over a field. (Step 2.7 found it had no caller left, and removed it.) `notebook_fonts` is named after the notebook, and the gallery and Osom use it too.
 - **U2. Two ways to import Dioxus.** The editor uses `margin_ui::prelude`, which picks the renderer. Osom and `margin` import `dioxus_native::prelude` directly.
 
 ### `osom-topics`, `osom`, `margin-vault-cli`
@@ -112,18 +112,18 @@ Every step is one commit and leaves the workspace building and green. Sizes: S i
 | 1.3 | Remove `Passage::source_at` and anything only it needs | C6 | S |
 | 1.4 | Correct the stale doc comments and the core's crate doc | X2, E7, C1 (doc) | S |
 
-### Phase 2: move each thing to the crate that owns it
+### Phase 2: move each thing to the crate that owns it (done)
 
 | Step | Change | Findings | Size |
 | --- | --- | --- | --- |
 | 2.1 | Move the Topics date forms to `osom-topics`. The core keeps the clock, civil dates, RFC 3339 and ISO dates. | C2 | S |
 | 2.2 | Move `heading_above` to `heading` | C5 | S |
-| 2.3 | Split `comments` into the file format and the agent request; rename the comment `Ask` (proposed: `comments::Request`) | C3 | M |
+| 2.3 | Split `comments` into the file format and the agent request (`comments::request`); the comment `Ask` becomes a private `Request` | C3 | M |
 | 2.4 | `Space::write` returns `WriteError`; delete the `CONFLICT` comparison | H3 | S |
-| 2.5 | `Note` gets the one constructor that writes a note's layout; `Vault::new_note` uses it. Decide whether the `format` marker is part of the layout. | N2 | S |
+| 2.5 | `Note` lays out every note document; `Vault::new_note` and the CLI go through it. The `format` marker stays the vault's own. | N2 | S |
 | 2.6 | Rename the vault's two app-named methods to what they do (resume the last note or start the first) | V1 | S |
-| 2.7 | Move `prose_width` to the editor's platform text module; rename `notebook_fonts` to `fonts`; import Dioxus through `margin_ui::prelude` in Osom and `margin` | U1, U2 | S |
-| 2.8 | Rename `document::Block` and `blocks()` to what they are (proposed: `Landmark`, `landmarks`); use "page" in `link_preview` | P1, P2 | M |
+| 2.7 | Remove `prose_width` (unused); rename `notebook_fonts` to `fonts`; import Dioxus through `margin_ui::prelude` in Osom, `margin` and `margin-web` | U1, U2 | S |
+| 2.8 | Rename `document::Block` and `blocks()` to `Landmark` and `landmarks`; use "page" in `link_preview` | P1, P2 | M |
 | 2.9 | Flatten `osom::topics` into `osom`; split `osom-topics` into modules by concept; drop its heading re-export | O1, T1, T2 | M |
 
 ### Phase 3: the editor's interface

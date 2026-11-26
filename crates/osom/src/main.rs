@@ -1,7 +1,7 @@
 //! Osom: the Topics window, and the commands that run without it
 //! (`osom setup`, `osom pair`, `osom --print`, `osom comment-test`).
 use margin_ui::prelude::*;
-use osom::topics::{Shell, Start, commands};
+use osom::{Shell, Start, commands};
 
 fn main() {
     margin_editor::support::restart::answer_build_probe("osom");

@@ -1,7 +1,7 @@
 //! Where the Topics window's data comes from: the live space and agent, or
 //! the demo. Both end as a `view::Workspace`.
-use crate::topics::demo;
-use crate::topics::view::*;
+use crate::demo;
+use crate::view::*;
 use margin_editor_core::{dates, heading};
 use margin_hub::{AgentChat, Canned, Endpoints, Page, Space, ZeroClaw};
 use osom_topics::{self as model, Kind, Origin, Reminder, Session, Topic, calendar};

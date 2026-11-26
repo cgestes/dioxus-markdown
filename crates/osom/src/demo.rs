@@ -1,6 +1,6 @@
 //! Sample data for `osom --demo`: the topics of the design mockup
 //! (`mockup/topics.html`), so the window can be shown without a tailnet.
-use crate::topics::view::*;
+use crate::view::*;
 
 fn s(x: &str) -> String {
     x.to_string()
