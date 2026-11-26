@@ -180,3 +180,37 @@ pub fn bounds(doc: &DioxusDocument, name: &str) -> [f64; 4] {
 pub fn text(doc: &DioxusDocument, name: &str) -> String {
     doc.inner.borrow().get_node(id(doc, name)).unwrap().text_content()
 }
+
+fn writing(doc: &DioxusDocument) -> crate::Writing {
+    doc.vdom.in_scope(ScopeId::APP, consume_context::<crate::Writing>)
+}
+
+/// Comment on `range` of the note as its reader would: quote it and ask
+/// `request`. Here and below, the notebook is the document's root.
+pub fn ask_about(doc: &DioxusDocument, range: std::ops::Range<usize>, quote: &str, request: &str) {
+    doc.vdom.in_scope(ScopeId::APP, || {
+        let mut w = consume_context::<crate::Writing>();
+        w.discussion.draft.set(Some(crate::comments::DraftComment { range, quote: quote.into() }));
+        w.submit_draft_comment(request);
+    });
+}
+
+/// The note's comment threads, as the notebook holds them.
+pub fn threads(doc: &DioxusDocument) -> Vec<crate::CommentThread> {
+    writing(doc).discussion.threads.peek().clone()
+}
+
+/// Where the comment file of a page stands.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommentFileState {
+    /// Read from the server, or known to be absent.
+    pub loaded: bool,
+    pub saving: bool,
+    pub error: Option<String>,
+}
+
+pub fn comment_file(doc: &DioxusDocument) -> CommentFileState {
+    let file = writing(doc).discussion.file;
+    let file = file.peek();
+    CommentFileState { loaded: file.is_loaded(), saving: file.is_saving(), error: file.error.clone() }
+}

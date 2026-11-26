@@ -122,7 +122,8 @@ pub struct CommentFile {
     pub error: Option<String>,
 }
 
-#[cfg(test)]
+// Read by the test driver (`crate::testing`).
+#[cfg(not(target_arch = "wasm32"))]
 impl CommentFile {
     pub fn is_loaded(&self) -> bool {
         self.loaded

@@ -4320,7 +4320,6 @@ dependencies = [
  "js-sys",
  "loro",
  "margin-editor-core",
- "margin-hub",
  "margin-note",
  "margin-projection",
  "margin-ui",

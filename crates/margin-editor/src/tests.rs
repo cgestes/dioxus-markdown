@@ -3093,95 +3093,30 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
 mod live_workflows;
 
 
-#[component]
-fn LiveEditor(text: String, options: NotebookOptions) -> Element {
-    notebook_view(&text, options)
-}
 
-/// The editor asks the real comment agent on a real page, streams the
-/// reply into the thread and saves the comment file next to the page;
-/// both are removed afterwards. The test binary is not the app the
-/// Keychain trusts, so pass the token to avoid a Keychain prompt:
-/// `ZEROCLAW_TOKEN=… cargo test -p margin-editor live_comment -- --ignored --nocapture`
+/// The test driver's comment hooks, against the stand-in agent. Osom's live
+/// test drives the same hooks against the real agent and a page of the space.
 #[test]
-#[ignore = "talks to the live space and agent over the tailnet"]
-fn live_comment_streams_a_reply_and_saves_the_thread() {
-    use crate::comments::{CommentAgent, DraftComment};
-    use crate::PageSource;
-    use margin_hub::Endpoints;
-    use std::{sync::Arc, time::Duration};
-    use dioxus_native::DioxusDocument;
-    use margin_editor_core::comments as file;
-    use margin_hub::Space;
-    let e = Endpoints::load().unwrap();
-    let page = "car/maintenance.md";
-    let space = Space::new(&e.space);
-    let read = space.read(page).unwrap();
-    let text = read.text.clone();
-    struct SpacePage(PageSource);
-    impl crate::NoteStore for SpacePage {
-        fn use_persistence(&self, _note: Signal<margin_note::note::Note>) -> Signal<String> {
-            use_signal(String::new)
+fn a_comment_asked_through_the_test_driver_gets_an_answer() {
+    let mut doc = editor();
+    let quote = "Pack the windscreen";
+    let at = SAMPLE.find(quote).unwrap();
+    assert!(threads(&doc).is_empty());
+    ask_about(&doc, at..at + quote.len(), quote, "Shorten this to a few words.");
+    for _ in 0..400 {
+        if threads(&doc).first().is_some_and(|t| t.pending.is_none()) {
+            break;
         }
-        fn page(&self) -> Option<PageSource> {
-            Some(self.0.clone())
-        }
+        blitz_dom::Document::poll(&mut doc, None);
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    let source = PageSource { path: page.into(), files: Arc::new(space.clone()), etag: read.etag };
-    let options = NotebookOptions {
-        comments: Comments::Agent(CommentAgent { alias: e.comment_agent.clone(), chat: Arc::new(e.zeroclaw()) }),
-        store: Some(crate::Store::new(SpacePage(source))),
-        ..Default::default()
-    };
-    let mut doc = DioxusDocument::new(
-        VirtualDom::new_with_props(LiveEditor, LiveEditorProps { text: text.clone(), options }),
-        dioxus_native::DocumentConfig {
-            font_ctx: Some(margin_ui::typefaces::fonts()),
-            ..Default::default()
-        },
-    );
-    doc.initial_build();
-    fn doc_writing(doc: &DioxusDocument) -> Writing {
-        doc.vdom.in_scope(ScopeId::APP, consume_context::<Writing>)
-    }
-    let settle = |doc: &mut DioxusDocument, secs: u64, done: &dyn Fn(&DioxusDocument) -> bool| {
-        let started = std::time::Instant::now();
-        while !done(doc) && started.elapsed() < Duration::from_secs(secs) {
-            blitz_dom::Document::poll(doc, None);
-            std::thread::sleep(Duration::from_millis(50));
-        }
-    };
-    // The page has no comment file yet: loading finds it absent.
-    settle(&mut doc, 20, &|d| {
-        let f = doc_writing(d).discussion.file;
-        let state = f.peek();
-        state.is_loaded() || state.error.is_some()
-    });
-    assert_eq!(doc_writing(&doc).discussion.file.peek().error, None);
-    let quote = "Front-left proximity sensor failing";
-    let at = text.find(quote).unwrap();
-    doc.vdom.in_scope(ScopeId::APP, || {
-        let mut w = consume_context::<Writing>();
-        w.discussion.draft.set(Some(DraftComment { range: at..at + quote.len(), quote: quote.into() }));
-        w.submit_draft_comment("Shorten this to a few words.");
-    });
-    settle(&mut doc, 240, &|d| {
-        doc_writing(d).discussion.threads.peek().first().is_some_and(|t| t.pending.is_none())
-            && !doc_writing(d).discussion.file.peek().is_saving()
-    });
-    let thread = doc_writing(&doc).discussion.threads.peek().first().cloned().expect("thread");
-    let reply = thread.file.messages.last().unwrap().clone();
-    println!("reply: {}\nproposal: {:?}", reply.body, reply.proposal.as_ref().map(|p| &p.new));
-    let saved = space.read(&file::sidecar_path(page));
-    // Clean up before asserting.
-    let _ = space.delete(&file::sidecar_path(page));
-    let _ = e.zeroclaw().delete_session(&file::request::session_id(&thread.file.id));
-    assert!(!thread.failed.contains(&reply.id) && !reply.body.is_empty(), "the agent answered: {}", reply.body);
-    assert!(!reply.body.contains(file::request::FENCE), "the edit block never shows");
-    let saved = file::Sidecar::parse(&saved.expect("comment file written").text).unwrap();
-    assert_eq!(saved.threads.len(), 1);
-    assert_eq!(saved.threads[0].anchor.exact, quote);
-    assert_eq!(saved.threads[0].messages.len(), 2, "your comment and the answer");
+    let thread = threads(&doc).pop().expect("the comment made a thread");
+    assert_eq!(thread.file.anchor.exact, quote);
+    assert!(thread.pending.is_none() && thread.failed.is_empty(), "the stand-in answered");
+    assert_eq!(thread.file.messages.len(), 2, "your comment and the answer");
+    // No page, so there is no comment file to load or save.
+    let file = comment_file(&doc);
+    assert!(!file.saving && file.error.is_none(), "{file:?}");
 }
 
 /// An attribute of the element with id `name`.

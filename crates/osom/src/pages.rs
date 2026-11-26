@@ -154,3 +154,69 @@ pub(super) fn TranscriptPane(session_key: String, title: String) -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use margin_editor::CommentAgent;
+    use margin_editor::testing::{ask_about, comment_file, threads};
+    use margin_editor_core::comments as file;
+    use margin_hub::{Endpoints, Space};
+
+    /// The notebook asks the real comment agent on a real page of the space,
+    /// streams the reply into the thread and saves the comment file next to
+    /// the page; both are removed afterwards. The test binary is not the app
+    /// the Keychain trusts, so pass the token to avoid a Keychain prompt:
+    /// `ZEROCLAW_TOKEN=… cargo test -p osom live_comment -- --ignored --nocapture`
+    #[test]
+    #[ignore = "talks to the live space and agent over the tailnet"]
+    fn live_comment_streams_a_reply_and_saves_the_thread() {
+        use dioxus_native::DioxusDocument;
+        let e = Endpoints::load().unwrap();
+        let page = "car/maintenance.md";
+        let space = Space::new(&e.space);
+        let read = space.read(page).unwrap();
+        let text = read.text.clone();
+        let source = PageSource { path: page.into(), files: Arc::new(space.clone()), etag: read.etag };
+        let options = NotebookOptions {
+            comments: Comments::Agent(CommentAgent { alias: e.comment_agent.clone(), chat: Arc::new(e.zeroclaw()) }),
+            ..Default::default()
+        };
+        // The page editor is the document's root, as the test driver expects.
+        let mut doc = DioxusDocument::new(
+            VirtualDom::new_with_props(PageEditor, PageEditorProps { text: text.clone(), source: Some(source), options }),
+            dioxus_native::DocumentConfig { font_ctx: Some(margin_ui::typefaces::fonts()), ..Default::default() },
+        );
+        doc.initial_build();
+        let settle = |doc: &mut DioxusDocument, secs: u64, done: &dyn Fn(&DioxusDocument) -> bool| {
+            let started = std::time::Instant::now();
+            while !done(doc) && started.elapsed() < Duration::from_secs(secs) {
+                blitz_dom::Document::poll(doc, None);
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        };
+        // The page has no comment file yet: loading finds it absent.
+        settle(&mut doc, 20, &|d| {
+            let state = comment_file(d);
+            state.loaded || state.error.is_some()
+        });
+        assert_eq!(comment_file(&doc).error, None);
+        let quote = "Front-left proximity sensor failing";
+        let at = text.find(quote).unwrap();
+        ask_about(&doc, at..at + quote.len(), quote, "Shorten this to a few words.");
+        settle(&mut doc, 240, &|d| threads(d).first().is_some_and(|t| t.pending.is_none()) && !comment_file(d).saving);
+        let thread = threads(&doc).first().cloned().expect("thread");
+        let reply = thread.file.messages.last().unwrap().clone();
+        println!("reply: {}\nproposal: {:?}", reply.body, reply.proposal.as_ref().map(|p| &p.new));
+        let saved = space.read(&file::sidecar_path(page));
+        // Clean up before asserting.
+        let _ = space.delete(&file::sidecar_path(page));
+        let _ = e.zeroclaw().delete_session(&file::request::session_id(&thread.file.id));
+        assert!(!thread.failed.contains(&reply.id) && !reply.body.is_empty(), "the agent answered: {}", reply.body);
+        assert!(!reply.body.contains(file::request::FENCE), "the edit block never shows");
+        let saved = file::Sidecar::parse(&saved.expect("comment file written").text).unwrap();
+        assert_eq!(saved.threads.len(), 1);
+        assert_eq!(saved.threads[0].anchor.exact, quote);
+        assert_eq!(saved.threads[0].messages.len(), 2, "your comment and the answer");
+    }
+}

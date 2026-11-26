@@ -1,6 +1,6 @@
 # Crate coherence: audit and plan
 
-Status: in progress, 2026-11-26. Phases 1 and 2 are done; the decisions below are taken.
+Status: in progress, 2026-11-26. Phases 1 to 3 are done; the decisions below are taken.
 
 The question: does each crate provide one thing, contain only what serves it, and expose an interface that matches? Eight of the thirteen crates do. Four do not, and one has a duplicated concept. This document lists every finding, the layout to aim for, and the steps to get there.
 
@@ -126,14 +126,14 @@ Every step is one commit and leaves the workspace building and green. Sizes: S i
 | 2.8 | Rename `document::Block` and `blocks()` to `Landmark` and `landmarks`; use "page" in `link_preview` | P1, P2 | M |
 | 2.9 | Flatten `osom::topics` into `osom`; split `osom-topics` into modules by concept; drop its heading re-export | O1, T1, T2 | M |
 
-### Phase 3: the editor's interface
+### Phase 3: the editor's interface (done)
 
 | Step | Change | Findings | Size |
 | --- | --- | --- | --- |
 | 3.1 | Move `support::page` into `notebook`; the crate root keeps exporting `PageSource` | E2 | S |
-| 3.2 | Split `NoteStore`. It keeps where the note and its discussion live (`note`, `use_persistence`, `threads`, `save_discussion`, `page`). The window title, the app's menu button, the embedded bar and the report destination move to one `Host` value in `NotebookOptions`. Re-export `Note` from the editor. | E3, E4 | M |
+| 3.2 | Split `NoteStore`. It keeps what is storage: the note, its discussion, a page on a server, and where a report is kept (`note`, `use_persistence`, `threads`, `save_discussion`, `page`, `attach_report`). The window title, the app's menu button and the pane bar move to one `Host` value in `NotebookOptions`. Re-export `Note` from the editor. | E3, E4 | M |
 | 3.3 | `View` becomes `Rich`, `Live`, `Source`. Osom asks for `Rich`; `host` no longer implies it. | E5 | S |
-| 3.4 | Move the live comment test to `osom`, which already has the hub and an `osom comment-test` command. The editor drops its dev dependency. | E6 | S |
+| 3.4 | Move the live comment test to `osom`, which already has the hub. It drives the notebook through new comment hooks in `margin_editor::testing`, which an editor test checks against the stand-in agent. The editor drops its dev dependency. | E6 | S |
 
 ### Phase 4: crate boundaries
 

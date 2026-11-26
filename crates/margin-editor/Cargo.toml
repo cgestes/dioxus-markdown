@@ -46,8 +46,6 @@ blitz-shell = { version = "=0.3.0-beta.4", default-features = false }
 dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7" }
 
 [dev-dependencies]
-# The live comment test talks to the real space and agent.
-margin-hub = { path = "../margin-hub" }
 tempfile = "3"
 blitz-paint = { version = "=0.3.0-beta.4", default-features = false }
 anyrender = "=0.14.0"
