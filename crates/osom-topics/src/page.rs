@@ -1,8 +1,7 @@
 //! Reading a page of the space: its tables, its task items, and the display
 //! text of inline Markdown.
 use margin_core::table;
-use margin_projection::reading::{self, Block};
-use pulldown_cmark::{Event, Options, Parser, Tag};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::collections::HashMap;
 
 /// A Markdown table with the heading it sits under.
@@ -87,21 +86,28 @@ pub fn plain(s: &str) -> String {
     inline(s).text
 }
 
-/// Task items of a page, as the notebook reads them: (text, checked).
+/// Task items of a page: (text, checked). The text is the item's first line
+/// as the notebook shows it, without the Markdown's marks.
 pub fn tasks(md: &str) -> Vec<(String, bool)> {
-    reading::read(md)
-        .into_iter()
-        .filter_map(|block| match block {
-            Block::Text { passage } if passage.kind == "item" => {
-                let (first, rest) = passage.runs.split_first()?;
-                (first.style == "box").then(|| {
-                    let text: String = rest.iter().map(|r| r.text.as_str()).collect();
-                    (text.trim().to_string(), first.text.starts_with('☑'))
-                })
+    let mut out = Vec::new();
+    let mut task: Option<(String, bool)> = None;
+    for event in Parser::new_ext(md, Options::ENABLE_TASKLISTS) {
+        match event {
+            Event::TaskListMarker(checked) => task = Some((String::new(), checked)),
+            Event::Text(text) | Event::Code(text) => {
+                if let Some((t, _)) = task.as_mut() {
+                    t.push_str(&text);
+                }
             }
-            _ => None,
-        })
-        .collect()
+            Event::SoftBreak | Event::HardBreak | Event::Start(Tag::List(_)) | Event::End(TagEnd::Item | TagEnd::Paragraph) => {
+                if let Some((t, checked)) = task.take() {
+                    out.push((t.trim().to_string(), checked));
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// A registry README's relations: page path → relationship, from its

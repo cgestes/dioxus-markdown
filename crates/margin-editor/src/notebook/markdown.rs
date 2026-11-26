@@ -351,6 +351,14 @@ impl Ink {
 }
 
 
+/// A language as a fence's info string can hold it: one word, without the
+/// fence characters. A backtick there would end a ``` fence's opening line as
+/// code; a leading `~` would lengthen a ~~~ fence, so its closing line would
+/// no longer close it.
+pub(crate) fn fence_language(typed: &str) -> String {
+    typed.split_whitespace().next().unwrap_or("").chars().filter(|c| !matches!(c, '`' | '~')).collect()
+}
+
 impl Writing {
     pub fn inline_fields(self) -> Vec<Field> {
         let mut fields = Vec::new();
@@ -409,8 +417,8 @@ impl Writing {
             + node.text_input_v_centering_offset(f64::from(scale)) as f32;
         let bottom = top + l.content_box_height() * scale;
         let tokens = &proj.tokens;
-        // Rich mode sets prose in a proportional face: a bold or italic run is
-        // wider or narrower than the regular glyphs it covers.
+        // Live shows a callout's `>` marks beside the caret, like other
+        // punctuation; Rich keeps them hidden.
         let rich = *self.edit_mode.peek() == super::projection::EditMode::Rich;
         let mut result = Vec::new();
         for line in layout.lines() {
@@ -649,6 +657,7 @@ impl Writing {
 
     pub fn set_code_block_lang(mut self, code_start: usize, new_lang: &str) {
         self.code_lang_menu.set(None);
+        let new_lang = &fence_language(new_lang);
         let found = self
             .parsed
             .read()

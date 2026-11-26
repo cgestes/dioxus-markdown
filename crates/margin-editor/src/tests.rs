@@ -431,20 +431,19 @@ fn resting_checkboxes_reveal_only_for_keyboard_cursor_while_mouse_keeps_togglebo
     let other = full.find("[x]").unwrap();
     let first_id = format!("checkbox-{open}");
     let other_id = format!("checkbox-{other}");
-    let shown = |d: &DioxusDocument, name: &str| d.inner.borrow().get_element_by_id(name).is_some();
-    assert!(shown(&doc, &first_id));
-    assert!(shown(&doc, &other_id));
+    assert!(has(&doc, &first_id));
+    assert!(has(&doc, &other_id));
 
     // Keyboard cursor reveals only the adjacent checkbox.
     for pos in [open - 1, open, open + 1, open + 2, open + 3, open + 4, other + 1] {
         open_body_at(&mut doc, [pos; 2]);
         assert_eq!(
-            shown(&doc, &first_id),
+            has(&doc, &first_id),
             !(open..=open + 3).contains(&pos),
             "first token at {pos}"
         );
         assert_eq!(
-            shown(&doc, &other_id),
+            has(&doc, &other_id),
             !(other..=other + 3).contains(&pos),
             "second token at {pos}"
         );
@@ -452,7 +451,7 @@ fn resting_checkboxes_reveal_only_for_keyboard_cursor_while_mouse_keeps_togglebo
 
     // Mouse-clicking a resting checkbox toggles it while keeping the togglebox visible!
     open_body_at(&mut doc, [7; 2]);
-    assert!(shown(&doc, &first_id));
+    assert!(has(&doc, &first_id));
     let box_rect = bounds(&doc, &first_id);
     let body_rect = bounds(&doc, "note-body");
     let click_pt = (
@@ -481,11 +480,11 @@ fn resting_checkboxes_reveal_only_for_keyboard_cursor_while_mouse_keeps_togglebo
     }
     click_at(&mut doc, "note-body", Some(click_pt));
     assert_eq!(&markdown(&doc)[open..open + 3], "[x]");
-    assert!(shown(&doc, &first_id), "mouse click keeps togglebox visible");
+    assert!(has(&doc, &first_id), "mouse click keeps togglebox visible");
     // Clicking again toggles it back off cleanly!
     click_at(&mut doc, "note-body", Some(click_pt));
     assert_eq!(&markdown(&doc)[open..open + 3], "[ ]");
-    assert!(shown(&doc, &first_id));
+    assert!(has(&doc, &first_id));
 }
 
 #[test]
@@ -844,6 +843,44 @@ fn resting_delimiters_collapse_tightly_and_expand_only_at_cursor() {
     click(&mut doc, "rich-mode");
     open_body_at(&mut doc, [inside_bold; 2]);
     assert_eq!(value(&doc, "note-body"), "A bold and soft note.\n");
+}
+
+/// In Rich mode the fences of a code block are hidden; Backspace beside
+/// them never joins a fence line to the text next to it.
+#[test]
+fn backspace_beside_a_hidden_fence_keeps_the_code_block() {
+    let mut doc = editor();
+    let md = "# Note\n\nBefore\n```rust\nfn main() {}\n```\nAfter";
+    open_markdown(&mut doc, md, md.find("After").unwrap());
+    click(&mut doc, "rich-mode");
+    for at in [md.find("After").unwrap(), md.find("fn main").unwrap()] {
+        let local = body_display(&doc, at);
+        select(&doc, "note-body", [local; 2]);
+        backspace_text(&mut doc);
+        assert_eq!(markdown(&doc), md, "Backspace at {at}");
+        assert!(value(&doc, "note-body").contains("fn main() {}\nAfter"), "the field shows the note again");
+    }
+}
+
+/// A finger leaves no hover: after a tap, the selected cell's column and
+/// row show their handles, and typing does not hide them. A mouse press
+/// goes back to showing them on hover only.
+#[test]
+fn a_tapped_cell_shows_its_column_and_row_handles() {
+    let mut doc = editor();
+    let md = "# Note\n\n| A | B | C |\n| --- | --- | --- |\n| one | two | three |\n\nBody";
+    open_markdown(&mut doc, md, 2);
+    tap(&mut doc, "cell-0-1-2");
+    assert!(has(&doc, "col-menu-btn-0-2") && has(&doc, "row-menu-btn-0-1"));
+    commit_text(&mut doc, "!");
+    assert!(has(&doc, "col-menu-btn-0-2") && has(&doc, "row-menu-btn-0-1"), "typing keeps them");
+    // The header row has no row handle.
+    tap(&mut doc, "cell-0-0-1");
+    assert!(has(&doc, "col-menu-btn-0-1") && !has(&doc, "row-menu-btn-0-1"));
+    // A mouse press: the handles follow the hover again, and typing hides them.
+    click(&mut doc, "cell-0-1-0");
+    commit_text(&mut doc, "!");
+    assert!(!has(&doc, "col-menu-btn-0-0") && !has(&doc, "row-menu-btn-0-1"));
 }
 
 #[test]
@@ -2995,6 +3032,14 @@ fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
     );
     click(&mut doc, "undo");
     assert!(markdown(&doc).contains("```rust\nfn main() {}\n```"));
+    // A typed language is kept to one word without fence characters: a
+    // backtick would turn the opening fence into inline code.
+    click(&mut doc, &format!("code-lang-{code_start}"));
+    commit_text(&mut doc, "c` x");
+    click(&mut doc, "ui-combobox-pick-custom");
+    assert!(markdown(&doc).contains("```c\nfn main() {}\n```"), "{}", markdown(&doc));
+    click(&mut doc, "undo");
+    assert!(markdown(&doc).contains("```rust\nfn main() {}\n```"));
     click(&mut doc, &format!("code-lang-{code_start}"));
     assert!(doc.inner.borrow().get_element_by_id("code-lang-menu").is_some());
     press(&mut doc, Key::Named(NamedKey::Escape), false);
@@ -3094,51 +3139,64 @@ mod live_workflows;
 
 
 
-/// The test driver's comment hooks, against the stand-in agent. Osom's live
-/// test drives the same hooks against the real agent and a page of the space.
-#[test]
-fn a_comment_asked_through_the_test_driver_gets_an_answer() {
-    let mut doc = editor();
-    let quote = "Pack the windscreen";
-    let at = SAMPLE.find(quote).unwrap();
-    assert!(threads(&doc).is_empty());
-    ask_about(&doc, at..at + quote.len(), quote, "Shorten this to a few words.");
-    for _ in 0..400 {
-        if threads(&doc).first().is_some_and(|t| t.pending.is_none()) {
-            break;
-        }
-        blitz_dom::Document::poll(&mut doc, None);
-        std::thread::sleep(std::time::Duration::from_millis(5));
+/// A store that keeps the discussion the notebook saves, as an app does.
+#[derive(Clone, Default)]
+struct KeepsDiscussion(std::rc::Rc<std::cell::RefCell<Vec<u8>>>);
+
+impl NoteStore for KeepsDiscussion {
+    fn use_persistence(&self, _note: Signal<Note>) -> Signal<String> {
+        use_signal(String::new)
     }
-    let thread = threads(&doc).pop().expect("the comment made a thread");
-    assert_eq!(thread.file.anchor.exact, quote);
-    assert!(thread.pending.is_none() && thread.failed.is_empty(), "the stand-in answered");
-    assert_eq!(thread.file.messages.len(), 2, "your comment and the answer");
-    // No page, so there is no comment file to load or save.
-    let file = comment_file(&doc);
-    assert!(!file.saving && file.error.is_none(), "{file:?}");
+
+    fn save_discussion(&self, _previous: &[u8], current: &[u8]) -> anyhow::Result<()> {
+        *self.0.borrow_mut() = current.to_vec();
+        Ok(())
+    }
 }
 
-/// An attribute of the element with id `name`.
-fn attribute(doc: &DioxusDocument, name: &str, attribute: &str) -> Option<String> {
-    doc.inner.borrow().get_node(id(doc, name)).unwrap().attr(attribute.into()).map(str::to_owned)
+impl KeepsDiscussion {
+    fn threads(&self) -> Vec<CommentThread> {
+        serde_json::from_slice(&self.0.borrow()).unwrap_or_default()
+    }
 }
 
-fn has(doc: &DioxusDocument, name: &str) -> bool {
-    doc.inner.borrow().get_element_by_id(name).is_some()
+/// The test driver comments as a reader does, and the stand-in agent's
+/// answer reaches the app through its store. Osom's live test does the same
+/// against the real agent and a page of the space.
+#[test]
+fn a_comment_made_through_the_page_reaches_the_store_with_its_answer() {
+    let kept = KeepsDiscussion::default();
+    let mut doc = open(VirtualDom::new_with_props(
+        |props: NotebookWithProps| notebook_view(SAMPLE, NotebookOptions { store: Some(props.store), ..Default::default() }),
+        NotebookWithProps { store: Store::new(kept.clone()) },
+    ));
+    let quote = "Pack the windscreen";
+    comment_on(&mut doc, quote, "Shorten this to a few words.");
+    let answered = |k: &KeepsDiscussion| k.threads().first().is_some_and(|t| t.file.messages.len() == 2);
+    settle(&mut doc, std::time::Duration::from_secs(2), |_| answered(&kept));
+    let threads = kept.threads();
+    assert_eq!(threads.len(), 1);
+    assert_eq!(threads[0].file.anchor.exact, quote);
+    let [asked, answer] = &threads[0].file.messages[..] else { panic!("your comment and the answer") };
+    assert!(!asked.ai && asked.body == "Shorten this to a few words.");
+    assert!(answer.ai && !answer.body.is_empty(), "the stand-in answered");
+}
+
+#[derive(Props, Clone, PartialEq)]
+struct NotebookWithProps {
+    store: Store,
+}
+
+#[component]
+fn NotebookIn(view: View) -> Element {
+    notebook_view(SAMPLE, NotebookOptions { view, ..Default::default() })
 }
 
 #[test]
 fn a_notebook_opens_in_the_view_it_is_asked_for() {
-    let options = |view| NotebookOptions { view, ..Default::default() };
-    let roots: [(fn() -> Element, &str); 3] = [
-        (|| notebook_view(SAMPLE, NotebookOptions { view: View::Rich, ..Default::default() }), "rich-mode"),
-        (|| notebook_view(SAMPLE, NotebookOptions::default()), "live-mode"),
-        (|| notebook_view(SAMPLE, NotebookOptions { view: View::Source, ..Default::default() }), "source-mode"),
-    ];
-    assert!(options(View::default()) == NotebookOptions::default(), "Live is the default");
-    for (root, selected) in roots {
-        let doc = open(VirtualDom::new(root));
+    assert!(View::default() == View::Live);
+    for (view, selected) in [(View::Rich, "rich-mode"), (View::Live, "live-mode"), (View::Source, "source-mode")] {
+        let doc = open(VirtualDom::new_with_props(NotebookIn, NotebookInProps { view }));
         for mode in ["rich-mode", "live-mode", "source-mode"] {
             let on = attribute(&doc, mode, "aria-pressed").as_deref() == Some("true");
             assert_eq!(on, mode == selected, "{mode} when opened as {selected}");

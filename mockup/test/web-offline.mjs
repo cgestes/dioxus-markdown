@@ -40,12 +40,22 @@ try {
   // only on https, so the test does it here.
   const wasmFile = (await readdir(join(bundle, "assets"))).find(name => /-dxh[0-9a-f]+\.wasm$/.test(name));
   const earlier = `/assets/${wasmFile.replace(/-dxh[0-9a-f]+\.wasm$/, "")}-dxh0123456789abcdef.wasm`;
+  // Another app on the same origin keeps its cache; Margin's older one goes.
   await page.evaluate(async earlier => {
     const cache = await caches.open("margin-shell-v3");
     await cache.put(earlier, new Response("an earlier build"));
+    await (await caches.open("another-app")).put("/other.txt", new Response("theirs"));
+    await (await caches.open("margin-shell-v2")).put("/old.txt", new Response("ours"));
     await navigator.serviceWorker.register("sw.js");
     await navigator.serviceWorker.ready;
   }, earlier);
+  let names = [];
+  for (const deadline = Date.now() + 15000; Date.now() < deadline; await page.waitForTimeout(200)) {
+    names = await page.evaluate(() => caches.keys());
+    if (!names.includes("margin-shell-v2")) break;
+  }
+  assert.ok(names.includes("another-app"), `another app's cache stays: ${names}`);
+  assert.ok(!names.includes("margin-shell-v2"), `Margin's older cache goes: ${names}`);
   // The page tells the worker what it loaded before the worker was there: the
   // worker keeps this build's script, wasm and fonts, and drops the earlier wasm.
   const cached = () => page.evaluate(async () =>

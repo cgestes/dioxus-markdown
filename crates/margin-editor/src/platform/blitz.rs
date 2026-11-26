@@ -275,6 +275,16 @@ pub fn save_report(bytes: &[u8]) -> std::io::Result<String> {
     Ok(path.display().to_string())
 }
 
+/// Blitz places a touch's caret only where the notebook does.
+pub fn keep_touch_caret(_doc: &Document, _id: NodeId) {}
+
+/// Put `text` on the clipboard, then run `then` if it is there.
+pub fn copy_then(root: &NodeHandle, text: String, then: impl FnOnce() + 'static) {
+    if root.doc().shell_provider.set_clipboard_text(text).is_ok() {
+        then();
+    }
+}
+
 /// Blitz gets its fonts from the font context and needs no page defaults.
 #[component]
 pub fn Head() -> Element {

@@ -23,16 +23,19 @@ pub mod restart {
     }
 
     pub fn restart_app() {}
-
-    /// No other build asks a page what it was built with.
-    pub fn answer_build_probe(_identity: &'static str) {}
 }
 
 /// The app's name, as `launch` was given it: window titles start with it.
 static APP_TITLE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
-pub fn app_title() -> &'static str {
-    APP_TITLE.get().map_or("Margin", String::as_str)
+/// A window's title for `subject` (what it shows): the app's name, the
+/// worktree a development build was built in, then the subject.
+pub fn window_title(subject: &str) -> String {
+    let app = APP_TITLE.get().map_or("Margin", String::as_str);
+    match restart::worktree_name() {
+        Some(worktree) => format!("{app} · {worktree} · {subject}"),
+        None => format!("{app} · {subject}"),
+    }
 }
 
 /// Open a window (or, in a browser, the page) titled `title` whose content

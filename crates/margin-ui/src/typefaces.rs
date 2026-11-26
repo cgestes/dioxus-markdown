@@ -1,4 +1,5 @@
 //! The typefaces every window uses (Geist and JetBrains Mono), bundled.
+use crate::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use parley::{
     FontContext,
@@ -22,10 +23,19 @@ macro_rules! faces {
     };
 }
 
+/// The bundled faces for a page: `@font-face` rules in a browser. Blitz gets
+/// them from its font context (`fonts`), so natively this renders nothing.
+#[component]
+pub fn FontFaces() -> Element {
+    #[cfg(target_arch = "wasm32")]
+    return rsx! { style { {font_faces()} } };
+    #[cfg(not(target_arch = "wasm32"))]
+    rsx! {}
+}
+
 /// `@font-face` rules for the bundled faces, served as assets.
 #[cfg(target_arch = "wasm32")]
-pub fn font_faces() -> String {
-    use crate::prelude::*;
+fn font_faces() -> String {
     macro_rules! face {
         ($family:tt, $weight:tt, $italic:tt, $file:tt) => {
             ($family, $weight, $italic, asset!($file))

@@ -86,7 +86,7 @@ fn personal_editor_persists_input_and_keeps_diagnostics_on_device() -> anyhow::R
     let mut app = open(VirtualDom::new(crate::app));
     assert_eq!(value(&app, "note-title"), "Field notes");
     assert_eq!(value(&app, "cell-0-1-0"), "North lock");
-    assert!(app.inner.borrow().get_element_by_id("comment-thread-1").is_some());
+    assert!(has(&app, "comment-thread-1"));
     click(&mut app, "notes-menu");
     click(&mut app, &format!("vault-room-{other}"));
     assert_eq!(field(&app, id(&app, "note-body")), "Different text");

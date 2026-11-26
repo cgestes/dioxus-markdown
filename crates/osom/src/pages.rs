@@ -158,15 +158,58 @@ pub(super) fn TranscriptPane(session_key: String, title: String) -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use margin_editor::CommentAgent;
-    use margin_editor::testing::{ask_about, comment_file, threads};
     use margin_core::comments as file;
+    use margin_core::files::{Versioned, WriteError};
+    use margin_editor::testing::{comment_on, settle};
+    use margin_editor::{CommentAgent, PageFiles};
     use osom_hub::{Endpoints, Space};
+    use std::sync::Mutex;
+
+    /// The space, keeping what the notebook reads and writes through it: the
+    /// app's view of the notebook.
+    #[derive(Clone)]
+    struct Watched {
+        space: Space,
+        /// Each comment file read (`Ok` when it worked) and written, in order.
+        reads: Arc<Mutex<Vec<Result<(), String>>>>,
+        writes: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl PageFiles for Watched {
+        fn read(&self, path: &str) -> Result<Option<Versioned>, String> {
+            let read = PageFiles::read(&self.space, path);
+            if path.ends_with(".json") {
+                self.reads.lock().unwrap().push(read.as_ref().map(|_| ()).map_err(Clone::clone));
+            }
+            read
+        }
+
+        fn write(&self, path: &str, text: &str, etag: Option<&str>) -> Result<Option<String>, WriteError> {
+            let written = PageFiles::write(&self.space, path, text, etag);
+            if written.is_ok() && path.ends_with(".json") {
+                self.writes.lock().unwrap().push(text.to_owned());
+            }
+            written
+        }
+
+        fn web_url(&self, path: &str) -> String {
+            PageFiles::web_url(&self.space, path)
+        }
+    }
+
+    impl Watched {
+        /// The last comment file written.
+        fn saved(&self) -> Option<file::Sidecar> {
+            self.writes.lock().unwrap().last().and_then(|text| file::Sidecar::parse(text).ok())
+        }
+    }
 
     /// The notebook asks the real comment agent on a real page of the space,
     /// streams the reply into the thread and saves the comment file next to
-    /// the page; both are removed afterwards. The test binary is not the app
-    /// the Keychain trusts, so pass the token to avoid a Keychain prompt:
+    /// the page; both are removed afterwards. It drives the page as a reader
+    /// does, and watches only what the app sees: the files written. The test
+    /// binary is not the app the Keychain trusts, so pass the token to avoid
+    /// a Keychain prompt:
     /// `ZEROCLAW_TOKEN=… cargo test -p osom live_comment -- --ignored --nocapture`
     #[test]
     #[ignore = "talks to the live space and agent over the tailnet"]
@@ -176,47 +219,38 @@ mod tests {
         let page = "car/maintenance.md";
         let space = Space::new(&e.space);
         let read = space.read(page).unwrap();
-        let text = read.text.clone();
-        let source = PageSource { path: page.into(), files: Arc::new(space.clone()), etag: read.etag };
+        let watched = Watched { space: space.clone(), reads: Default::default(), writes: Default::default() };
+        let source = PageSource { path: page.into(), files: Arc::new(watched.clone()), etag: read.etag };
         let options = NotebookOptions {
             comments: Comments::Agent(CommentAgent { alias: e.comment_agent.clone(), chat: Arc::new(e.zeroclaw()) }),
             ..Default::default()
         };
-        // The page editor is the document's root, as the test driver expects.
         let mut doc = DioxusDocument::new(
-            VirtualDom::new_with_props(PageEditor, PageEditorProps { text: text.clone(), source: Some(source), options }),
+            VirtualDom::new_with_props(PageEditor, PageEditorProps { text: read.text, source: Some(source), options }),
             dioxus_native::DocumentConfig { font_ctx: Some(margin_ui::typefaces::fonts()), ..Default::default() },
         );
         doc.initial_build();
-        let settle = |doc: &mut DioxusDocument, secs: u64, done: &dyn Fn(&DioxusDocument) -> bool| {
-            let started = std::time::Instant::now();
-            while !done(doc) && started.elapsed() < Duration::from_secs(secs) {
-                blitz_dom::Document::poll(doc, None);
-                std::thread::sleep(Duration::from_millis(50));
-            }
-        };
         // The page has no comment file yet: loading finds it absent.
-        settle(&mut doc, 20, &|d| {
-            let state = comment_file(d);
-            state.loaded || state.error.is_some()
-        });
-        assert_eq!(comment_file(&doc).error, None);
+        settle(&mut doc, Duration::from_secs(20), |_| !watched.reads.lock().unwrap().is_empty());
+        assert_eq!(watched.reads.lock().unwrap().first(), Some(&Ok(())), "the comment file was read");
         let quote = "Front-left proximity sensor failing";
-        let at = text.find(quote).unwrap();
-        ask_about(&doc, at..at + quote.len(), quote, "Shorten this to a few words.");
-        settle(&mut doc, 240, &|d| threads(d).first().is_some_and(|t| t.pending.is_none()) && !comment_file(d).saving);
-        let thread = threads(&doc).first().cloned().expect("thread");
-        let reply = thread.file.messages.last().unwrap().clone();
-        println!("reply: {}\nproposal: {:?}", reply.body, reply.proposal.as_ref().map(|p| &p.new));
-        let saved = space.read(&file::sidecar_path(page));
+        comment_on(&mut doc, quote, "Shorten this to a few words.");
+        let answered = |s: &file::Sidecar| s.threads.first().is_some_and(|t| t.messages.len() == 2);
+        settle(&mut doc, Duration::from_secs(240), |_| watched.saved().is_some_and(|s| answered(&s)));
+        let saved = watched.saved().expect("comment file written");
+        let on_server = space.read(&file::sidecar_path(page));
         // Clean up before asserting.
         let _ = space.delete(&file::sidecar_path(page));
-        let _ = e.zeroclaw().delete_session(&file::request::session_id(&thread.file.id));
-        assert!(!thread.failed.contains(&reply.id) && !reply.body.is_empty(), "the agent answered: {}", reply.body);
-        assert!(!reply.body.contains(file::request::FENCE), "the edit block never shows");
-        let saved = file::Sidecar::parse(&saved.expect("comment file written").text).unwrap();
+        if let Some(thread) = saved.threads.first() {
+            let _ = e.zeroclaw().delete_session(&file::request::session_id(&thread.id));
+        }
         assert_eq!(saved.threads.len(), 1);
         assert_eq!(saved.threads[0].anchor.exact, quote);
-        assert_eq!(saved.threads[0].messages.len(), 2, "your comment and the answer");
+        let reply = saved.threads[0].messages.last().unwrap();
+        println!("reply: {}\nproposal: {:?}", reply.body, reply.proposal.as_ref().map(|p| &p.new));
+        assert!(reply.ai && !reply.body.is_empty(), "the agent answered: {}", reply.body);
+        assert!(!reply.body.contains(file::request::FENCE), "the edit block never shows");
+        let on_server = file::Sidecar::parse(&on_server.expect("comment file on the server").text).unwrap();
+        assert_eq!(on_server.threads[0].messages.len(), 2, "your comment and the answer");
     }
 }

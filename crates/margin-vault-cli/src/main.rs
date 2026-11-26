@@ -238,8 +238,7 @@ async fn main() -> Result<()> {
             let bytes = input(&path)?;
             if !bytes.is_empty() {
                 let before = text.document().oplog_vv();
-                let end = text.markdown().len();
-                text.replace(end..end, std::str::from_utf8(&bytes)?)?;
+                text.append(std::str::from_utf8(&bytes)?)?;
                 v.append_update(&note, &text.document().export(loro::ExportMode::updates(&before))?)?;
             }
         }

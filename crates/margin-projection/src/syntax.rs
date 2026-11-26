@@ -531,7 +531,6 @@ mod tests {
         );
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn highlights_rust_typescript_and_toml_with_valid_byte_ranges() {
         let rust = "// greet\nfn main() {\n    let msg = \"hi\";\n    let n = 42;\n}";

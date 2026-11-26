@@ -37,8 +37,9 @@ blitz-traits = "=0.3.0-beta.4"
 dioxus = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", features = ["web"] }
 wasm-bindgen = "0.2"
 js-sys = "0.3"
+wasm-bindgen-futures = "0.4"
 elsa = "1"
-web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlTextAreaElement", "HtmlInputElement", "CssStyleDeclaration", "DomRect", "Range", "Node", "Navigator", "Location", "Event", "EventTarget", "FontFaceSet", "Blob", "BlobPropertyBag", "Url"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlTextAreaElement", "HtmlInputElement", "CssStyleDeclaration", "DomRect", "Range", "Node", "Navigator", "Location", "Event", "EventTarget", "AddEventListenerOptions", "FontFaceSet", "Blob", "BlobPropertyBag", "Url"] }
 
 [dev-dependencies]
 tempfile = "3"

@@ -4338,6 +4338,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
  "web-time",
  "webbrowser",
@@ -4351,6 +4352,7 @@ dependencies = [
  "margin-core",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -5236,7 +5238,6 @@ name = "osom-topics"
 version = "0.1.0"
 dependencies = [
  "margin-core",
- "margin-projection",
  "pulldown-cmark",
  "serde",
  "serde_json",

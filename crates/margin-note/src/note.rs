@@ -11,6 +11,11 @@ use std::{
 
 const CHECKED: &str = "markdown.checked";
 
+/// The version of a note's document layout: its Markdown in the `markdown`
+/// text, checkbox states as `markdown.checked` marks on it. Every new note
+/// records it, as `format` in its `margin` map.
+pub const FORMAT: i64 = 1;
+
 pub use margin_core::edit::{Splice, text_change};
 
 pub struct Note {
@@ -23,6 +28,9 @@ pub struct Note {
 impl Note {
     pub fn new(markdown: &str) -> Self {
         let doc = LoroDoc::new();
+        doc.get_map("margin")
+            .insert("format", FORMAT)
+            .expect("a new map takes a value");
         doc.get_text("markdown")
             .insert(0, markdown)
             .expect("new text is empty");
@@ -118,6 +126,14 @@ impl Note {
             }
         }
         Ok(Decision::PassThrough)
+    }
+
+    /// Add `text` at the end of the note, in one commit.
+    pub fn append(&self, text: &str) -> LoroResult<()> {
+        let markdown = self.doc.get_text("markdown");
+        markdown.insert_utf8(markdown.len_utf8(), text)?;
+        self.doc.commit();
+        Ok(())
     }
 
     /// Apply an ordinary source edit using UTF-8 byte offsets. A projection
@@ -298,5 +314,18 @@ mod tests {
             Decision::PassThrough
         );
         assert_eq!(note.markdown(), "- \\[ ] listen");
+    }
+
+    #[test]
+    fn append_adds_at_the_end_after_multibyte_text() {
+        let note = Note::new("Écoute 🎧");
+        note.append("\nnext").unwrap();
+        assert_eq!(note.markdown(), "Écoute 🎧\nnext");
+    }
+
+    #[test]
+    fn a_new_note_records_its_layout_version() {
+        let format = Note::new("x").document().get_map("margin").get("format").and_then(|v| v.into_value().ok());
+        assert_eq!(format, Some(LoroValue::I64(FORMAT)));
     }
 }

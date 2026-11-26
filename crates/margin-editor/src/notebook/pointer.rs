@@ -327,6 +327,7 @@ impl Writing {
                         .map(|input| input.editor.raw_selection())
                         .map(|s| [s.anchor().index(), s.focus().index()]);
                     doc.with_text_input(id, |mut input| input.select_byte_range(at, at));
+                    crate::platform::keep_touch_caret(&doc, id);
                 }
             }
             self.drag.set(Some(Drag {

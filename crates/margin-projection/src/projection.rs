@@ -77,8 +77,47 @@ pub struct Projection {
     pub tokens: Vec<DisplayToken>,
     pub checkboxes: Vec<DisplayCheckbox>,
     hidden_pairs: Vec<DelimPair>,
+    /// The line breaks that keep a hidden code fence on its own line.
+    fence_edges: Vec<FenceEdge>,
     pub has_hidden_heading_prefix: bool,
     pub is_cell: bool,
+}
+
+/// The line breaks beside a code fence line that Rich mode hides: before an
+/// opening fence, or after a closing one. They stay visible, so an edit can
+/// remove them; one that would leave the fence line joined to its neighbour
+/// keeps them instead (the fence would stop being one).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FenceEdge {
+    /// The hidden fence: an edit that removes it may remove these too.
+    fence: Range<usize>,
+    /// The run of line-break bytes beside it, and their text.
+    breaks: Range<usize>,
+    text: String,
+    /// The breaks come before the fence (an opening fence).
+    before: bool,
+    /// Past the breaks is the start or the end of the note: nothing to join.
+    at_edge: bool,
+}
+
+impl FenceEdge {
+    /// Whether replacing `edit` with `insert` joins the fence line to its
+    /// neighbour.
+    fn joined_by(&self, edit: &Range<usize>, insert: &str) -> bool {
+        let touches = |r: &Range<usize>| edit.start < r.end && edit.end > r.start;
+        if !touches(&self.breaks) || touches(&self.fence) {
+            return false;
+        }
+        let local = |at: usize| at.clamp(self.breaks.start, self.breaks.end) - self.breaks.start;
+        let between = format!("{}{insert}{}", &self.text[..local(edit.start)], &self.text[local(edit.end)..]);
+        if self.before {
+            // What sits before the fence ends with a line break, or the
+            // edit reaches back past the breaks to the start of the note.
+            !(between.ends_with('\n') || (between.is_empty() && self.at_edge && edit.start <= self.breaks.start))
+        } else {
+            !(between.starts_with('\n') || between.starts_with("\r\n") || (between.is_empty() && self.at_edge && edit.end >= self.breaks.end))
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -425,10 +464,13 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                         let header_slice = &md[after_ticks..range.start + header_end];
                         let lead_ws = header_slice.len() - header_slice.trim_start().len();
                         let lang_start = after_ticks + lead_ws;
-                        let lang_range = if lang.is_empty() {
+                        // The source's own bytes: an escaped or entity-encoded
+                        // language is longer than the decoded `lang`.
+                        let raw_lang = header_slice.split_whitespace().next().unwrap_or("");
+                        let lang_range = if raw_lang.is_empty() {
                             after_ticks..after_ticks
                         } else {
-                            lang_start..(lang_start + lang.len()).min(range.start + header_end)
+                            lang_start..lang_start + raw_lang.len()
                         };
                         code_blocks.push(ParsedCodeBlock {
                             range: range.start..range.start + tail.len(),
@@ -738,6 +780,8 @@ impl Projection {
 
         let mut overrides: Vec<Override> = Vec::new();
         let mut hidden_pairs: Vec<DelimPair> = Vec::new();
+        let mut fence_edges: Vec<FenceEdge> = Vec::new();
+        let is_break = |b: u8| b == b'\n' || b == b'\r';
         let mut has_hidden_heading_prefix = false;
 
         for g in groups {
@@ -761,6 +805,37 @@ impl Projection {
                     }
                 }
             };
+            if !expanded && g.rich_only {
+                if g.open.start > field_range.start && g.open.start <= field_range.end {
+                    let start = md.as_bytes()[field_range.start..g.open.start]
+                        .iter()
+                        .rposition(|&b| !is_break(b))
+                        .map_or(field_range.start, |i| field_range.start + i + 1);
+                    fence_edges.push(FenceEdge {
+                        fence: g.open.clone(),
+                        breaks: start..g.open.start,
+                        text: md[start..g.open.start].to_owned(),
+                        before: true,
+                        at_edge: start == 0,
+                    });
+                }
+                if let Some(close) = &g.close
+                    && close.end >= field_range.start
+                    && close.end < field_range.end
+                {
+                    let end = md.as_bytes()[close.end..field_range.end]
+                        .iter()
+                        .position(|&b| !is_break(b))
+                        .map_or(field_range.end, |i| close.end + i);
+                    fence_edges.push(FenceEdge {
+                        fence: close.clone(),
+                        breaks: close.end..end,
+                        text: md[close.end..end].to_owned(),
+                        before: false,
+                        at_edge: end == md.len(),
+                    });
+                }
+            }
             if !expanded {
                 let open = g.open.start.max(field_range.start)..g.open.end.min(field_range.end);
                 if !open.is_empty() {
@@ -891,6 +966,7 @@ impl Projection {
             tokens: Vec::new(),
             checkboxes: Vec::new(),
             hidden_pairs,
+            fence_edges,
             has_hidden_heading_prefix,
             is_cell,
         };
@@ -1071,7 +1147,25 @@ impl Projection {
                 }
             }
 
+        // A code fence that Rich mode hides keeps its own line: the edit
+        // stops short of the line breaks it would join the fence across.
+        for edge in &self.fence_edges {
+            if edge.joined_by(&(src_start..src_end), &encoded_insert) {
+                if edge.before {
+                    src_end = src_end.min(edge.breaks.start);
+                    src_start = src_start.min(src_end);
+                } else {
+                    src_start = src_start.max(edge.breaks.end);
+                    src_end = src_end.max(src_start);
+                }
+            }
+        }
         let next_caret = src_start + encoded_insert.len();
+        if src_start == src_end && encoded_insert.is_empty() {
+            // Nothing is left to change: the caret stays, and the field shows
+            // the note again.
+            return Some((Vec::new(), next_caret));
+        }
         Some((
             vec![Splice::new(src_start..src_end, encoded_insert)],
             next_caret,
@@ -1107,6 +1201,17 @@ impl Projection {
 mod tests {
     use super::*;
     use margin_core::checkbox::markdown_markers;
+
+    #[test]
+    fn a_fence_language_covers_its_source_bytes() {
+        // The decoded language is `c++`, three bytes; the source spells it longer.
+        let md = "```c&#43;&#43; extra\nint x;\n```\n\n~~~\nplain\n~~~";
+        let blocks = parse_markdown(md).code_blocks;
+        assert_eq!(blocks[0].lang, "c++");
+        assert_eq!(&md[blocks[0].lang_range.clone()], "c&#43;&#43;");
+        assert!(blocks[1].lang.is_empty() && blocks[1].lang_range.is_empty());
+        assert_eq!(&md[blocks[1].lang_range.start..][..1], "\n");
+    }
 
     #[test]
     fn markdown_mode_is_tight_at_rest_and_expands_only_the_active_span() {
@@ -1301,5 +1406,68 @@ mod tests {
             eout.replace_range(s.range, &s.text);
         }
         assert_eq!(eout, "```\nlet x = 1;\n```");
+    }
+
+    /// Apply a field edit, as the editor does, and return the note and the caret.
+    fn edit_rich(md: &str, edit: impl Fn(&str) -> String) -> (String, usize) {
+        let parsed = parse_markdown(md);
+        let rich = Projection::build(md, &parsed, 0..md.len(), &[], EditMode::Rich, None, None, None, true, false);
+        let (splices, caret) = rich.map_input(&edit(&rich.display)).unwrap();
+        let mut out = md.to_owned();
+        for s in splices.into_iter().rev() {
+            out.replace_range(s.range, &s.text);
+        }
+        (out, caret)
+    }
+
+    /// Remove `len` bytes at `at` in the display, as Backspace or Delete does.
+    fn without(display: &str, at: usize, len: usize) -> String {
+        format!("{}{}", &display[..at], &display[at + len..])
+    }
+
+    #[test]
+    fn rich_mode_keeps_a_hidden_fence_on_its_own_line() {
+        // Backspace twice at the start of "After": the blank line goes, then
+        // the line break after the closing fence stays.
+        let md = "Before\n\n```rust\nfn main() {}\n```\n\nAfter";
+        let at = |d: &str| d.find("After").unwrap();
+        let (once, _) = edit_rich(md, |d| without(d, at(d) - 1, 1));
+        assert_eq!(once, "Before\n\n```rust\nfn main() {}\n```\nAfter");
+        let (twice, caret) = edit_rich(&once, |d| without(d, at(d) - 1, 1));
+        assert_eq!(twice, once, "the closing fence keeps its line");
+        assert_eq!(&once[caret..], "After", "the caret stays at the start of After");
+
+        // Backspace at the start of the code: the line break before the
+        // opening fence stays.
+        let md = "Before\n```rust\nfn main() {}\n```\nAfter";
+        let (out, _) = edit_rich(md, |d| without(d, d.find("fn").unwrap() - 1, 1));
+        assert_eq!(out, md, "the opening fence keeps its line");
+
+        // Delete at the end of the code removes the blank line, not the break.
+        let md = "```\ncode\n```\n\nAfter";
+        let end = |d: &str| d.find("code").unwrap() + 4;
+        let (once, _) = edit_rich(md, |d| without(d, end(d), 1));
+        assert_eq!(once, "```\ncode\n```\nAfter");
+        let (twice, _) = edit_rich(&once, |d| without(d, end(d), 1));
+        assert_eq!(twice, once);
+
+        // Typing over the break before a fence keeps the break.
+        let md = "Before\n```\ncode\n```";
+        let (out, _) = edit_rich(md, |d| d.replacen("Before\n", "Beforex", 1));
+        assert_eq!(out, "Beforex\n```\ncode\n```");
+
+        // Selecting the text before a fence, its break included, deletes the text only.
+        let md = "Intro\nBefore\n```\ncode\n```";
+        let (out, _) = edit_rich(md, |d| d.replacen("Before\n", "", 1));
+        assert_eq!(out, "Intro\n\n```\ncode\n```");
+
+        // Replacing everything still replaces the fences too.
+        let (out, _) = edit_rich(md, |_| "new".to_owned());
+        assert_eq!(out, "new");
+
+        // Windows line endings keep both bytes of the break.
+        let md = "Before\r\n```\r\ncode\r\n```\r\nAfter";
+        let (out, _) = edit_rich(md, |d| without(d, d.find("After").unwrap() - 2, 2));
+        assert_eq!(out, md);
     }
 }

@@ -158,12 +158,32 @@ impl Shell {
         Err(())
     }
 
+    /// Start writing `text` to the clipboard. `Ok` only says the write began:
+    /// the browser answers later. Code that must know it worked (a cut, which
+    /// then deletes) uses `copy_then`.
     pub fn set_clipboard_text(&self, text: String) -> Result<(), ()> {
-        let clipboard = js_sys::Reflect::get(&window().navigator(), &"clipboard".into()).map_err(|_| ())?;
-        let write = js_sys::Reflect::get(&clipboard, &"writeText".into()).map_err(|_| ())?;
-        let write: js_sys::Function = write.dyn_into().map_err(|_| ())?;
-        write.call1(&clipboard, &JsValue::from_str(&text)).map(|_| ()).map_err(|_| ())
+        write_clipboard(&text).map(|_| ()).ok_or(())
     }
+}
+
+/// The browser's clipboard write, as a promise.
+fn write_clipboard(text: &str) -> Option<js_sys::Promise> {
+    let clipboard = js_sys::Reflect::get(&window().navigator(), &"clipboard".into()).ok()?;
+    let write: js_sys::Function = js_sys::Reflect::get(&clipboard, &"writeText".into()).ok()?.dyn_into().ok()?;
+    write.call1(&clipboard, &JsValue::from_str(text)).ok()?.dyn_into().ok()
+}
+
+/// Put `text` on the clipboard, then run `then`, only once the browser says
+/// the text is there: it can refuse (no permission, the page not focused).
+pub fn copy_then(_root: &NodeHandle, text: String, then: impl FnOnce() + 'static) {
+    let Some(written) = write_clipboard(&text) else {
+        return;
+    };
+    spawn(async move {
+        if wasm_bindgen_futures::JsFuture::from(written).await.is_ok() {
+            then();
+        }
+    });
 }
 
 /// A view of the page for one burst of queries. Nodes are looked up on demand
@@ -610,6 +630,8 @@ pub mod text {
         len: usize,
         x: f32,
         advance: f32,
+        /// A space a line can wrap at.
+        space: bool,
     }
 
     #[derive(Clone, Debug, PartialEq)]
@@ -730,7 +752,7 @@ pub mod text {
                 let len16 = ch.len_utf16() as u32;
                 if ch == '\n' {
                     let x = glyphs.last().map_or(start_x, |g| g.x + g.advance);
-                    glyphs.push(Glyph { byte, len: 1, x, advance: 0.0 });
+                    glyphs.push(Glyph { byte, len: 1, x, advance: 0.0, space: false });
                     finish(&mut lines, &mut glyphs, line_start..byte + 1, true);
                     (line_start, line_top) = (byte + 1, None);
                     units += len16;
@@ -748,7 +770,7 @@ pub mod text {
                 }
                 line_top.get_or_insert(top);
                 let x = (r.left() - origin.left()) as f32;
-                glyphs.push(Glyph { byte, len: ch.len_utf8(), x, advance: r.width() as f32 });
+                glyphs.push(Glyph { byte, len: ch.len_utf8(), x, advance: r.width() as f32, space: ch.is_whitespace() });
             }
             finish(&mut lines, &mut glyphs, line_start..text.len(), false);
             let layout = Rc::new(Layout { lines, len: text.len() });
@@ -889,9 +911,18 @@ pub mod text {
                 return Self { index: 0 };
             };
             let l = &layout.lines[line];
-            // Past the line's text the caret sits before its line break, if it has one.
+            let wrapped = !l.hard_break && line + 1 < layout.lines.len();
+            // Past the line's text the caret sits before its line break, if it
+            // has one. A wrapped line's end is the next line's start, where the
+            // caret would be drawn, so it sits before the spaces it wrapped at
+            // (or before its last letter, when a word was broken).
             let (text, end) = match l.glyphs.split_last() {
                 Some((line_break, text)) if l.hard_break => (text, line_break.byte),
+                Some((last, _)) if wrapped => {
+                    let words = l.glyphs.iter().rposition(|g| !g.space).map_or(0, |i| i + 1);
+                    let end = l.glyphs.get(words).map_or(last.byte, |space| space.byte);
+                    (&l.glyphs[..words], end)
+                }
                 _ => (&l.glyphs[..], l.range.end),
             };
             let index = text.iter().find(|g| x < g.x + g.advance * 0.5).map_or(end, |g| g.byte);
@@ -992,6 +1023,25 @@ pub fn keep_caret_in_view(_doc: &mut Document, _id: NodeId) {}
 /// later than the pointer events the notebook handles.
 pub fn press_places_caret(press: &PointerData) -> bool {
     press.pointer_type() != "touch"
+}
+
+/// The notebook placed a touch's caret in field `id` at the press: keep the
+/// browser from placing its own when the finger lifts. (Past the end of a
+/// wrapped line the browser's is the next line's start.) Only while the field
+/// has the focus: a tap that focuses it is the browser's.
+pub fn keep_touch_caret(doc: &Document, id: NodeId) {
+    let Some(node) = doc.get_node(id) else { return };
+    let field = node.element.clone();
+    let options = web_sys::AddEventListenerOptions::new();
+    options.set_once(true);
+    options.set_passive(false);
+    let keep = Closure::once_into_js(move |e: web_sys::Event| {
+        // A touch that became a scroll ends uncancelable: nothing to keep.
+        if e.cancelable() && page().active_element().as_ref() == Some(&field) {
+            e.prevent_default();
+        }
+    });
+    let _ = node.element.add_event_listener_with_callback_and_add_event_listener_options("touchend", keep.unchecked_ref(), &options);
 }
 
 /// Whether moving this pressed pointer drags a selection. In a browser a
@@ -1252,7 +1302,7 @@ pub fn save_report(bytes: &[u8]) -> std::io::Result<String> {
 #[component]
 pub fn Head() -> dioxus::prelude::Element {
     rsx! {
-        style { {margin_ui::typefaces::font_faces()} }
+        margin_ui::typefaces::FontFaces {}
         style { {include_str!("web.css")} }
     }
 }

@@ -237,24 +237,6 @@ impl Space {
         }))
     }
 
-    /// Write a page if nobody changed it since `etag`. Returns the new version.
-    pub fn write(&self, path: &str, text: &str, etag: Option<&str>) -> std::result::Result<Option<String>, WriteError> {
-        let mut req = self
-            .http
-            .put(format!("{}/.fs/{}", self.base, encode_path(path)))
-            .header("Content-Type", "text/markdown")
-            .header("X-Source", "external")
-            .header("X-Permission", "rw");
-        if let Some(tag) = etag {
-            req = req.header("If-Match", tag);
-        }
-        let r = reply(req.send(text)).map_err(WriteError::Failed)?;
-        if r.status == 412 {
-            return Err(WriteError::Conflict);
-        }
-        Ok(ok(r).map_err(WriteError::Failed)?.etag)
-    }
-
     pub fn delete(&self, path: &str) -> Result<()> {
         ok(reply(
             self.http
@@ -276,8 +258,22 @@ impl PageFiles for Space {
         Ok(Space::read_optional(self, path)?.map(|page| Versioned { text: page.text, etag: page.etag }))
     }
 
+    /// Write a page if nobody changed it since `etag`. Returns the new version.
     fn write(&self, path: &str, text: &str, etag: Option<&str>) -> std::result::Result<Option<String>, WriteError> {
-        Space::write(self, path, text, etag)
+        let mut req = self
+            .http
+            .put(format!("{}/.fs/{}", self.base, encode_path(path)))
+            .header("Content-Type", "text/markdown")
+            .header("X-Source", "external")
+            .header("X-Permission", "rw");
+        if let Some(tag) = etag {
+            req = req.header("If-Match", tag);
+        }
+        let r = reply(req.send(text)).map_err(WriteError::Failed)?;
+        if r.status == 412 {
+            return Err(WriteError::Conflict);
+        }
+        Ok(ok(r).map_err(WriteError::Failed)?.etag)
     }
 
     fn web_url(&self, path: &str) -> String {

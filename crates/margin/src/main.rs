@@ -72,7 +72,7 @@ fn SampleEditor(inspect: bool) -> Element {
 /// A standalone Loro file as the notebook's store: every change to the note
 /// is written back to the file.
 struct SyncFileStore {
-    file: std::rc::Rc<NoteFile>,
+    file: NoteFile,
 }
 
 impl NoteStore for SyncFileStore {
@@ -99,7 +99,7 @@ impl NoteStore for SyncFileStore {
 fn SyncFileEditor(path: std::path::PathBuf, inspect: bool) -> Element {
     let loaded = use_hook(|| {
         let file = NoteFile::open(&path, SAMPLE).map_err(|e| e.to_string())?;
-        Ok::<_, String>(Store::new(SyncFileStore { file: std::rc::Rc::new(file) }))
+        Ok::<_, String>(Store::new(SyncFileStore { file }))
     });
     let store = match loaded {
         Ok(store) => store,

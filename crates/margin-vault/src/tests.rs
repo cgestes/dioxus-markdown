@@ -36,11 +36,7 @@ fn desktop_first_launch_is_atomic_and_keeps_a_cleared_starter_empty() -> Result<
     let ready = std::sync::Barrier::new(2);
     let launch = |v: &Vault| {
         ready.wait();
-        v.resume_note(None, || {
-            let doc = LoroDoc::new();
-            doc.get_text("markdown").insert(0, "first note")?;
-            Ok((doc, b"private starter discussion".to_vec()))
-        })
+        v.resume_note(None, || Ok((Note::new("first note"), b"private starter discussion".to_vec())))
     };
     let (first, second) = std::thread::scope(|scope| {
         let first = scope.spawn(|| launch(&a));
@@ -382,5 +378,20 @@ async fn interrupted_document_and_multi_window_replay_use_the_durable_outbox() -
     assert_eq!(b.cursor()?, a.cursor()?);
     assert!(a.pending()?.is_none());
     task.abort();
+    Ok(())
+}
+
+/// Every note the vault creates records the layout version, as `Note` does.
+#[test]
+fn notes_the_vault_creates_record_their_layout_version() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let v = device(tmp.path(), Identity::from_recovery(&keys::Recovery::new()));
+    let format = |room: &str| -> Result<_> {
+        Ok(v.load(room)?.0.get_map("margin").get("format").and_then(|f| f.into_value().ok()))
+    };
+    let first = v.resume_note(None, || Ok((Note::new("first"), Vec::new())))?;
+    let other = v.new_note("other", false)?;
+    assert_eq!(format(&first)?, Some(loro::LoroValue::I64(margin_note::note::FORMAT)));
+    assert_eq!(format(&other)?, Some(loro::LoroValue::I64(margin_note::note::FORMAT)));
     Ok(())
 }

@@ -2,7 +2,7 @@
 //! select, type and read fields. The editor's own tests use it, and so do the
 //! tests of the apps that embed the editor.
 use blitz_dom::Document;
-use blitz_traits::events::{BlitzImeEvent, BlitzKeyEvent, KeyState, MouseEventButtons, UiEvent};
+use blitz_traits::events::{BlitzImeEvent, BlitzKeyEvent, BlitzPointerId, KeyState, MouseEventButtons, UiEvent};
 use blitz_traits::shell::Viewport;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, NodeId};
@@ -56,6 +56,21 @@ pub fn click_with(
     point: Option<(f32, f32)>,
     modifiers: Modifiers,
 ) {
+    press_with(doc, name, point, modifiers, BlitzPointerId::Mouse);
+}
+
+/// A finger's tap on the middle of the element with id `name`.
+pub fn tap(doc: &mut DioxusDocument, name: &str) {
+    press_with(doc, name, None, Modifiers::empty(), BlitzPointerId::Finger(1));
+}
+
+fn press_with(
+    doc: &mut DioxusDocument,
+    name: &str,
+    point: Option<(f32, f32)>,
+    modifiers: Modifiers,
+    pointer_id: BlitzPointerId,
+) {
     let element = id(doc, name);
     let mut pointer = doc
         .inner
@@ -63,6 +78,7 @@ pub fn click_with(
         .get_node(element)
         .unwrap()
         .synthetic_click_event_data(modifiers);
+    pointer.id = pointer_id;
     {
         let dom = doc.inner.borrow();
         let rect = dom.get_client_bounding_rect(element).unwrap();
@@ -181,36 +197,48 @@ pub fn text(doc: &DioxusDocument, name: &str) -> String {
     doc.inner.borrow().get_node(id(doc, name)).unwrap().text_content()
 }
 
-fn writing(doc: &DioxusDocument) -> crate::Writing {
-    doc.vdom.in_scope(ScopeId::APP, consume_context::<crate::Writing>)
+/// Whether the document has an element with id `name`.
+pub fn has(doc: &DioxusDocument, name: &str) -> bool {
+    doc.inner.borrow().get_element_by_id(name).is_some()
 }
 
-/// Comment on `range` of the note as its reader would: quote it and ask
-/// `request`. Here and below, the notebook is the document's root.
-pub fn ask_about(doc: &DioxusDocument, range: std::ops::Range<usize>, quote: &str, request: &str) {
-    doc.vdom.in_scope(ScopeId::APP, || {
-        let mut w = consume_context::<crate::Writing>();
-        w.discussion.draft.set(Some(crate::comments::DraftComment { range, quote: quote.into() }));
-        w.submit_draft_comment(request);
-    });
+/// An attribute of the element with id `name`.
+pub fn attribute(doc: &DioxusDocument, name: &str, attribute: &str) -> Option<String> {
+    doc.inner.borrow().get_node(id(doc, name)).unwrap().attr(attribute.into()).map(str::to_owned)
 }
 
-/// The note's comment threads, as the notebook holds them.
-pub fn threads(doc: &DioxusDocument) -> Vec<crate::CommentThread> {
-    writing(doc).discussion.threads.peek().clone()
+/// Poll the document until `done` holds or `timeout` passes: for work that
+/// finishes off the UI thread (a worker, an agent's reply).
+pub fn settle(doc: &mut DioxusDocument, timeout: std::time::Duration, done: impl Fn(&DioxusDocument) -> bool) {
+    let started = std::time::Instant::now();
+    while !done(doc) && started.elapsed() < timeout {
+        doc.poll(None);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
 }
 
-/// Where the comment file of a page stands.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CommentFileState {
-    /// Read from the server, or known to be absent.
-    pub loaded: bool,
-    pub saving: bool,
-    pub error: Option<String>,
+/// The id of the first text field that shows `text`.
+pub fn field_showing(doc: &DioxusDocument, text: &str) -> Option<String> {
+    let dom = doc.inner.borrow();
+    dom.query_selector_all("textarea").ok()?.into_iter().find_map(|node| {
+        let node = dom.get_node(node)?;
+        let shown = node.element_data()?.text_input_data()?.editor.raw_text().contains(text);
+        shown.then(|| node.attr("id".into()).map(str::to_owned)).flatten()
+    })
 }
 
-pub fn comment_file(doc: &DioxusDocument) -> CommentFileState {
-    let file = writing(doc).discussion.file;
-    let file = file.peek();
-    CommentFileState { loaded: file.is_loaded(), saving: file.is_saving(), error: file.error.clone() }
+/// Comment on `quote` as a reader does: select it where the notebook shows
+/// it, press Comment in the format bar, write `request`, post. What follows
+/// shows in the page, and reaches the app through its `NoteStore` (and, on a
+/// page, its `PageFiles`).
+pub fn comment_on(doc: &mut DioxusDocument, quote: &str, request: &str) {
+    let name = field_showing(doc, quote).unwrap_or_else(|| panic!("no field shows {quote:?}"));
+    let start = value(doc, &name).find(quote).unwrap();
+    click(doc, &name);
+    select(doc, &name, [start, start + quote.len()]);
+    send_key(doc, Key::Named(NamedKey::Shift), KeyState::Released, false);
+    click(doc, "format-comment");
+    click(doc, "new-comment-input");
+    commit_text(doc, request);
+    click(doc, "new-comment-post");
 }

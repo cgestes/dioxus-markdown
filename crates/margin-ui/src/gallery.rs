@@ -47,6 +47,7 @@ pub fn Gallery(children: Element) -> Element {
         .collect::<Vec<_>>();
     rsx! {
         style { "{CSS}" }
+        typefaces::FontFaces {}
         main { class: "flex flex-col gap-6 px-8 pt-6 pb-12 bg-page text-ink type-ui leading-[1.45]",
             h1 { class: "m-0 type-h1", "Margin design system" }
             p { class: "m-0 text-muted", "Tokens from assets/theme.css and Tailwind v4 utilities compiled into margin_ui::CSS. Features compose these components; they add layout only." }

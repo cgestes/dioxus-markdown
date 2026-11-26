@@ -154,46 +154,6 @@ fn scan_prose(source: &str, run: Range<usize>, markers: &mut Vec<Marker>) {
     }
 }
 
-/// Token-relative offsets make both sides of this ASCII field independent of
-/// the editor's position units.
-#[cfg(target_arch = "wasm32")]
-#[unsafe(no_mangle)]
-pub extern "C" fn checkbox_input(
-    middle: u32,
-    from: u32,
-    to: u32,
-    typed: u32,
-    literal: bool,
-    repeat: bool,
-) -> i32 {
-    let checked = match char::from_u32(middle) {
-        Some(' ') => false,
-        Some('x' | 'X') => true,
-        _ => return -1,
-    };
-    let input = if repeat {
-        Input::Repeat
-    } else {
-        char::from_u32(typed).map_or(Input::OtherTextEdit, Input::Type)
-    };
-    let mode = if literal {
-        Mode::Literal
-    } else {
-        Mode::Structured
-    };
-    match (Marker { open: 0, checked }).edit(from as usize..to as usize, mode, input) {
-        Decision::PassThrough => -1,
-        Decision::Consume => 0,
-        Decision::SetChecked { checked, .. } => {
-            if checked {
-                b'x' as i32
-            } else {
-                b' ' as i32
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -14,7 +14,8 @@ struct Saved {
     snapshot: Vec<u8>,
 }
 
-/// A note and the file it is kept in.
+/// A note and the file it is kept in. Clones share the note.
+#[derive(Clone)]
 pub struct NoteFile {
     path: PathBuf,
     doc: LoroDoc,
@@ -51,7 +52,9 @@ impl NoteFile {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let tmp = self.path.with_extension("tmp");
+        // `<name>.tmp` beside the file: its own, whatever the file is called.
+        let mut tmp = self.path.clone().into_os_string();
+        tmp.push(".tmp");
         std::fs::write(&tmp, bytes)?;
         std::fs::rename(tmp, &self.path)
     }
@@ -61,15 +64,10 @@ impl NoteFile {
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("margin-note-file-{}-{name}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        dir.join("note.sync")
-    }
-
     #[test]
     fn a_note_file_starts_from_the_starter_and_reopens_with_its_edits() {
-        let path = scratch("reopen");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes").join("note.sync");
         let file = NoteFile::open(&path, "# Start\n").unwrap();
         assert!(!path.exists(), "nothing is written before the first save");
         let note = file.note();
@@ -80,12 +78,12 @@ mod tests {
         let again = NoteFile::open(&path, "ignored: the file exists").unwrap();
         assert_eq!(again.note().markdown(), "# Start\nMore.\n");
         assert_eq!(again.doc.peer_id(), file.doc.peer_id(), "the same writer continues the history");
-        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 
     #[test]
     fn a_file_written_with_the_old_sync_state_still_opens() {
-        let path = scratch("old");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("note.sync");
         let note = Note::new("old note");
         let doc = note.document();
         let old = serde_json::json!({
@@ -96,9 +94,24 @@ mod tests {
             "pre_root_journal": [],
             "needs_checkpoint": false,
         });
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
         assert_eq!(NoteFile::open(&path, "").unwrap().note().markdown(), "old note");
-        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn files_named_alike_keep_their_own_temporary_file() {
+        let dir = tempfile::tempdir().unwrap();
+        // `a.tmp` would be its own temporary file, and `a.sync` and `a.loro`
+        // would share one, if the temporary name replaced the extension.
+        for (name, text) in [("a.tmp", "first"), ("a.sync", "second"), ("a.loro", "third")] {
+            let file = NoteFile::open(&dir.path().join(name), text).unwrap();
+            file.save().unwrap();
+        }
+        for (name, text) in [("a.tmp", "first"), ("a.sync", "second"), ("a.loro", "third")] {
+            assert_eq!(NoteFile::open(&dir.path().join(name), "").unwrap().note().markdown(), text);
+        }
+        let mut names: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        names.sort();
+        assert_eq!(names, ["a.loro", "a.sync", "a.tmp"], "no temporary file is left");
     }
 }

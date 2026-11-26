@@ -14,7 +14,9 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+    // Only Margin's own earlier caches: other apps can share this origin (a
+    // GitHub Pages project site shares its user's), and their caches are theirs.
+    .then(keys => Promise.all(keys.filter(key => key.startsWith("margin-shell-") && key !== CACHE).map(key => caches.delete(key))))
     .then(() => self.clients.claim()));
 });
 

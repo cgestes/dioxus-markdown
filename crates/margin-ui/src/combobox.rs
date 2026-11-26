@@ -22,15 +22,32 @@ const SEARCH_CHROME_HEIGHT: f64 = 42.0;
 const VIEWPORT_PAD: f64 = 8.0;
 #[cfg(not(target_arch = "wasm32"))]
 const TRIGGER_GAP: f64 = 4.0;
-#[cfg(not(target_arch = "wasm32"))]
 const ROW_HEIGHT: f64 = 26.0;
-#[cfg(not(target_arch = "wasm32"))]
 const ROW_STEP: f64 = 27.0;
 
+/// A mounted element: Blitz's node natively, Dioxus' handle in a browser.
 #[cfg(not(target_arch = "wasm32"))]
 type DomHandle = NodeHandle;
 #[cfg(target_arch = "wasm32")]
-type DomHandle = ();
+type DomHandle = std::rc::Rc<MountedData>;
+
+/// Where a list scrolled to `current`, `height` tall, must scroll so that
+/// option `idx` shows; `None` when it already does.
+fn scroll_target(current: f64, height: f64, idx: usize) -> Option<f64> {
+    if height <= 0.0 {
+        return None;
+    }
+    let row_top = idx as f64 * ROW_STEP;
+    let row_bottom = row_top + ROW_HEIGHT;
+    let next = if row_top < current {
+        row_top
+    } else if row_bottom > current + height {
+        row_bottom - height
+    } else {
+        current
+    };
+    ((next - current).abs() > 0.5).then_some(next)
+}
 
 struct PopoverPlacement {
     menu_style: String,
@@ -87,7 +104,14 @@ fn reset_list_scroll(list_handle: Signal<Option<DomHandle>>) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn reset_list_scroll(_list_handle: Signal<Option<DomHandle>>) {}
+fn reset_list_scroll(list_handle: Signal<Option<DomHandle>>) {
+    if let Some(list) = list_handle.peek().clone() {
+        spawn(async move {
+            let top = dioxus::html::geometry::PixelsVector2D::new(0.0, 0.0);
+            let _ = list.scroll(top, dioxus::html::ScrollBehavior::Instant).await;
+        });
+    }
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn scroll_option_into_view(list_handle: Signal<Option<DomHandle>>, idx: usize) {
@@ -100,28 +124,28 @@ fn scroll_option_into_view(list_handle: Signal<Option<DomHandle>>, idx: usize) {
     let Some(node) = doc.get_node(id) else {
         return;
     };
-    let view_h = f64::from(node.final_layout().size.height);
-    if view_h <= 0.0 {
-        return;
-    }
-    let cur = node.scroll_offset().y;
-    let row_top = idx as f64 * ROW_STEP;
-    let row_bottom = row_top + ROW_HEIGHT;
-    let next = if row_top < cur {
-        row_top
-    } else if row_bottom > cur + view_h {
-        row_bottom - view_h
-    } else {
-        cur
-    };
-    if (next - cur).abs() > 0.5 {
+    let height = f64::from(node.final_layout().size.height);
+    if let Some(next) = scroll_target(node.scroll_offset().y, height, idx) {
         doc.scroll_to(id, 0.0, next, ScrollBehavior::Instant);
         doc.shell_provider.request_redraw();
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-fn scroll_option_into_view(_list_handle: Signal<Option<DomHandle>>, _idx: usize) {}
+fn scroll_option_into_view(list_handle: Signal<Option<DomHandle>>, idx: usize) {
+    let Some(list) = list_handle.peek().clone() else {
+        return;
+    };
+    spawn(async move {
+        let (Ok(offset), Ok(rect)) = (list.get_scroll_offset().await, list.get_client_rect().await) else {
+            return;
+        };
+        if let Some(next) = scroll_target(offset.y, rect.size.height, idx) {
+            let to = dioxus::html::geometry::PixelsVector2D::new(0.0, next);
+            let _ = list.scroll(to, dioxus::html::ScrollBehavior::Instant).await;
+        }
+    });
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn capture_handle(e: &MountedEvent) -> Option<DomHandle> {
@@ -129,8 +153,8 @@ fn capture_handle(e: &MountedEvent) -> Option<DomHandle> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn capture_handle(_e: &MountedEvent) -> Option<DomHandle> {
-    None
+fn capture_handle(e: &MountedEvent) -> Option<DomHandle> {
+    Some(e.data())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -141,7 +165,12 @@ fn focus_mounted_input(e: &MountedEvent) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn focus_mounted_input(_e: &MountedEvent) {}
+fn focus_mounted_input(e: &MountedEvent) {
+    let input = e.data();
+    spawn(async move {
+        let _ = input.set_focus(true).await;
+    });
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn handle_list_wheel(e: WheelEvent, list_handle: Signal<Option<DomHandle>>) {

@@ -88,7 +88,7 @@ Each finding has an id; the plan refers to them, and the last table maps every i
 | `margin-ui` | The design system | none |
 | `margin-note` | `Note`, a Loro document | core |
 | `margin-projection` | Both projections of Markdown: editing and reading, with code highlighting | core |
-| `osom-topics` | Osom's model, with its date formatting | core, projection |
+| `osom-topics` | Osom's model, with its date formatting | core |
 | `margin-runtime` (new) | What an app runs around its UI: the window (`launch`), background work and agent turns (`worker`), restart into a newer build (`restart`) | core, ui |
 | `margin-vault` | The encrypted vault | note |
 | `osom-hub` (was `margin-hub`) | Osom's network access: the space and the agent | core, osom-topics |
@@ -97,7 +97,7 @@ Each finding has an id; the plan refers to them, and the last table maps every i
 | `osom` | The Topics window | editor, ui, runtime, osom-topics, osom-hub |
 | `margin-vault-cli` | The vault from the terminal | vault, note |
 
-What changes in the dependency graph: the core loses its optional feature and the highlighter; `osom-topics` gains `margin-projection`; the editor loses the hub entirely; a new small crate sits between the design system and the editor.
+What changes in the dependency graph: the core loses its optional feature and the highlighter; the editor loses the hub entirely; a new small crate sits between the design system and the editor.
 
 ## Plan
 
@@ -133,7 +133,7 @@ Every step is one commit and leaves the workspace building and green. Sizes: S i
 | 3.1 | Move `support::page` into `notebook`; the crate root keeps exporting `PageSource` | E2 | S |
 | 3.2 | Split `NoteStore`. It keeps what is storage: the note, its discussion, a page on a server, and where a report is kept (`note`, `use_persistence`, `threads`, `save_discussion`, `page`, `attach_report`). The window title, the app's menu button and the pane bar move to one `Host` value in `NotebookOptions`. Re-export `Note` from the editor. | E3, E4 | M |
 | 3.3 | `View` becomes `Rich`, `Live`, `Source`. Osom asks for `Rich`; `host` no longer implies it. | E5 | S |
-| 3.4 | Move the live comment test to `osom`, which already has the hub. It drives the notebook through new comment hooks in `margin_editor::testing`, which an editor test checks against the stand-in agent. The editor drops its dev dependency. | E6 | S |
+| 3.4 | Move the live comment test to `osom`, which already has the hub. It comments through the page (`margin_editor::testing::comment_on`) and watches only what the app sees (the comment file written through its `PageFiles`); an editor test does the same against the stand-in agent, watching its `NoteStore`. The editor drops its dev dependency. | E6 | S |
 
 ### Phase 4: crate boundaries (done)
 
@@ -141,7 +141,7 @@ These touch the most files.
 
 | Step | Change | Findings | Size |
 | --- | --- | --- | --- |
-| 4.1 | Done. `preview` (as `reading`, read with `reading::read`) and `syntax` are in `margin-projection`. Highlighting is chosen by target (native yes, browser no) instead of a feature. `osom-topics` depends on `margin-projection` for `tasks`, so its own tests now build the grammars. The core dropped `two-face` and the feature. | C4 | M |
+| 4.1 | Done. `preview` (as `reading`, read with `reading::read`) and `syntax` are in `margin-projection`. Highlighting is chosen by target (native yes, browser no) instead of a feature. The core dropped `two-face` and the feature. (`osom-topics` first read tasks through the reading projection; it now reads them with the Markdown parser, so it does not build the grammars.) | C4 | M |
 | 4.2 | Done. New crate `margin-runtime`: `launch`, `worker`, `restart`. The macOS key bridge moved with `launch`; it reads two attributes the crate documents (`data-range-keys`, `data-grid-keys`) instead of the editor's cell ids. The editor uses the crate for `worker` and `restart`; apps call `launch`. The editor dropped `blitz-shell`, `dioxus-devtools` and its `support` module. The real-window key test (`scripts/test-editor` without `--headless`) was not run for this step: it takes over the keyboard. | E1 | L |
 | 4.3 | Done. `margin-hub` is `osom-hub`. | H1 | S |
 | 4.4 | Done. The root crate is `crates/margin-core`. The root `Cargo.toml` is a workspace manifest only. | C1 | M |

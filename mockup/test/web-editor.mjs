@@ -118,6 +118,34 @@ try {
   await page.keyboard.press("ControlOrMeta+v");
   await settle(page);
   assert.match(await markdown(page), /\| Dawn \| Water through the gate now \| 45 s \|\n\| Dawn \| Steps/);
+
+  // Cut clears the cells only once their text is on the clipboard. (A
+  // range's toolbar sits over the cells, so leave the table first.)
+  const selectDawn = async () => {
+    await page.click("#note-title");
+    await page.mouse.click(...middle(await box(page, "#cell-0-1-0")));
+    await page.keyboard.down("Shift");
+    await page.mouse.click(...middle(await box(page, "#cell-0-2-0")));
+    await page.keyboard.up("Shift");
+    await settle(page);
+  };
+  await selectDawn();
+  await page.evaluate(() => {
+    window.writeText = navigator.clipboard.writeText;
+    navigator.clipboard.writeText = () => Promise.reject(new DOMException("Write permission denied.", "NotAllowedError"));
+  });
+  await page.keyboard.press("ControlOrMeta+x");
+  await settle(page);
+  assert.match(await markdown(page), /\| Dawn \| Water through the gate now \| 45 s \|\n\| Dawn \| Steps/, "a refused cut keeps the cells");
+  await page.evaluate(() => { navigator.clipboard.writeText = window.writeText; });
+  await selectDawn();
+  await page.keyboard.press("ControlOrMeta+x");
+  await settle(page);
+  assert.match(await markdown(page), /\|  \| Water through the gate now \| 45 s \|\n\|  \| Steps/, "a cut clears the cells");
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "Dawn\nDawn");
+  await page.keyboard.press("ControlOrMeta+z");
+  await settle(page);
+  assert.match(await markdown(page), /\| Dawn \| Water through the gate now \| 45 s \|\n\| Dawn \| Steps/);
   await copy(page, "https://example.com/lock");
   body = await box(page, "#note-body");
   await page.mouse.dblclick(body.x + 30, body.y + 12);
@@ -160,6 +188,31 @@ try {
   await page.keyboard.press("ControlOrMeta+b");
   await settle(page);
   assert.match((await markdown(page)).split("\n")[2], /^\*\*Recorder\*\* packed/);
+
+  // A code block's language picker takes the keyboard: typing filters, the
+  // arrows move through the list and scroll it, Enter picks.
+  const beforeCode = await markdown(page);
+  await write(page, beforeCode + "\n\n```rust\nfn main() {}\n```");
+  const fenceAt = (await markdown(page)).indexOf("```rust");
+  await page.click(`#code-lang-${fenceAt}`);
+  await page.waitForSelector("#code-lang-search");
+  await settle(page);
+  assert.equal(await page.evaluate(() => document.activeElement.id), "code-lang-search", "the search field has the focus");
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
+  await settle(page);
+  const [listbox, highlighted] = await page.evaluate(() => {
+    const menu = document.querySelector("#code-lang-menu [role=listbox]");
+    const active = menu.querySelector(".active") ?? menu.querySelector("[aria-selected=true]");
+    return [menu.getBoundingClientRect().toJSON(), active?.getBoundingClientRect().toJSON()];
+  });
+  assert.ok(highlighted && highlighted.top >= listbox.top - 1 && highlighted.bottom <= listbox.bottom + 1, "the highlighted language is scrolled into view");
+  await page.keyboard.type("pyth");
+  await settle(page);
+  assert.ok(await page.locator("#code-lang-pick-python").count() === 1 && await page.locator("#code-lang-pick-rust").count() === 0, "typing filters");
+  await page.keyboard.press("Enter");
+  await settle(page);
+  assert.match(await markdown(page), /```python\nfn main\(\) \{\}\n```/);
+  await write(page, beforeCode);
 
   // A slash on an empty line opens the block menu.
   body = await box(page, "#note-body");
@@ -259,6 +312,22 @@ try {
   const [under] = middle(await box(page, "#slot-0-0-2"));
   assert.ok(Math.abs(handle - under) < 2, `handle at ${handle} over a column centred at ${under}`);
 
+  // In the text being edited, a tap past the end of a wrapped line puts the
+  // caret at the end of that line, not at the start of the next one.
+  const notes = await markdown(page);
+  await write(page, "# Walk\n\n" + "Listen at the lock gate before dawn and again at dusk ".repeat(3).trim());
+  body = await box(page, "#note-body");
+  await page.touchscreen.tap(body.x + 30, body.y + 12);
+  await settle(page);
+  await page.touchscreen.tap(body.x + body.width - 3, body.y + 12);
+  await settle(page);
+  await page.keyboard.insertText("X");
+  await settle(page);
+  const tapped = (await markdown(page)).split("\n")[2];
+  const x = tapped.indexOf("X");
+  assert.ok(x > 0 && tapped[x - 1] !== " ", `the caret ended the first line: ${tapped}`);
+  await write(page, notes);
+
   // A finger that scrolls the page over the text leaves the caret where it was.
   body = await box(page, "#note-body");
   await page.touchscreen.tap(body.x + 30, body.y + 12);
@@ -275,8 +344,18 @@ try {
   assert.equal(await active(page), "note-body@4", "scrolling over the text does not move the caret");
   await page.close();
 
+  // The design system's gallery uses the bundled faces in a browser too.
+  const gallery = new URL(url);
+  gallery.search = "?gallery";
+  page = await browser.newPage();
+  await page.goto(gallery.href);
+  await page.getByRole("heading", { name: "Margin design system" }).waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  assert.ok(await page.evaluate(() => [...document.fonts].some(face => face.family.includes("Geist") && face.status === "loaded")), "the gallery loads Geist");
+  await page.close();
+
   assert.deepEqual(errors, [], "no console errors");
-  console.log("Passed web editor: typing, undo, Live spans, checkboxes, cells, paste, lists, arrows, formatting, slash menu, inspector, Source, late fonts and touch.");
+  console.log("Passed web editor: typing, undo, Live spans, checkboxes, cells, paste, cut, lists, arrows, formatting, the language picker, slash menu, inspector, Source, late fonts, touch and the gallery's fonts.");
 } finally {
   await browser.close();
 }

@@ -232,14 +232,16 @@ impl Writing {
             let Some(handle) = self.root.peek().clone() else {
                 return false;
             };
-            let shell = handle.doc().shell_provider.clone();
-            if shell
-                .set_clipboard_text(md[selected.clone()].to_owned())
-                .is_ok()
-                && matches!(&key, Key::Character(s) if s.eq_ignore_ascii_case("x"))
-            {
-                self.edit_range(selected, "");
-            }
+            let cut = matches!(&key, Key::Character(s) if s.eq_ignore_ascii_case("x"));
+            // A cut deletes once the text is on the clipboard, if the note
+            // has not changed meanwhile (a browser answers later).
+            let rev = *self.doc_rev.peek();
+            let this = self;
+            crate::platform::copy_then(&handle, md[selected.clone()].to_owned(), move || {
+                if cut && *this.doc_rev.peek() == rev {
+                    this.edit_range(selected, "");
+                }
+            });
         } else if (mods - Modifiers::SHIFT).is_empty() {
             match key {
                 Key::Named(NamedKey::Backspace | NamedKey::Delete) if span => {

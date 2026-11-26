@@ -126,11 +126,11 @@ impl Vault {
 
     /// The note to open, remembered for next time: `requested`, else the one
     /// opened last, else the latest note. A pristine device gets its first
-    /// note, which `starter` writes (the document and its private value).
+    /// note, which `starter` writes (the note and its private value).
     pub fn resume_note(
         &self,
         requested: Option<&str>,
-        starter: impl FnOnce() -> Result<(LoroDoc, Vec<u8>)>,
+        starter: impl FnOnce() -> Result<(Note, Vec<u8>)>,
     ) -> Result<String> {
         let mut c = self.conn()?;
         let tx = c.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -160,9 +160,8 @@ impl Vault {
                 room
             } else {
                 let room = self.first_note_room();
-                let (doc, discussion) = starter()?;
-                let bytes =
-                    self.encrypted_delta(&room, false, &doc.export(ExportMode::all_updates())?)?;
+                let (note, discussion) = starter()?;
+                let bytes = self.encrypted_delta(&room, false, &note.document().export(ExportMode::all_updates())?)?;
                 tx.execute("INSERT INTO docs VALUES(?,0)", [&room])?;
                 Self::insert(&tx, &room, DOCUMENT, &bytes, false, false)?;
                 self.write_private_value(&tx, &room, &discussion)?;
@@ -330,11 +329,8 @@ impl Vault {
 
     pub fn new_note(&self, markdown: &str, shared: bool) -> Result<String> {
         let room = hex::encode(keys::random::<16>());
-        // `Note` lays out the document; the marker is the vault's own.
         let note = Note::new(markdown);
-        let d = note.document();
-        d.get_map("margin").insert("format", 1)?;
-        let data = self.encrypted_delta(&room, shared, &d.export(ExportMode::all_updates())?)?;
+        let data = self.encrypted_delta(&room, shared, &note.document().export(ExportMode::all_updates())?)?;
         let mut c = self.conn()?;
         let tx = c.transaction()?;
         tx.execute("INSERT INTO docs VALUES(?,?)", params![room, shared])?;

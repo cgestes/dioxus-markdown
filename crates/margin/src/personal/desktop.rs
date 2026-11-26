@@ -44,7 +44,8 @@ pub(crate) fn open_note(vault: &Vault, requested: Option<&str>) -> Result<String
     vault.resume_note(requested, || {
         let note = Note::new(margin_editor::SAMPLE);
         let threads = margin_editor::seed_sample_comments(&note);
-        Ok((note.document().clone(), serde_json::to_vec(&threads)?))
+        let discussion = serde_json::to_vec(&threads)?;
+        Ok((note, discussion))
     })
 }
 

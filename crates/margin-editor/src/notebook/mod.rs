@@ -236,14 +236,14 @@ pub struct HostAction {
 
 pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, host, store } = options;
-    let Host { title: host_title, menu: host_menu, bar: host } = host;
+    let Host { title: host_title, menu: host_menu, bar } = host;
     let (initial_pane, initial_mode) = match initial_view {
         View::Rich => (Pane::Fields, projection::EditMode::Rich),
         View::Live => (Pane::Fields, projection::EditMode::Markdown),
         View::Source => (Pane::Source, projection::EditMode::Markdown),
     };
     let page_source = store.as_ref().and_then(|s| s.page());
-    let embedded = host.is_some();
+    let embedded = bar.is_some();
     let seed_comments = start_comments == Comments::Sample;
     let agent = match start_comments {
         Comments::Agent(agent) => agent,
@@ -410,18 +410,14 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         }
         let md = contents.read();
         let title = Sections::read(&md).title(&md).trim();
-        let title = if title.is_empty() { "Untitled" } else { title };
-        match restart::worktree_name() {
-            Some(name) => format!("{} · {name} · {title}", margin_runtime::app_title()),
-            None => format!("{} · {title}", margin_runtime::app_title()),
-        }
+        margin_runtime::window_title(if title.is_empty() { "Untitled" } else { title })
     });
     let desktop = window.is_some();
     use_effect(move || {
         let title = window_title.read();
         // A host (Osom) owns its window's title.
         if let Some(window) = window.as_ref().filter(|_| !embedded) {
-            if !names_place && inspecting() && view() == Pane::Fields {
+            if !names_place && inspecting() && !source() {
                 window.set_title(&format!("{title}  |  {}", trace.read().title_status()));
             } else {
                 window.set_title(&title);
@@ -562,8 +558,8 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
             w.open(w.field_at(range[1]), range);
         }
     };
-    let is_rich = view() == Pane::Fields && (writing.edit_mode)() == projection::EditMode::Rich;
-    let is_md_live = view() == Pane::Fields && (writing.edit_mode)() == projection::EditMode::Markdown;
+    let is_rich = !source() && (writing.edit_mode)() == projection::EditMode::Rich;
+    let is_md_live = !source() && (writing.edit_mode)() == projection::EditMode::Markdown;
     let mut toggle_debug = move || {
         if source() {
             change_view(Pane::Fields);
@@ -641,7 +637,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                     if let Some(mut open) = host_menu {
                         ui::Button { id: "notes-menu", label: "Notes", text: "Notes", expanded: open(), onclick: move |_| { let visible = open(); open.set(!visible); } }
                     }
-                    if let Some(h) = host.as_ref() {
+                    if let Some(h) = bar.as_ref() {
                         div { class: "flex items-center gap-2 min-w-0",
                             ui::Button { id: "doc-back", label: h.back.clone(), text: h.back.clone(), icon: Icon::Back, variant: ui::Variant::Ghost, onclick: { let back = h.onback; move |_| back.call(()) } }
                             span { class: "min-w-0 overflow-hidden text-muted type-mono-ui whitespace-nowrap", "{h.crumb}" }
@@ -695,7 +691,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                     }
                     ui::Button { id: "toggle-debug", variant: ui::Variant::Icon, label: "Debug display", tip: "Toggle debug display (F8)", icon: Icon::Bug, selected: inspecting() && !source(), onclick: move |_| toggle_debug() }
                     page::PageBar { writing }
-                    if let Some(h) = host.as_ref() {
+                    if let Some(h) = bar.as_ref() {
                         for action in h.actions.iter() {
                             ui::Button { label: action.label.clone(), text: action.label.clone(), icon: action.icon, onclick: { let go = action.onclick; move |_| go.call(()) } }
                         }

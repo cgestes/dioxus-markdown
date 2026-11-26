@@ -637,24 +637,9 @@ mod tests {
             pre[0].source_at(line0.find("greet").unwrap()),
             md.find("greet").unwrap()
         );
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            assert!(pre[0]
-                .runs
-                .iter()
-                .any(|r| r.text == "fn" && r.style.contains("tok-keyword")));
-            assert!(pre[0]
-                .runs
-                .iter()
-                .any(|r| r.text == "greet" && r.style.contains("tok-function")));
-            assert!(pre[1]
-                .runs
-                .iter()
-                .any(|r| r.text.contains("hello") && r.style.contains("tok-string")));
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            assert!(pre[0].runs.iter().all(|r| !r.style.contains("tok-")));
-        }
+        // Tests run natively, where code is highlighted.
+        assert!(pre[0].runs.iter().any(|r| r.text == "fn" && r.style.contains("tok-keyword")));
+        assert!(pre[0].runs.iter().any(|r| r.text == "greet" && r.style.contains("tok-function")));
+        assert!(pre[1].runs.iter().any(|r| r.text.contains("hello") && r.style.contains("tok-string")));
     }
 }

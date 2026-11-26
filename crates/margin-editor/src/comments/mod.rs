@@ -122,18 +122,6 @@ pub struct CommentFile {
     pub error: Option<String>,
 }
 
-// Read by the test driver (`crate::testing`).
-#[cfg(not(target_arch = "wasm32"))]
-impl CommentFile {
-    pub fn is_loaded(&self) -> bool {
-        self.loaded
-    }
-
-    pub fn is_saving(&self) -> bool {
-        self.saving || self.again
-    }
-}
-
 fn new_key() -> String {
     use std::hash::BuildHasher;
     let ms = dates::now_ms();

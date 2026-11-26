@@ -399,12 +399,18 @@ impl Writing {
                     let Some(handle) = self.root.peek().clone() else {
                         return false;
                     };
-                    let shell = handle.doc().shell_provider.clone();
                     let md = self.contents.read().clone();
                     let text = self.tables.read()[t].copy_rect(&md, rect);
-                    if shell.set_clipboard_text(text).is_ok() && k.eq_ignore_ascii_case("x") {
-                        self.clear_or_fill(t, rect, "", r, c);
-                    }
+                    // A cut clears the cells once the text is on the clipboard,
+                    // if the note has not changed meanwhile (a browser answers later).
+                    let cut = k.eq_ignore_ascii_case("x");
+                    let rev = *self.doc_rev.peek();
+                    let this = self;
+                    crate::platform::copy_then(&handle, text, move || {
+                        if cut && *this.doc_rev.peek() == rev {
+                            this.clear_or_fill(t, rect, "", r, c);
+                        }
+                    });
                 }
                 Key::Named(
                     NamedKey::ArrowLeft
@@ -896,13 +902,15 @@ fn ColStrip(
     active_row: usize,
     multi_active: bool,
     open_col: Option<usize>,
+    /// The selected cell's column, after a tap: a finger leaves no hover.
+    tapped_col: Option<usize>,
     scroll_x: Signal<f64>,
 ) -> Element {
     let hover_c = (*hovered_col.read()).filter(|&c| c < width_count);
     let target_col = if multi_active {
         None
     } else {
-        open_col.or(hover_c)
+        open_col.or(hover_c).or(tapped_col)
     };
     let Some(c) = target_col.filter(|&c| c < width_count) else {
         return rsx! {};
@@ -1006,12 +1014,14 @@ fn RowStrip(
     active_col: usize,
     multi_active: bool,
     open_row: Option<usize>,
+    /// The selected cell's row (below the header), after a tap.
+    tapped_row: Option<usize>,
 ) -> Element {
     let hover_r = (*hovered_row.read()).filter(|&r| r > 0 && r < row_count);
     let target_row = if multi_active {
         None
     } else {
-        open_row.or(hover_r)
+        open_row.or(hover_r).or(tapped_row)
     };
     // Rows grow with wrapped text; until they are measured the stylesheet's fixed heights apply.
     let heights = writing.grid.row_heights.read().get(index).cloned().unwrap_or_default();
@@ -1208,6 +1218,10 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
     let mut hovered_col = use_signal(|| None::<usize>);
     let mut hovered_row = use_signal(|| None::<usize>);
     let mut within = use_signal(|| false);
+    // Whether the last press in the table was a finger (or a pen). A mouse
+    // shows a column's and a row's handles on hover, and hides them while
+    // you type; a finger leaves no hover, so the selected cell's show.
+    let mut touched = use_signal(|| false);
     let mut scroll_x = use_signal(|| 0.0_f64);
     // Fit columns when the grid opens or its column count changes. Ordinary
     // typing must never move the cell underneath a stationary pointer.
@@ -1302,6 +1316,9 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
     let active_row = selected.map_or(0, |(r, _)| r);
     let active_col = selected.map_or(0, |(_, c)| c);
     let multi_active = rect.is_some_and(|r| r.count() > 1);
+    let tapped = selected.filter(|_| touched());
+    let tapped_col = tapped.map(|(_, c)| c);
+    let tapped_row = tapped.map(|(r, _)| r).filter(|&r| r > 0);
     let open_col = match active_menu {
         Some(super::writing::TableMenu::Column(t, c)) if t == index && c < width_count => Some(c),
         _ => None,
@@ -1336,6 +1353,10 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                 }
             },
             onpointerenter: move |_| { if !*hovered.peek() { hovered.set(true); } },
+            onpointerdown: move |e| {
+                let finger = matches!(e.pointer_type().as_str(), "touch" | "pen");
+                if *touched.peek() != finger { touched.set(finger); }
+            },
             onpointerleave: move |_| {
                 if *hovered.peek() { hovered.set(false); }
                 if hovered_col.peek().is_some() { hovered_col.set(None); }
@@ -1346,8 +1367,8 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
             if let Some(bidx) = table_block_idx {
                 BlockHandle { writing, block_idx: bidx, total: total_blocks, top: 6 }
             }
-            ColStrip { writing, index, hovered, hovered_col, hovered_row, weights: weights_vec.clone(), alignments: alignments_vec, width_count, active_row, multi_active, open_col, scroll_x }
-            RowStrip { writing, index, hovered, hovered_col, hovered_row, row_count, active_col, multi_active, open_row }
+            ColStrip { writing, index, hovered, hovered_col, hovered_row, weights: weights_vec.clone(), alignments: alignments_vec, width_count, active_row, multi_active, open_col, tapped_col, scroll_x }
+            RowStrip { writing, index, hovered, hovered_col, hovered_row, row_count, active_col, multi_active, open_row, tapped_row }
             div { id: "grid-scroll-{index}", class: "grid-scroll", role: "table", aria_label: "Markdown table",
                 onscroll: move |_| {
                     if let Some(handle) = writing.root.peek().as_ref() {
