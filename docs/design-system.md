@@ -11,7 +11,7 @@ These follow the product principles in `SPEC.md` §1.
 1. **Calm paper.** A warm page, thin rules, one accent (pine). No heavy chrome: a control appears where it is used, and quiet actions stay quiet (ghost and link buttons) until hovered.
 2. **One source for each look.** A colour, radius, space or type size is a token in `theme.css`. A button, card, row, checkbox or block of Markdown looks the same wherever it appears, because it is the same component.
 3. **Markdown reads the same everywhere.** Read-only Markdown (a topic's page, a chat reply, a transcript, a comment) goes through the editor crate's `MarkdownView`, which uses the notebook's reading projection (`preview::document`) and the editor's table markup.
-4. **Features compose; they don't restyle.** A feature's stylesheet (`topics.css`, `comments.css`, `editor.css`) holds layout and marks that exist only there. It has no button, card, row, Markdown or checkbox styles of its own, and no raw colour where a token exists.
+4. **Features compose; they don't restyle.** Features compose `margin-ui` components and Tailwind v4 utilities using tokens from `tailwind.in.css` / `theme.css`. Hand-written CSS stays limited to low-level editor surface/overlay rules (`editor.css`), data-table geometry (`table.css`), read-only Markdown prose (`ui.css`), debug overlays (`inspector.css`), and browser quirks (`web.css`).
 
 ## Tokens (`crates/margin-ui/assets/theme.css`)
 
@@ -121,7 +121,7 @@ Still custom: the block drag handle (`⋮⋮`), whose press starts a drag rather
 
 ## Rules
 
-- Features compose `ui::` components. No per-feature button, card, row, Markdown or checkbox styles; a feature stylesheet holds layout and marks of its own (comment highlights, the docs grid, the chat column).
-- A new look is a new variant or component in `ui/`, styled in `ui.css`, shown in the gallery, and listed here.
-- Colours, radii, spacing and type sizes come from `theme.css`; add a token rather than a literal.
-- `ui.css` rules are scoped by `ui-*` classes (or the reading projection's `read-*` classes inside `.ui-md`). The editor's bare `button` and `nav` rules are scoped under `.notebook` with `:where()`, so they never outrank a component.
+- Features compose `ui::` components and Tailwind v4 utilities. No per-feature CSS files for chrome, cards, rows, or layout; rebuild `crates/margin-ui/assets/tailwind.css` with `./scripts/build-css` whenever adding new utility classes.
+- A new look is a new variant or component in `crates/margin-ui/src/`, styled with Tailwind v4 utilities, shown in the gallery, and listed here.
+- Colours, radii, spacing and type sizes come from `theme.css` and `@theme` in `tailwind.in.css`; add a token rather than a raw literal.
+- `ui.css` holds only base resets, shared icon/checkbox marks, and `.ui-md` read-only Markdown prose rules inside `@layer components`. The editor's bare `button` and `nav` rules are scoped under `.notebook` inside `@layer base`, so they never outrank Tailwind utilities (`@layer utilities`).

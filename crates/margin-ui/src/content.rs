@@ -19,7 +19,7 @@ pub fn Card(
     rsx! {
         section {
             id,
-            class: "ui-card min-w-0 py-[14px] px-4 border border-solid border-line rounded-lg bg-surface {action_cls} {class}",
+            class: "ui-card min-w-0 py-[14px] px-4 border border-solid border-line rounded-lg bg-surface [&>.ui-row:first-child]:pt-0.5 [&>.ui-row:first-child]:border-t-0 {action_cls} {class}",
             onclick: move |_| if let Some(f) = onclick { f.call(()) },
             {children}
         }

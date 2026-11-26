@@ -544,11 +544,27 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         });
         inspecting.set(next);
     };
+    let dock_cls = if embedded {
+        "sticky top-0 z-[6] flex items-center justify-start gap-2 h-auto min-h-10 m-0 pb-2 bg-page border-0 border-b border-solid border-line [&_.ui-btn.icon]:w-[26px] [&_.ui-btn.icon]:h-6 [&_.ui-btn.icon]:rounded-[5px] max-[485px]:[&_.ui-segment]:min-w-[34px] max-[485px]:[&_.ui-segment]:px-[5px] max-[485px]:[&_.ui-btn.icon]:w-6"
+    } else {
+        "sticky top-0 z-[6] flex-none flex items-center justify-center h-9 py-1 px-3 bg-page max-[485px]:px-1.5 [&_.ui-btn.icon]:w-[26px] [&_.ui-btn.icon]:h-6 [&_.ui-btn.icon]:rounded-[5px] max-[485px]:[&_.ui-segment]:min-w-[34px] max-[485px]:[&_.ui-segment]:px-[5px] max-[485px]:[&_.ui-btn.icon]:w-6"
+    };
+    let pill_bar_cls = if embedded {
+        "flex items-center gap-[5px] flex-auto min-w-0 max-[485px]:gap-[3px]"
+    } else {
+        "flex items-center gap-[5px] max-[485px]:gap-[3px]"
+    };
+    let statusbar_cls = if embedded {
+        "flex items-center gap-2 min-h-8 mt-auto py-[3px] px-0 border-0 border-t border-solid border-line text-muted type-hint max-[650px]:gap-[5px]"
+    } else {
+        "flex items-center gap-2 min-h-8 mt-auto py-[3px] px-5 border-0 border-t border-solid border-line text-muted type-hint max-[650px]:px-3 max-[650px]:gap-[5px]"
+    };
+    let notebook_min_h = if embedded { "min-h-0" } else { "min-h-screen" };
     rsx! {
         style { "{ui::CSS}" }
         style { "{CSS}" }
         crate::platform::Head {}
-        main { class: "notebook", class: if embedded { "embedded" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.handles.drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
+        main { class: "notebook flex flex-col {notebook_min_h}", class: if embedded { "embedded" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.handles.drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
             onpointerdown: move |event| { writing.clear_goal(); writing.dismiss_menu_at(event.client_coordinates().x,event.client_coordinates().y); },
             onpointermove: move |e| writing.pointer_move(e),
             onpointerup: move |_| writing.end_drag(),
@@ -592,17 +608,17 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                     writing.history(source(), e.modifiers().shift() || k.eq_ignore_ascii_case("y"));
                 }
             },
-            div { id: "mode-bar", class: "mode-dock",
-                nav { class: "mode-pill-bar", aria_label: "Editor tools",
+            div { id: "mode-bar", class: "{dock_cls}",
+                nav { class: "{pill_bar_cls}", aria_label: "Editor tools",
                     if let Some(mut open) = store.peek().as_ref().and_then(|s| s.menu()) {
                         ui::Button { id: "notes-menu", label: "Notes", text: "Notes", expanded: open(), onclick: move |_| { let visible = open(); open.set(!visible); } }
                     }
                     if let Some(h) = host.as_ref() {
-                        div { class: "dock-host",
+                        div { class: "flex items-center gap-2 min-w-0",
                             ui::Button { id: "doc-back", label: h.back.clone(), text: h.back.clone(), icon: Icon::Back, variant: ui::Variant::Ghost, onclick: { let back = h.onback; move |_| back.call(()) } }
-                            span { class: "dock-crumb", "{h.crumb}" }
+                            span { class: "min-w-0 overflow-hidden text-muted type-mono-ui whitespace-nowrap", "{h.crumb}" }
                         }
-                        span { class: "dock-spacer" }
+                        span { class: "flex-auto" }
                     }
                     ui::Segmented { label: "Markdown view",
                         items: vec![
@@ -619,9 +635,9 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                     ui::Button { id: "insert-table", variant: ui::Variant::Icon, label: "Insert table", tip: "Insert Markdown table", icon: Icon::Table, onclick: move |_| writing.insert_table(source()) }
                     if newer_build() {
                         ui::Button { id: "restart-app", label: "Restart", tip: "A newer build is ready. Restart Margin to run it",
-                            class: "restart-app", onclick: move |_| restart::restart_app() }
+                            class: "!text-accent-deep !border-accent-deep", onclick: move |_| restart::restart_app() }
                     }
-                    div { class: "history-tools", role: "group", aria_label: "History",
+                    div { class: "flex items-center pl-[5px] border-0 border-l border-solid border-line gap-px", role: "group", aria_label: "History",
                         ui::Button { id: "undo", variant: ui::Variant::Icon, label: "Undo", tip: undo_tip, icon: Icon::Undo, disabled: !note.read().can_undo(), onclick: move |_| writing.history(source(), false) }
                         ui::Button { id: "redo", variant: ui::Variant::Icon, label: "Redo", tip: redo_tip, icon: Icon::Redo, disabled: !note.read().can_redo(), onclick: move |_| writing.history(source(), true) }
                     }
@@ -659,7 +675,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 }
             }
             if inspecting() && !source() {
-                div { class: "inspector-strip",
+                div { class: "fixed top-9 left-0 right-0 h-0 z-10",
                     inspector::Inspector { writing, trace, desktop }
                 }
             }
@@ -749,32 +765,32 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 slash::SlashMenu { writing }
                 if desktop { marker_view::WindowLayout { writing } }
             }
-            footer { class: "statusbar",
-                if !store_status.read().is_empty() { span { id: "save-status", class: "store-status", "{store_status}" } }
-                span { class: "status-words", {
+            footer { class: "{statusbar_cls}",
+                if !store_status.read().is_empty() { span { id: "save-status", class: "text-muted font-sans text-[11px] leading-[normal]", "{store_status}" } }
+                span { class: "text-muted", {
                     let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();
                     format!("{words} {}", if words == 1 { "word" } else { "words" })
                 } }
                 if !source() && hint_at.is_some() {
-                    span { id: "marker-hint", "{hint}" }
+                    span { id: "marker-hint", class: "pl-2 border-0 border-l border-solid border-line", "{hint}" }
                     ui::Button { id: action_id.to_owned(), variant: ui::Variant::Link, label: action, onclick: move |_| {
                         if raw { writing.keep_literal(); } else { writing.toggle_literal(); }
                     } }
                 } else if !source() && writing.parked_selection.read().is_some() {
-                    span { class: "parked-hint", "Press Enter or type to edit" }
+                    span { class: "pl-2 border-0 border-l border-solid border-line", "Press Enter or type to edit" }
                 }
-                span { class: "status-right",
+                span { class: "ml-auto flex items-center gap-2 type-mono-ui text-muted",
                     if let Some([ln, col]) = (writing.caret_line_col)() {
-                        span { class: "status-pos", "Ln {ln}, Col {col}" }
-                        span { class: "status-sep", aria_hidden: "true" }
+                        span { "Ln {ln}, Col {col}" }
+                        span { class: "w-px h-[11px] bg-line", aria_hidden: "true" }
                     }
-                    span { class: "status-lines", {
+                    span { {
                         let count = markdown.bytes().filter(|c| *c == b'\n').count() + 1;
                         format!("{count} {}", if count == 1 { "line" } else { "lines" })
                     } }
                 }
             }
-            if !message.read().is_empty() { p { class: "error", "{message}" } }
+            if !message.read().is_empty() { p { class: "my-2 mx-7 text-alert type-ui", "{message}" } }
         }
     }
 }

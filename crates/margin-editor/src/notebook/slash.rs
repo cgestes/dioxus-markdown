@@ -404,7 +404,7 @@ pub fn SlashMenu(writing: Writing) -> Element {
     rsx! {
         crate::ui::Menu {
             id: "slash-menu",
-            class: "slash-menu",
+            class: "fixed z-[14] w-[236px] max-h-[320px] overflow-y-auto",
             role: "listbox",
             label: "Insert block",
             style: format!("left:{:.0}px; top:{:.0}px;", state.x, state.y),

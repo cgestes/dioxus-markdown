@@ -129,7 +129,7 @@ impl CalloutBox {
                 if open {
                     Menu {
                         id: "callout-menu",
-                        class: "callout-menu",
+                        class: "absolute z-[12] w-[158px]",
                         label: "Callout type",
                         style: format!("left:0px; top:{:.1}px;", badge_h + 2.0),
                         for option in CalloutKind::ALL {

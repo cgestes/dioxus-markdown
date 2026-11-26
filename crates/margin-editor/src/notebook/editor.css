@@ -1,19 +1,9 @@
 ::selection { background: var(--selected-text); }
-.notebook { display: flex; flex-direction: column; min-height: 100vh; }
-.mode-dock {
-    position: sticky; top: 0; z-index: 6; flex: 0 0 auto;
-    display: flex; align-items: center; justify-content: center;
-    height: 36px; padding: 4px 12px; background: var(--page);
-}
-.mode-pill-bar { gap: 5px; }
-.inspector-strip {
-    position: fixed; top: 36px; left: 0; right: 0; height: 0; z-index: 10;
-}
 @layer base {
   /* The editor's own controls (ui::Variant::Bare buttons). Scoped to the
      notebook inside @layer base so ui-* components (@layer components) and
      Tailwind utilities (@layer utilities) keep their look. */
-  :where(.notebook) nav, .history-tools, :where(.notebook) button { display: flex; align-items: center; }
+  :where(.notebook) nav, :where(.notebook) button { display: flex; align-items: center; }
   :where(.notebook) nav { gap: 6px; }
   :where(.notebook) button {
       justify-content: center; gap: 6px; height: 28px; padding: 0 8px;
@@ -25,15 +15,8 @@
   :where(.notebook) button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   :where(.notebook) button:disabled { color: var(--faint); opacity: .36; background: transparent; cursor: default; }
 }
-.restart-app { color: var(--accent-deep); border-color: var(--accent-deep); }
-.history-tools { padding-left: 5px; border-left: 1px solid var(--line); gap: 1px; }
-.mode-dock .ui-btn.icon { width: 26px; height: 24px; border-radius: 5px; }
-/* The empty-line tools are a ui::Toolbar (inline); placed next to the caret. */
-.empty-line-tools { position: absolute; z-index: 4; }
 
-.paper, .source-layout { position: relative; width: 100%; max-width: 812px; margin: 32px auto 0; padding: 0 46px 64px; }
-.source-layout { flex: 1 1 auto; display: flex; flex-direction: column; margin-top: 24px; padding-bottom: 24px; }
-.paper { cursor: text; flex: 1 1 auto; }
+.paper { position: relative; width: 100%; max-width: 812px; margin: 32px auto 0; padding: 0 46px 64px; cursor: text; flex: 1 1 auto; }
 .title-row, .sheet-body, .prose-block, .block-wrap { position: relative; }
 .prose-block { overflow: hidden; }
 .paper input, .paper textarea { caret-color: var(--accent-deep); }
@@ -87,10 +70,6 @@
     position: absolute; left: -4px; top: -2.75px; width: 8px; height: 8px;
     border-radius: 50%; background: var(--accent);
 }
-/* Menus are ui::Menu popovers; these only place them. */
-.block-menu { position: absolute; left: 0; top: 26px; z-index: 12; width: 172px; }
-.link-card { position: absolute; z-index: 13; }
-.slash-menu { position: fixed; z-index: 14; width: 236px; max-height: 320px; overflow-y: auto; }
 .note-title:focus, .blank-editor:focus, textarea.body-editor:focus { outline: 0; }
 .blank-editor { display: block; width: 100%; height: 22px; padding: 0; margin: 0; border: 0; background: transparent; font: var(--font-source); }
 .body-editor, .prose-block .md-ink { color: var(--ink); font: var(--font-prose-mono); }
@@ -173,7 +152,6 @@ textarea.body-editor {
 .callout-badge-btn.callout-important .callout-tag-inner { color: var(--accent-deep); }
 .callout-badge-btn.callout-warning .callout-tag-inner { color: var(--warn-ink); }
 .callout-badge-btn.callout-caution .callout-tag-inner { color: var(--alert); }
-.callout-menu { position: absolute; z-index: 12; width: 158px; }
 .code-bg {
     position: absolute; left: -12px; right: -12px; z-index: 0; pointer-events: none; user-select: none;
     border: 1px solid var(--line); border-radius: var(--radius); background: var(--rail);
@@ -279,49 +257,17 @@ textarea.body-editor {
 .ledger .cell-slot.is-editing { outline: 0; }
 .range-outline, .cell-outline { position: absolute; inset: 0; pointer-events: none; border-style: solid; border-color: var(--ledger-ring); }
 .cell-outline { border-width: 1px; border-color: var(--cell-ring); }
-/* The format bar is a ui::Toolbar (floating); placed over the selection. */
-.format-bar { position: fixed; z-index: 9; width: auto; min-width: 190px; max-width: calc(100vw - 16px); }
-
-.statusbar {
-    display: flex; align-items: center; gap: 8px; min-height: 32px; margin-top: auto;
-    padding: 3px 20px; border-top: 1px solid var(--line); color: var(--muted); font: var(--font-hint);
-}
-.status-sep { width: 1px; height: 11px; background: var(--line); }
-.status-words { color: var(--muted); }
-.status-right { margin-left: auto; display: flex; align-items: center; gap: 8px; font: var(--font-mono-ui); color: var(--muted); }
-#marker-hint, .parked-hint { padding-left: 8px; border-left: 1px solid var(--line); }
-.source-layout textarea { flex: 1 1 auto; width: 100%; height: calc(100vh - 128px); min-height: 260px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: var(--font-prose-mono); }
-.source-layout textarea:focus { outline: 1px solid var(--accent); }
-.error { margin: 8px 28px; color: var(--alert); font: var(--font-ui); }
-/* The page a notebook edits: its path, state and Save, at the end of the dock. */
-.page-bar { display: flex; align-items: center; gap: var(--space-2); margin-left: var(--space-2); padding-left: var(--space-2); border-left: 1px solid var(--line); }
-.page-path { color: var(--muted); font: var(--font-mono-ui); }
-.page-note { color: var(--faint); font: var(--font-hint); }
-.page-bar .ui-btn { height: 24px; }
 
 @media (max-width: 650px) {
-    .paper, .source-layout { margin-top: 32px; padding-left: 42px; padding-right: 28px; }
-    .statusbar { padding: 3px 12px; gap: 5px; }
+    .paper { margin-top: 32px; padding-left: 42px; padding-right: 28px; }
 }
 @media (max-width: 485px) {
-    .mode-dock { padding: 4px 6px; }
-    .mode-pill-bar { gap: 3px; }
-    .mode-dock .ui-segment { min-width: 34px; padding: 0 5px; }
-    .mode-dock .ui-btn.icon { width: 24px; }
     .note-title, .title-row .md-ink { min-height: 38px; font-size: 28px; }
     .note-title.h2, .title-row .note-title.h2 ~ .md-ink { font-size: 21px; }
 }
 
-
-.store-status { color: var(--muted); font: 11px var(--sans); }
-
-/* Hosted in another window (Topics): the dock is the host's pane bar, and the
-   page lines up with the host's column instead of centering itself. The block
-   handles sit in the column's margin. */
-.notebook.embedded { min-height: 0; }
-.notebook.embedded .mode-pill-bar { flex: 1 1 auto; min-width: 0; }
-.notebook.embedded .page-path { display: none; }
-.notebook.embedded .paper, .notebook.embedded .source-layout { max-width: 760px; margin: var(--space-5) 0 0; padding: 0 0 64px; }
+/* Hosted in another window (Topics): the page lines up with the host's column
+   instead of centering itself. The block handles sit in the column's margin. */
+.notebook.embedded .paper { max-width: 760px; margin: var(--space-5) 0 0; padding: 0 0 64px; }
 .notebook.embedded .block-handle-anchor { left: -26px; width: 26px; padding-right: 6px; }
 .notebook.embedded .block-drop-line { left: 0; right: 0; }
-.notebook.embedded .statusbar { padding-left: 0; padding-right: 0; }

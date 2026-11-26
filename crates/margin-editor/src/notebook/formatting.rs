@@ -150,7 +150,7 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
         return rsx! {};
     };
     rsx! {
-        Toolbar { id: "format-bar", class: "format-bar", label: "Format selection", look: ToolbarLook::Floating, keep_focus: true,
+        Toolbar { id: "format-bar", class: "fixed z-[9] w-auto min-w-[190px] max-w-[calc(100vw-16px)]", label: "Format selection", look: ToolbarLook::Floating, keep_focus: true,
             style: "left:{x}px; top:{y}px;",
             for (i, style) in Style::ALL.into_iter().enumerate() {
                 Button { key: "{i}", id: format!("format-{i}"), variant: Variant::Icon, label: style.label(), tip: tips[i].clone(),

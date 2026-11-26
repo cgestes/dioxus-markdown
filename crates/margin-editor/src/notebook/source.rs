@@ -101,8 +101,8 @@ pub(super) fn SourceEditor(writing: Writing) -> Element {
         }
     });
     rsx! {
-        div { class: "source-layout",
-            textarea { id: "markdown", aria_label: "Markdown source", value: md.as_str(),
+        div { class: "relative w-full max-w-[812px] mx-auto mt-6 px-[46px] pb-6 flex-auto flex flex-col max-[650px]:mt-8 max-[650px]:pl-[42px] max-[650px]:pr-7 [.notebook.embedded_&]:max-w-[760px] [.notebook.embedded_&]:mx-0 [.notebook.embedded_&]:mt-6 [.notebook.embedded_&]:px-0 [.notebook.embedded_&]:pb-16",
+            textarea { id: "markdown", class: "flex-auto w-full h-[calc(100vh-128px)] min-h-[260px] py-[18px] px-5 border border-solid border-line rounded-md bg-surface text-ink font-mono text-[14px]/[25px] font-normal focus:outline-1 focus:outline-solid focus:outline-accent", aria_label: "Markdown source", value: md.as_str(),
                 onmounted: move |e| mounted_field(e, Field::Source, writing.focus),
                 onpointerup: move |_| read(writing), onkeyup: move |_| read(writing),
                 onkeydown: move |e| key(writing, e), oninput: move |e| input(writing, &e.value()),

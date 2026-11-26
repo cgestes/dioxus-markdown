@@ -103,9 +103,9 @@ pub(crate) fn PageBar(writing: Writing) -> Element {
         state.note.clone()
     };
     rsx! {
-        div { class: "page-bar",
-            span { class: "page-path", "{src.path}" }
-            if !note.is_empty() { span { class: "page-note", "{note}" } }
+        div { class: "flex items-center gap-2 ml-2 pl-2 border-0 border-l border-solid border-line [&_.ui-btn]:h-6",
+            span { class: "text-muted type-mono-ui [.notebook.embedded_&]:hidden", "{src.path}" }
+            if !note.is_empty() { span { class: "text-faint type-hint", "{note}" } }
             Button { id: "save-page", label: "Save", variant: Variant::Primary, disabled: !dirty || state.saving,
                 onclick: move |_| writing.save_page() }
         }

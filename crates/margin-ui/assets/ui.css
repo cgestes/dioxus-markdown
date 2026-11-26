@@ -8,12 +8,6 @@
 html, body { margin: 0; padding: 0; }
 body { color: var(--ink); background: var(--page); font: var(--font-ui); }
 
-
-/* Components size themselves the same in every window (the editor sets
-   border-box globally; other windows do not). */
-.ui-btn, .ui-chip, .ui-segment, .ui-tab, .ui-composer, .ui-card, .ui-row, .ui-nav, .ui-badge, .ui-banner,
-.ui-popover, .ui-popover *, .ui-toolbar, .ui-toolbar *, .ui-combobox, .ui-combobox *, .ui-md, .ui-md * { box-sizing: border-box; }
-
 /* ── Icons ─────────────────────────────────────────────────────────────── */
 .i { flex: 0 0 auto; width: 16px; height: 16px; }
 .tool-icon, .tool-caption { pointer-events: none; }
@@ -31,11 +25,6 @@ body { color: var(--ink); background: var(--page); font: var(--font-ui); }
 .marker-face.checked.hovered, .marker-slot:hover .marker-face.checked { background: var(--accent-deep); border-color: var(--accent-deep); }
 .marker-tick { position: absolute; width: 5px; height: 9px; border: solid white; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); margin-top: -1px; }
 .marker-face.selected { outline: 2px solid #7ab3fa; }
-
-/* Cards, rows, marks, and messages are styled directly with Tailwind v4
-   utilities in content.rs and message.rs. Keep only the first-child rule for
-   raw `.ui-row` children inside `.ui-card` (used directly in topics/mod.rs). */
-.ui-card > .ui-row:first-child { padding-top: 2px; border-top: 0; }
 
 /* ── Read-only Markdown (the reading projection) ───────────────────────── */
 /* `page` reads exactly like the editor in Rich mode: same headings, prose,
@@ -122,16 +111,3 @@ body { color: var(--ink); background: var(--page); font: var(--font-ui); }
 .ui-md.compact .ledger-cell { font: 400 12px/17px var(--sans); }
 .ui-md.compact .ledger-head { font: var(--font-table-head); }
 .ui-md.compact .read-cell { padding: 6px 9px; }
-
-/* ── Pane bar ─────────────────────────────────────────────────────────────
-   The bar above a pane that takes a tab's place (a doc, a conversation):
-   the way back, where you are, then the pane's tools. An embedded editor's
-   dock is the same bar. */
-.ui-panebar, .notebook.embedded .mode-dock {
-    position: sticky; top: 0; z-index: 6; display: flex; align-items: center; justify-content: flex-start;
-    gap: var(--space-2); height: auto; min-height: 40px; margin: 0; padding: 0 0 var(--space-2);
-    background: var(--page); border-bottom: 1px solid var(--line);
-}
-.dock-host { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.dock-crumb { min-width: 0; overflow: hidden; color: var(--muted); font: var(--font-mono-ui); white-space: nowrap; }
-.dock-spacer { flex: 1 1 auto; }

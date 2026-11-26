@@ -788,7 +788,7 @@ pub fn BlockHandle(writing: Writing, block_idx: usize, total: usize, top: i32) -
                 {crate::Icon::Grip.draw()}
             }
             if open {
-                Menu { id: "block-menu", class: "block-menu", label: "Block menu",
+                Menu { id: "block-menu", class: "absolute left-0 top-[26px] z-[12] w-[172px]", label: "Block menu",
                     MenuItem { id: "block-move-up", label: "Move up", badge: "↑", disabled: block_idx == 0,
                         onclick: move |_| writing.move_block_dir(block_idx, false) }
                     MenuItem { id: "block-move-down", label: "Move down", badge: "↓", disabled: block_idx + 1 >= total,
@@ -816,7 +816,7 @@ pub fn EmptyLineBar(writing: Writing, field: Field) -> Element {
     rsx! {
         Toolbar {
             id: "empty-line-tools",
-            class: "empty-line-tools",
+            class: "absolute z-[4]",
             label: "Insert block",
             look: ToolbarLook::Inline,
             keep_focus: true,
