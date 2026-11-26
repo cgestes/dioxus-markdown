@@ -39,8 +39,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
 
-/// The window's layout; components bring their own styles (`ui::CSS`).
-const CSS: &str = include_str!("topics.css");
+// ── Shared layout classes ───────────────────────────────────────────────────
+const CRUMB: &str = "min-h-4 mb-1 text-faint text-[11.5px]";
+const PAGE_H1: &str = "m-0 text-ink font-display text-[34px]/[1.1] font-normal";
+const PAGE_META: &str = "mt-[3px] text-faint text-[12px]";
+const EMPTY: &str = "py-7 px-4 border border-dashed border-line-strong rounded-lg text-faint text-center";
+const EMPTY_SMALL: &str = "p-3 border border-dashed border-line-strong rounded-lg text-faint text-center";
+const TWO_COL: &str = "flex flex-wrap items-start gap-3.5 [&>.ui-card]:flex-none [&>.ui-card]:w-[calc(50%-7px)] max-[1080px]:[&>.ui-card]:w-full";
+const PANEBAR: &str = "sticky top-0 z-[6] flex items-center justify-start gap-2 min-h-10 pb-2 bg-page border-0 border-b border-solid border-line";
+const PANEBAR_CRUMB: &str = "min-w-0 overflow-hidden text-muted type-mono-ui whitespace-nowrap";
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
@@ -321,10 +328,9 @@ pub fn Shell(start: Start) -> Element {
     });
     rsx! {
         style { "{ui::CSS}" }
-        style { "{CSS}" }
-        div { class: "topics",
+        div { class: "flex flex-row w-full h-screen overflow-hidden font-sans text-[13px]/[1.45] font-normal text-ink bg-page",
             Sidebar {}
-            main { class: "main",
+            main { class: "flex-auto min-w-0 h-full pt-4 px-[26px] pb-8 overflow-y-auto [&>.ui-banner]:mb-3",
                 if let Some(e) = ui.error.read().clone() { Banner { text: e, tone: Tone::Alert } }
                 Center {}
             }
@@ -378,10 +384,11 @@ fn Sidebar() -> Element {
     let footer = match (ui.live(), ws.as_ref()) {
         (Some(l), _) => {
             let paired = l.zc.paired();
+            let zc_dot = if paired { "bg-ok" } else { "bg-alert" };
             rsx! {
-                span { class: "sdot ok" } strong { "SilverBullet" } br {}
+                span { class: "inline-block w-[7px] h-[7px] mr-1.5 rounded-sm bg-ok" } strong { "SilverBullet" } br {}
                 {host(&l.endpoints.space)} br {}
-                span { class: if paired { "sdot ok" } else { "sdot bad" } } strong { "ZeroClaw" } " · agent " strong { "{l.endpoints.agent}" } br {}
+                span { class: "inline-block w-[7px] h-[7px] mr-1.5 rounded-sm {zc_dot}" } strong { "ZeroClaw" } " · agent " strong { "{l.endpoints.agent}" } br {}
                 if paired { {format!("{} · paired", host(&l.endpoints.zeroclaw))} } else { "not paired" }
             }
         }
@@ -393,8 +400,8 @@ fn Sidebar() -> Element {
         (None, None) => rsx! {},
     };
     rsx! {
-        aside { class: "side",
-            div { class: "search",
+        aside { class: "flex flex-col gap-0.5 flex-[0_0_220px] w-[220px] h-full pt-4 px-2.5 pb-3 overflow-y-auto bg-rail border-0 border-r border-solid border-line",
+            div { class: "flex items-center gap-2 w-full h-8 mb-2 px-2.5 border border-solid border-line rounded-md bg-surface text-faint leading-[22px] [&_input]:h-[22px]",
                 {ui::icon(Icon::Search)}
                 TextField { value: query, placeholder: "Search topics" }
             }
@@ -402,7 +409,7 @@ fn Sidebar() -> Element {
                 leading: ui::icon(Icon::Calendar), onclick: move |_| ui.go(Place::Today) }
             NavItem { label: ws.as_ref().map(|w| w.inbox_title.clone()).unwrap_or_default(), selected: place == Place::Inbox,
                 count: (inbox_left, Tone::Alert), leading: ui::icon(Icon::Inbox), onclick: move |_| ui.go(Place::Inbox) }
-            div { class: "lbl", "Topics" }
+            div { class: "mt-3.5 mx-2 mb-1 text-faint type-label uppercase", "Topics" }
             if let Some(w) = ws.as_ref() {
                 if q.is_empty() {
                     for t in w.topics.iter() {
@@ -415,11 +422,11 @@ fn Sidebar() -> Element {
                     }
                 }
             } else if ui.error.read().is_none() {
-                div { class: "loading", "Loading the space…" }
+                div { class: "py-6 text-faint", "Loading the space…" }
             }
-            div { class: "sfoot",
+            div { class: "mt-auto pt-2.5 px-2 pb-0.5 border-0 border-t border-solid border-line text-faint font-mono text-[10.5px]/[1.6] font-normal [&_strong]:text-ink [&_strong]:font-semibold",
                 {footer}
-                Button { label: "Refresh", variant: Variant::Ghost, class: "refresh", onclick: ui.refresh }
+                Button { label: "Refresh", variant: Variant::Ghost, class: "mt-1", onclick: ui.refresh }
             }
         }
     }
@@ -431,7 +438,7 @@ fn Sidebar() -> Element {
 fn Center() -> Element {
     let ui = use_context::<Ui>();
     if ui.ws.read().is_none() {
-        return rsx! { div { class: "empty", if ui.error.read().is_some() { "Nothing to show yet." } else { "Loading the space…" } } };
+        return rsx! { div { class: EMPTY, if ui.error.read().is_some() { "Nothing to show yet." } else { "Loading the space…" } } };
     }
     match ((ui.pane)(), (ui.place)()) {
         // Under a topic, they open below its header (see `TopicPage`).
@@ -441,7 +448,7 @@ fn Center() -> Element {
         (_, Place::Inbox) => rsx! { Inbox {} },
         (_, Place::Topic(id)) => match ui.ws.read().as_ref().and_then(|w| w.find(&id)).cloned() {
             Some(t) => rsx! { TopicPage { topic: t } },
-            None => rsx! { div { class: "empty", "This topic is no longer in the space." } },
+            None => rsx! { div { class: EMPTY, "This topic is no longer in the space." } },
         },
     }
 }

@@ -54,12 +54,12 @@ pub(super) fn TopicPage(topic: TopicView) -> Element {
         .map(|(_, label, count)| TabItem { label: label.to_string(), count: *count })
         .collect::<Vec<_>>();
     rsx! {
-        div { class: "crumb", "{crumb}" }
-        div { class: "head",
+        div { class: CRUMB, "{crumb}" }
+        div { class: "flex items-center gap-3.5",
             Tile { icon: t.icon, hue: t.hue, size: TileSize::Large }
-            div { class: "grow",
-                h1 { "{t.title}" }
-                div { class: "meta", "{meta} · vault " span { class: "tag", "{t.vault_path}" } }
+            div { class: "flex-auto min-w-0",
+                h1 { class: PAGE_H1, "{t.title}" }
+                div { class: PAGE_META, "{meta} · vault " span { class: "font-mono text-[10.5px] leading-[normal] font-normal text-faint", "{t.vault_path}" } }
             }
             if let Some(url) = web {
                 Button { label: "SilverBullet", icon: Icon::Open, text: "SilverBullet", onclick: move |_| open_url(&url) }
@@ -69,7 +69,7 @@ pub(super) fn TopicPage(topic: TopicView) -> Element {
                 Button { label: "Reminder", icon: Icon::Calendar, text: "Reminder", variant: Variant::Primary, onclick: move |_| {} }
             }
         }
-        div { class: "tabs", Tabs { items, selected, onselect: move |i: usize| ui.set_tab(keys[i]) } }
+        div { class: "my-4", Tabs { items, selected, onselect: move |i: usize| ui.set_tab(keys[i]) } }
         // A doc or a conversation replaces the tab's content; the header and
         // the tabs stay where they are.
         match (ui.pane)() {
@@ -84,12 +84,12 @@ pub(super) fn TopicPage(topic: TopicView) -> Element {
                 } }
             },
             Tab::Questions => rsx! { Questions { topic: t.clone() } },
-            Tab::Docs => rsx! { div { class: "grid3", for d in t.docs.iter() { DocEntry { doc: d.clone(), tile: true } } } },
-            Tab::Procedures => rsx! { div { class: "two", for (i, p) in t.procedures.iter().enumerate() { ChecklistCard { list: p.clone(), topic: t.id.clone(), index: i, procedure: true } } } },
-            Tab::Lists => rsx! { div { class: "two", for (i, l) in t.lists.iter().enumerate() { ChecklistCard { list: l.clone(), topic: t.id.clone(), index: i, procedure: false } } } },
+            Tab::Docs => rsx! { div { class: "flex flex-wrap gap-2.5", for d in t.docs.iter() { DocEntry { doc: d.clone(), tile: true } } } },
+            Tab::Procedures => rsx! { div { class: TWO_COL, for (i, p) in t.procedures.iter().enumerate() { ChecklistCard { list: p.clone(), topic: t.id.clone(), index: i, procedure: true } } } },
+            Tab::Lists => rsx! { div { class: TWO_COL, for (i, l) in t.lists.iter().enumerate() { ChecklistCard { list: l.clone(), topic: t.id.clone(), index: i, procedure: false } } } },
             Tab::Code => rsx! {
                 for s in t.code.iter() {
-                    Card { CardTitle { text: s.file.clone(), icon: Icon::Code } pre { class: "code", "{s.code}" } }
+                    Card { CardTitle { text: s.file.clone(), icon: Icon::Code } pre { class: "m-0 py-3 px-3.5 overflow-x-auto border border-solid border-line rounded-md bg-wash text-ink font-mono text-[12px]/[1.55] font-normal whitespace-pre", "{s.code}" } }
                 }
             },
         },
@@ -105,13 +105,13 @@ pub(super) fn Overview(topic: TopicView) -> Element {
     let open_q: Vec<&QuestionRow> = t.questions.iter().filter(|q| q.open).collect();
     let today = ui.ws.read().as_ref().map(|w| w.today.clone()).unwrap_or_default();
     rsx! {
-        div { class: "ov",
-            div { class: "ov-col l",
+        div { class: "flex flex-row items-start gap-3.5 max-[1080px]:flex-col max-[1080px]:items-stretch",
+            div { class: "flex flex-col gap-3.5 min-w-0 flex-[1.25_1_0]",
                 if !t.brief.is_empty() {
-                    Card { class: "brief",
+                    Card {
                         CardTitle { text: "Brief", icon: Icon::Spark }
-                        p { "{t.brief}" }
-                        div { class: "by", {ui::icon(Icon::Spark)} "Kept up to date by the agent · {t.brief_by}" }
+                        p { class: "m-0 text-ink font-display text-[20px]/[1.32] font-normal", "{t.brief}" }
+                        div { class: "flex items-center gap-1.5 mt-2.5 text-faint text-[11.5px] [&_.i]:w-[13px] [&_.i]:h-[13px]", {ui::icon(Icon::Spark)} "Kept up to date by the agent · {t.brief_by}" }
                     }
                 }
                 if let (Some(md), Some(path)) = (t.overview.clone(), t.overview_path.clone()) {
@@ -137,20 +137,20 @@ pub(super) fn Overview(topic: TopicView) -> Element {
                     }
                 }
             }
-            div { class: "ov-col r",
+            div { class: "flex flex-col gap-3.5 min-w-0 flex-[1_1_0]",
                 Card {
                     if t.agenda.len() > 3 {
                         CardTitle { text: "Next up", icon: Icon::Calendar, action: format!("All {} →", t.agenda.len()), onaction: go(Tab::Calendar) }
                     } else {
                         CardTitle { text: "Next up", icon: Icon::Calendar }
                     }
-                    if t.agenda.is_empty() { div { class: "empty small", "No reminders for this topic." } }
+                    if t.agenda.is_empty() { div { class: EMPTY_SMALL, "No reminders for this topic." } }
                     Rows { for a in t.agenda.iter().take(3) { AgendaRow { today: today.clone(), agenda: a.clone(), topic: None } } }
                 }
                 if !t.facts.is_empty() {
                     Card {
                         CardTitle { text: "Known facts", icon: Icon::Pin, note: format!("memory · topic:{}", t.id) }
-                        div { class: "facts", for (k, v) in t.facts.iter() { div { span { "{k}" } "{v}" } } }
+                        div { class: "flex flex-col gap-1.5 font-mono text-[12px] leading-[normal] font-normal", for (k, v) in t.facts.iter() { div { class: "flex gap-2.5", span { class: "flex-[0_0_84px] text-faint", "{k}" } "{v}" } } }
                     }
                 }
                 if !open_q.is_empty() {
@@ -210,7 +210,7 @@ pub(super) fn ThreadItem(thread: ThreadRow, topic_title: Option<String>) -> Elem
             },
             onclick: move |_| if inline { expanded.toggle() } else { ui.open(Pane::Thread(key.clone(), title.clone())) },
             if expanded() {
-                div { class: "turns", for (who, text) in th.turns.iter() { div { b { "{who} " } "{text}" } } }
+                div { class: "flex flex-col gap-1.5 mt-2 mb-0.5 py-2 px-3 border-0 border-l-2 border-solid border-l-line text-[12.5px] font-normal [&_b]:mr-1 [&_b]:font-semibold", for (who, text) in th.turns.iter() { div { b { "{who} " } "{text}" } } }
             }
         }
     }
@@ -227,7 +227,7 @@ pub(super) fn Discussions(topic: TopicView) -> Element {
     let mut rows = topic.threads.iter().filter(|t| filter.is_none_or(|f| t.source == f)).peekable();
     let empty = rows.peek().is_none();
     rsx! {
-        div { class: "chips",
+        div { class: "flex flex-wrap gap-1.5 mb-3",
             Chip { label: "All", selected: filter.is_none(), onclick: move |_| set(None) }
             for s in topic.sources() {
                 Chip { label: s.name(), icon: Icon::for_channel(channel(s)), selected: filter == Some(s), onclick: move |_| set(Some(s)) }
@@ -237,7 +237,7 @@ pub(super) fn Discussions(topic: TopicView) -> Element {
             Rows {
                 for th in rows { ThreadItem { key: "{th.key}", thread: th.clone(), topic_title: None } }
             }
-            if empty { div { class: "empty small", "Nothing from this source yet." } }
+            if empty { div { class: EMPTY_SMALL, "Nothing from this source yet." } }
         }
     }
 }
@@ -261,7 +261,7 @@ pub(super) fn Questions(topic: TopicView) -> Element {
             }
         }
         if !answered.is_empty() {
-            div { class: "grp", "Answered" }
+            div { class: "mt-4 mb-1.5 text-faint type-label uppercase", "Answered" }
             Card {
                 Rows {
                     for q in answered.iter() {
@@ -294,10 +294,10 @@ pub(super) fn DocEntry(doc: DocRow, tile: bool) -> Element {
     let kind = rsx! { Badge { text: doc.kind.clone(), tone: kind_tone(&doc.kind) } };
     if tile {
         return rsx! {
-            Card { class: "doc", onclick: open,
+            Card { class: "flex flex-col items-start gap-2.5 flex-none w-[calc(33.333%-7px)] !p-3 max-[1080px]:w-[calc(50%-5px)]", onclick: open,
                 {kind}
-                span { class: "nm", "{doc.name}" }
-                span { class: "m", "{doc.meta}" }
+                span { class: "font-semibold [overflow-wrap:anywhere]", "{doc.name}" }
+                span { class: "text-faint type-mono-ui", "{doc.meta}" }
             }
         };
     }
@@ -311,15 +311,15 @@ pub(super) fn ChecklistCard(list: Checklist, topic: String, index: usize, proced
     let ui = use_context::<Ui>();
     let note = if list.shopping { format!("{} · rolls up into Today › Shopping", list.meta) } else { list.meta.clone() };
     rsx! {
-        Card { class: "proc",
-            h4 { "{list.title}" }
-            div { class: "m", "{note}" }
+        Card {
+            h4 { class: "m-0 mb-0.5 font-display text-[22px]/[1.15] font-normal", "{list.title}" }
+            div { class: "mb-2.5 text-faint type-mono-ui", "{note}" }
             for (j, (text, done)) in list.items.iter().enumerate() {
                 CheckItem { text: text.clone(), checked: *done,
                     onclick: { let (topic, path) = (topic.clone(), list.path.clone()); move |_| toggle(ui, &topic, procedure, index, j, path.clone()) } }
             }
             if let Some(p) = list.path.clone() {
-                Button { label: "Open in editor →", variant: Variant::Link, onclick: move |_| ui.open(Pane::Doc(p.clone())) }
+                Button { label: "Open in editor →", variant: Variant::Link, class: "mt-1.5", onclick: move |_| ui.open(Pane::Doc(p.clone())) }
             }
         }
     }

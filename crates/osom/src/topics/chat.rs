@@ -119,26 +119,27 @@ pub(super) fn ChatPanel() -> Element {
         }
     };
     let chat = ui.chat.read();
+    let live_dot = if busy { "bg-ok" } else { "bg-line-strong" };
     rsx! {
-        section { class: "chat",
-            div { class: "chead",
-                div { class: "t", {ui::icon(Icon::Chat)} "Chat · {name}"
-                    span { class: "live", class: if busy { "on" }, b {} if busy { "streaming" } else { "idle" } }
+        section { class: "flex flex-col flex-[0_0_300px] w-[300px] h-full min-w-0 bg-surface border-0 border-l border-solid border-line",
+            div { class: "flex-none pt-4 px-4 pb-3 border-0 border-b border-solid border-line",
+                div { class: "flex items-center gap-[7px] font-semibold", {ui::icon(Icon::Chat)} "Chat · {name}"
+                    span { class: "flex items-center gap-[5px] ml-auto text-faint font-mono text-[10.5px] leading-[normal] font-normal", b { class: "w-1.5 h-1.5 rounded-[3px] {live_dot}" } if busy { "streaming" } else { "idle" } }
                 }
-                div { class: "s", "session {session} · agent {agent} · /ws/chat" }
+                div { class: "mt-[3px] text-faint font-mono text-[10.5px] leading-[normal] font-normal", "session {session} · agent {agent} · /ws/chat" }
             }
-            div { class: "msgs",
-                div { class: "ctx", {ui::icon(Icon::Spark)} "Context — {context}" }
-                if chat.loading { div { class: "loading", "Loading the conversation…" } }
+            div { class: "flex flex-col gap-3 flex-auto min-h-0 py-3.5 px-4 overflow-y-auto",
+                div { class: "flex items-center gap-[7px] py-[7px] px-2.5 border border-dashed border-line-strong rounded-md text-muted text-[11.5px] [&_.i]:w-[13px] [&_.i]:h-[13px] [&_.i]:text-accent", {ui::icon(Icon::Spark)} "Context — {context}" }
+                if chat.loading { div { class: "py-6 text-faint", "Loading the conversation…" } }
                 for (i, l) in chat.lines.iter().enumerate() {
                     Message { key: "{i}", author: "agent", body: l.text.clone(), ai: !l.from_user, tools: l.tools.clone(),
                         rich: rsx! { MarkdownView { text: l.text.clone(), compact: true } } }
                 }
                 PendingReply {}
                 if let Some((tool, summary)) = chat.approval.as_ref() {
-                    div { class: "approval",
+                    div { class: "flex flex-col gap-2",
                         Banner { text: if summary.is_empty() { format!("The agent wants to run {tool}.") } else { format!("The agent wants to run {tool}: {summary}") }, tone: Tone::Warn }
-                        div { class: "row-btns",
+                        div { class: "flex gap-2",
                             Button { label: "Approve", variant: Variant::Primary, onclick: decide(true) }
                             Button { label: "Deny", onclick: decide(false) }
                         }
@@ -147,10 +148,10 @@ pub(super) fn ChatPanel() -> Element {
                 if let Some(e) = chat.error.clone() { Banner { text: e, tone: Tone::Alert } }
             }
             if paired {
-                div { class: "qa",
+                div { class: "flex flex-wrap flex-none gap-1.5 px-4 pb-2.5",
                     for q in actions.iter().copied() { Chip { label: q, onclick: move |_| send(ui, q.to_string()) } }
                 }
-                div { class: "comp",
+                div { class: "flex-none mx-3 mb-3",
                     Composer { placeholder: format!("Ask about {name}…"), multiline: true, onsend: move |text: String| send(ui, text) }
                 }
             } else if ui.live().is_some() {
@@ -189,9 +190,9 @@ pub(super) fn Pairing() -> Element {
         });
     });
     rsx! {
-        div { class: "pair",
-            p { "Pair this Mac with ZeroClaw to read the agent’s conversations and chat. On the server run " code { "zeroclaw gateway get-paircode --new" } "." }
-            div { class: "pair-field", TextField { value: code, placeholder: "Pairing code", onenter: pair } }
+        div { class: "flex flex-col gap-2 m-3 p-3 border border-solid border-line rounded-lg bg-wash text-[12.5px]",
+            p { class: "m-0 text-muted", "Pair this Mac with ZeroClaw to read the agent’s conversations and chat. On the server run " code { "zeroclaw gateway get-paircode --new" } "." }
+            div { class: "flex h-[30px] px-[9px] border border-solid border-line-strong rounded-md bg-surface font-mono text-[13px]/[30px] font-normal", TextField { value: code, placeholder: "Pairing code", onenter: pair } }
             Button { label: "Pair", variant: Variant::Primary, onclick: move |_| pair(()) }
         }
     }

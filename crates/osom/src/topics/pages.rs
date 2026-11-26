@@ -91,7 +91,7 @@ pub(super) fn DocPane(path: String) -> Element {
         actions: web.map(|_| HostAction { label: "SilverBullet".into(), icon: Icon::Open, onclick: open_web }).into_iter().collect(),
     };
     match opened() {
-        None => rsx! { div { class: "ui-panebar", Button { label: back_to, icon: Icon::Back, text: back_to, variant: Variant::Ghost, onclick: move |_| ui.open(Pane::Tab) } span { class: "dock-crumb", "{host.crumb}" } } },
+        None => rsx! { div { class: PANEBAR, Button { label: back_to, icon: Icon::Back, text: back_to, variant: Variant::Ghost, onclick: move |_| ui.open(Pane::Tab) } span { class: PANEBAR_CRUMB, "{host.crumb}" } } },
         Some(Err(e)) => rsx! { Banner { text: e, tone: Tone::Alert } },
         Some(Ok(page)) => {
             let comments = match ui.live() {
@@ -102,7 +102,7 @@ pub(super) fn DocPane(path: String) -> Element {
             let source = ui.live().map(|live| PageSource { path: page.path.clone(), files: Arc::new(live.space.clone()), etag: page.etag.clone() });
             let key = format!("{}@{}", page.path, page.etag.clone().unwrap_or_default());
             let options = NotebookOptions { comments, host: Some(host), ..Default::default() };
-            rsx! { div { class: "editor-host", PageEditor { key: "{key}", text: page.text.clone(), source, options } } }
+            rsx! { div { class: "min-h-[400px] bg-page [&_.notebook]:min-h-0 [&_#comments-pane]:top-0 [&_#comments-pane]:max-h-[calc(100vh-120px)]", PageEditor { key: "{key}", text: page.text.clone(), source, options } } }
         }
     }
 }
@@ -133,18 +133,18 @@ pub(super) fn TranscriptPane(session_key: String, title: String) -> Element {
         None => fetched(),
     };
     rsx! {
-        div { class: "ui-panebar",
+        div { class: PANEBAR,
             Button { label: back_label(&ui), icon: Icon::Back, text: back_label(&ui), variant: Variant::Ghost, onclick: move |_| ui.open(Pane::Tab) }
-            span { class: "dock-crumb", "{title}" }
-            span { class: "dock-spacer" }
-            span { class: "dock-note", "{session_key}" }
+            span { class: PANEBAR_CRUMB, "{title}" }
+            span { class: "flex-auto" }
+            span { class: "text-faint type-mono-ui", "{session_key}" }
         }
         match turns {
-            None => rsx! { div { class: "loading", "Loading the conversation…" } },
+            None => rsx! { div { class: "py-6 text-faint", "Loading the conversation…" } },
             Some(Err(e)) => rsx! { Banner { text: e, tone: Tone::Alert } },
             Some(Ok(turns)) => rsx! {
-                div { class: "transcript",
-                    if turns.is_empty() { div { class: "empty", "No messages." } }
+                div { class: "flex flex-col gap-3.5 max-w-[760px] pt-3.5",
+                    if turns.is_empty() { div { class: EMPTY, "No messages." } }
                     for (i, t) in turns.into_iter().enumerate() {
                         Message { key: "{i}", author: if t.from_user { "you" } else { "agent" }, body: t.text.clone(), ai: !t.from_user,
                             tools: t.tools, at: (!t.at.is_empty()).then_some(t.at), style: MessageStyle::Card,

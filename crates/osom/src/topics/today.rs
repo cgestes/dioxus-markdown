@@ -103,31 +103,31 @@ pub(super) fn Today() -> Element {
     let data = use_memo(move || ui.ws.read().as_ref().map(today_data));
     let Some(d) = data() else { return rsx! {} };
     rsx! {
-        div { class: "crumb", "{d.label}" }
-        div { class: "head", div { class: "grow",
-            h1 { "Today" }
-            div { class: "meta",
+        div { class: CRUMB, "{d.label}" }
+        div { class: "flex items-center gap-3.5", div { class: "flex-auto min-w-0",
+            h1 { class: PAGE_H1, "Today" }
+            div { class: PAGE_META,
                 if !d.reminders_unavailable { "{d.agenda.len()} reminders in the next three weeks · " }
                 "{d.threads.len()} recent discussions · across {d.topics} topics"
             }
         } }
-        div { class: "ov spaced",
-            div { class: "ov-col l",
+        div { class: "flex flex-row items-start gap-3.5 mt-4 max-[1080px]:flex-col max-[1080px]:items-stretch",
+            div { class: "flex flex-col gap-3.5 min-w-0 flex-[1.25_1_0]",
                 if !d.key_dates.is_empty() {
                     Card {
                         CardTitle { text: "Key dates", icon: Icon::Pin, action: "Open Planning →",
                             onaction: move |_| ui.open(Pane::Doc(model::PLANNING_PAGE.into())) }
                         Rows {
                             for entry in &d.key_dates {
-                                div { class: "ui-row", MarkdownView { text: entry.markdown.clone(), compact: true } }
+                                div { class: "ui-row py-2 border-0 border-t border-solid border-line", MarkdownView { text: entry.markdown.clone(), compact: true } }
                             }
                         }
                     }
                 }
                 Card {
                     CardTitle { text: "Coming up", icon: Icon::Calendar }
-                    if d.reminders_unavailable { div { class: "empty small", "Reminders are unavailable." } }
-                    else if d.agenda.is_empty() { div { class: "empty small", "Nothing due in the next three weeks." } }
+                    if d.reminders_unavailable { div { class: EMPTY_SMALL, "Reminders are unavailable." } }
+                    else if d.agenda.is_empty() { div { class: EMPTY_SMALL, "Nothing due in the next three weeks." } }
                     Rows {
                         for (a, t) in d.agenda.iter() {
                             AgendaRow { today: d.today.clone(), agenda: a.clone(), topic: Some(t.clone()) }
@@ -135,7 +135,7 @@ pub(super) fn Today() -> Element {
                     }
                 }
                 if !d.shopping.is_empty() {
-                    Card { class: "proc",
+                    Card {
                         CardTitle { text: "Shopping", icon: Icon::List, note: "rolled up from topic lists" }
                         for s in d.shopping.iter().cloned() {
                             CheckItem { text: s.text.clone(), checked: s.done, tag: s.topic.title.clone(),
@@ -144,7 +144,7 @@ pub(super) fn Today() -> Element {
                     }
                 }
             }
-            div { class: "ov-col r",
+            div { class: "flex flex-col gap-3.5 min-w-0 flex-[1_1_0]",
                 Card {
                     CardTitle { text: if d.unread { "New since yesterday" } else { "Recent discussions" }, icon: Icon::Chat }
                     Rows { for (th, title) in d.threads.iter() { ThreadItem { key: "{th.key}", thread: th.clone(), topic_title: Some(title.clone()) } } }
@@ -168,21 +168,21 @@ pub(super) fn Inbox() -> Element {
         }
     };
     rsx! {
-        div { class: "crumb", " " }
-        div { class: "head", div { class: "grow",
-            h1 { "{w.inbox_title}" }
-            div { class: "meta", "{w.inbox_note}" }
+        div { class: CRUMB, " " }
+        div { class: "flex items-center gap-3.5", div { class: "flex-auto min-w-0",
+            h1 { class: PAGE_H1, "{w.inbox_title}" }
+            div { class: PAGE_META, "{w.inbox_note}" }
         } }
-        div { class: "stack",
+        div { class: "flex flex-col gap-3.5 [&_.ui-row-title]:text-[15px]",
             for item in w.inbox.iter() {
                 Card { key: "{item.key}",
                     Row { title: item.text.clone(), trailing: item.when.clone(),
                         leading: rsx! { ChannelGlyph { channel: channel(item.source) } },
                         sub: rsx! { SubItem { text: format!("{} · {}", item.source.name(), item.place) } },
                         if let Some(to) = filed.get(&item.key) {
-                            div { class: "filed", if to == "none" { "Dismissed — not a topic." } else { "Filed to {w.find(to).map(|t| t.title.clone()).unwrap_or_default()} ✓" } }
+                            div { class: "mt-2 text-accent text-[12px]", if to == "none" { "Dismissed — not a topic." } else { "Filed to {w.find(to).map(|t| t.title.clone()).unwrap_or_default()} ✓" } }
                         } else if !item.suggestions.is_empty() {
-                            div { class: "sug",
+                            div { class: "flex flex-wrap gap-1.5 mt-2",
                                 for (k, (id, score)) in item.suggestions.iter().enumerate() {
                                     if let Some(t) = w.find(id) {
                                         Button { label: format!("File to {}", t.title), text: format!("{} · {score}", t.title), icon: t.icon,
@@ -192,7 +192,7 @@ pub(super) fn Inbox() -> Element {
                                 Button { label: "Not a topic", variant: Variant::Ghost, onclick: file(&item.key, "none") }
                             }
                         } else {
-                            div { class: "sug",
+                            div { class: "flex flex-wrap gap-1.5 mt-2",
                                 Button { label: "Read",
                                     onclick: { let (key, place) = (item.key.clone(), item.place.clone()); move |_| ui.open(Pane::Thread(key.clone(), place.clone())) } }
                             }
@@ -200,7 +200,7 @@ pub(super) fn Inbox() -> Element {
                     }
                 }
             }
-            if w.inbox.is_empty() { div { class: "empty", "Every chat is filed under a topic." } }
+            if w.inbox.is_empty() { div { class: EMPTY, "Every chat is filed under a topic." } }
         }
     }
 }
