@@ -12,6 +12,8 @@ mod formatting;
 mod grid;
 #[path = "native/inspector.rs"]
 mod inspector;
+#[path = "native/link_card.rs"]
+mod link_card;
 #[path = "native/lists.rs"]
 mod lists;
 #[cfg(target_os = "macos")]
@@ -499,6 +501,9 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         empty_line: use_signal(|| None),
         slash_menu: use_signal(|| None),
         slash_selected: use_signal(|| 0),
+        link_card: use_signal(|| None),
+        link_dismissed: use_signal(|| None),
+        link_editing: use_signal(|| false),
         block_menu: use_signal(|| None),
         block_drag: use_signal(|| None),
         heights: use_signal(Vec::new),
@@ -506,6 +511,9 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         caret_line_col: use_signal(|| None),
         syntax: use_memo(move || markdown::syntax(&contents.read())),
         ink: use_signal(Vec::new),
+        callout_boxes: use_signal(Vec::new),
+        code_boxes: use_signal(Vec::new),
+        callout_menu: use_signal(|| None),
         caret: use_signal(|| None),
         active: use_signal(|| initial_field.filter(|f| *f != Field::Source)),
         body: use_signal(|| None),
@@ -571,6 +579,7 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
             writing.refresh_format_position();
             writing.refresh_empty_line();
             writing.refresh_slash();
+            writing.refresh_link_card();
             writing.refresh_boxes();
         }
     });
@@ -591,6 +600,7 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 }
             }
             writing.refresh_boxes();
+            writing.refresh_link_card();
         }
     });
     let markdown = contents();
@@ -609,7 +619,11 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         writing.edit_mode.read();
         writing.cursor_source.read();
         writing.mouse_box.read();
+        if let Some(handle) = root.peek().as_ref() {
+            writing.resolve_dom(handle);
+        }
         writing.refresh_boxes();
+        writing.refresh_link_card();
     });
     // Resolve pending DOM mutations immediately after Dioxus renders so Blitz's
     // hit-testing (paint_children) never dereferences a deleted NodeId.
@@ -620,10 +634,15 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
     use_effect(move || {
         writing.contents.read();
         writing.ink.read();
+        writing.callout_boxes.read();
+        writing.code_boxes.read();
+        writing.callout_menu.read();
         writing.boxes.read();
         writing.format_position.read();
         writing.empty_line.read();
         writing.slash_menu.read();
+        writing.link_card.read();
+        writing.link_editing.read();
         writing.block_menu.read();
         writing.block_drag.read();
         writing.table_menu.read();
@@ -897,6 +916,7 @@ fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                         }
                     }
                 }
+                link_card::LinkCard { writing }
                 }
                     }
                     comments::CommentsPane { writing }

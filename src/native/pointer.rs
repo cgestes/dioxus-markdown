@@ -56,7 +56,11 @@ impl Writing {
                     if id.starts_with("table-menu-")
                         || id == "empty-line-tools"
                         || id == "slash-menu"
+                        || id == "link-card"
                         || id == "block-menu"
+                        || id == "callout-menu"
+                        || id.starts_with("callout-badge-")
+                        || id.starts_with("code-copy-")
                         || id.starts_with("col-menu-")
                         || id.starts_with("row-menu-")
                         || id.starts_with("block-handle-")
@@ -225,6 +229,9 @@ impl Writing {
         let Some(hit) = self.hit(p.x, p.y) else {
             return;
         };
+        if self.link_dismissed.peek().is_some() && self.link_at_pos(hit.field, hit.pos).is_some() {
+            self.link_dismissed.set(None);
+        }
         self.table_menu.set(None);
         self.quiet_cell.set(None);
         let previous = *self.active.peek();

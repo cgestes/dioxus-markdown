@@ -1,5 +1,5 @@
 use super::table::eol;
-use margin_editor_core::note::Splice;
+use margin_editor_core::{callout::strip_quote_marker, note::Splice};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
 
@@ -105,11 +105,170 @@ fn items(md: &str) -> Vec<Item> {
     result
 }
 
+fn next_list_suffix(marker: &Prefix<'_>) -> Option<String> {
+    let next = if let Some(digit) = marker.mark.strip_suffix(['.', ')']) {
+        format!(
+            "{}{}",
+            digit.parse::<u64>().ok()? + 1,
+            &marker.mark[digit.len()..]
+        )
+    } else {
+        marker.mark.to_owned()
+    };
+    Some(format!(
+        "{}{next}{}{}",
+        marker.indent,
+        if marker.gap.is_empty() {
+            " "
+        } else {
+            marker.gap
+        },
+        if marker.task { "[ ] " } else { "" }
+    ))
+}
+
+struct QuotePrefix {
+    depth: usize,
+    prev_end: usize,
+    end: usize,
+}
+
+fn quote_prefix(line: &str) -> Option<QuotePrefix> {
+    let mut i = 0;
+    let mut depth = 0;
+    let mut prev_end = 0;
+    while let Some((_, content)) = strip_quote_marker(&line[i..]) {
+        prev_end = i;
+        i += content;
+        depth += 1;
+    }
+    (depth > 0).then_some(QuotePrefix {
+        depth,
+        prev_end,
+        end: i,
+    })
+}
+
+fn in_blockquote(md: &str, line_start: usize) -> bool {
+    for (e, range) in
+        Parser::new_ext(md, Options::ENABLE_TASKLISTS | Options::ENABLE_TABLES).into_offset_iter()
+    {
+        if matches!(e, Event::Start(Tag::BlockQuote(_)))
+            && range.start <= line_start
+            && line_start < range.end
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn edit_blockquote(md: &str, [a, b]: [usize; 2], command: Command) -> Option<Edit> {
+    let (lo, hi) = (a.min(b), a.max(b));
+    let first = line_start(md, lo);
+    let end = line_end(md, first);
+    let line = &md[first..end];
+    let q = quote_prefix(line)?;
+    if !in_blockquote(md, first) {
+        return None;
+    }
+    let quote_str = &line[..q.end];
+    let continuation = if quote_str.ends_with([' ', '\t']) {
+        quote_str.to_owned()
+    } else {
+        format!("{quote_str} ")
+    };
+
+    // Handle a list item nested inside a blockquote (e.g. `> - item`).
+    if let Some(marker) = prefix(&line[q.end..]) {
+        let item_content_start = first + q.end + marker.end;
+        if matches!(command, Command::Backspace) {
+            if a != b || lo != item_content_start {
+                return None;
+            }
+            return Some(Edit {
+                changes: vec![Splice::new(first + q.end..lo, "")],
+                caret: [first + q.end; 2],
+            });
+        }
+        if matches!(command, Command::Continue) {
+            if hi > end || lo < item_content_start {
+                return None;
+            }
+            if lo == hi && md[item_content_start..end].trim().is_empty() {
+                return Some(Edit {
+                    changes: vec![Splice::new(first + q.end..end, "")],
+                    caret: [first + q.end; 2],
+                });
+            }
+            let insert = format!("{}{continuation}{}", eol(md), next_list_suffix(&marker)?);
+            return Some(Edit {
+                caret: [lo + insert.len(); 2],
+                changes: vec![Splice::new(lo..hi, insert)],
+            });
+        }
+        return None;
+    }
+
+    match command {
+        Command::Backspace => {
+            if a != b || lo != first + q.end {
+                return None;
+            }
+            let cut_from = if q.depth > 1 {
+                first + q.prev_end
+            } else {
+                first
+            };
+            Some(Edit {
+                changes: vec![Splice::new(cut_from..lo, "")],
+                caret: [cut_from; 2],
+            })
+        }
+        Command::Continue => {
+            if hi > end || lo < first + q.end {
+                return None;
+            }
+            if lo == hi && md[first + q.end..end].trim().is_empty() {
+                if q.depth > 1 {
+                    return Some(Edit {
+                        changes: vec![Splice::new(first + q.prev_end..end, "")],
+                        caret: [first + q.prev_end; 2],
+                    });
+                }
+                let prev_non_empty = first > 0
+                    && !md[..first]
+                        .trim_end_matches(['\r', '\n'])
+                        .rsplit('\n')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .is_empty()
+                    && !md[..first].ends_with("\n\n")
+                    && !md[..first].ends_with("\r\n\r\n");
+                let insert = if prev_non_empty { eol(md) } else { "" };
+                return Some(Edit {
+                    changes: vec![Splice::new(first..end, insert)],
+                    caret: [first + insert.len(); 2],
+                });
+            }
+            let insert = format!("{}{continuation}", eol(md));
+            Some(Edit {
+                caret: [lo + insert.len(); 2],
+                changes: vec![Splice::new(lo..hi, insert)],
+            })
+        }
+        Command::Indent | Command::Outdent => None,
+    }
+}
+
 pub fn edit(md: &str, [a, b]: [usize; 2], command: Command) -> Option<Edit> {
     let (lo, hi) = (a.min(b), a.max(b));
     let first = line_start(md, lo);
     let end = line_end(md, first);
-    let marker = prefix(&md[first..end])?;
+    let Some(marker) = prefix(&md[first..end]) else {
+        return edit_blockquote(md, [a, b], command);
+    };
     if matches!(command, Command::Backspace) && (a != b || lo != first + marker.end) {
         return None;
     }
@@ -140,26 +299,7 @@ pub fn edit(md: &str, [a, b]: [usize; 2], command: Command) -> Option<Edit> {
                 caret: [first + insert.len(); 2],
             });
         }
-        let next = if let Some(digit) = marker.mark.strip_suffix(['.', ')']) {
-            format!(
-                "{}{}",
-                digit.parse::<u64>().ok()? + 1,
-                &marker.mark[digit.len()..]
-            )
-        } else {
-            marker.mark.to_owned()
-        };
-        let insert = format!(
-            "{}{}{next}{}{}",
-            eol(md),
-            marker.indent,
-            if marker.gap.is_empty() {
-                " "
-            } else {
-                marker.gap
-            },
-            if marker.task { "[ ] " } else { "" }
-        );
+        let insert = format!("{}{}", eol(md), next_list_suffix(&marker)?);
         return Some(Edit {
             caret: [lo + insert.len(); 2],
             changes: vec![Splice::new(lo..hi, insert)],

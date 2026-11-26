@@ -76,7 +76,7 @@ preserves concurrent edits and a recovery window.
 
 ### 3.3 Source Mode (`View::Source`)
 - Full-viewport raw Markdown `<textarea>` sharing the same Loro document, undo history, and caret/selection round-tripping.
-- Supports the same formatting shortcuts (`⌘B`, `⌘I`, `⌘⇧X`, `⌘E`, `⌘K`) and list continuation (`Enter`, `Tab`, `Shift+Tab`, `Backspace`).
+- Supports the same formatting shortcuts (`⌘B`, `⌘I`, `⌘⇧X`, `⌘E`, `⌘K`) and list/blockquote continuation (`Enter`, `Tab`, `Shift+Tab`, `Backspace`).
 
 ---
 
@@ -87,7 +87,7 @@ preserves concurrent edits and a recovery window.
   - **Slash Command (`/`):** Typing `/` on an empty line opens a floating, filterable command menu (`#slash-menu`) right below the caret:
     - Typing after `/` filters commands live (e.g., `/h2`, `/task`, `/table`, `/code`, `/img`, `/quote`, `/rule`).
     - `ArrowUp` / `ArrowDown` navigate items, `Enter` / `Tab` / click executes the item (replacing `/query`), `Escape` dismisses.
-    - Supports: `Heading 1`, `Heading 2`, `Heading 3`, `Bullet list`, `Checklist`, `Blockquote`, `Code block`, `Table`, `Divider`, `Image` (`![alt](url)`).
+    - Supports: `Heading 1`, `Heading 2`, `Heading 3`, `Bullet list`, `Checklist`, `Blockquote`, `Callout` (`/callout`, `/tip`, `/important`, `/warning`, `/caution`), `Code block`, `Table`, `Divider`, `Image` (`![alt](url)`).
 - **Left Block Handle (`⋮⋮`, `.block-handle`) & Drag-and-Drop Reordering:**
   - Every top-level block (headings, individual paragraphs, blockquotes, rules, lists, code blocks, tables) renders its own subtle `⋮⋮` grip handle in the left margin (`cursor: grab`).
   - **Drag** any block's `⋮⋮` handle (headings, paragraphs, blockquotes, dividers, tables, fenced code blocks, and individual top-level list/checklist items) vertically to reorder it to any position in the document with full-window pointer tracking, source dimming, and a crisp accent-green drop indicator line (`#block-drop-line`); releasing commits one byte-exact, undoable Loro edit. Zero dead hover gap between block content and handle.
@@ -95,7 +95,16 @@ preserves concurrent edits and a recovery window.
   - **Keyboard:** `⌥⇧↑` / `⌥⇧↓` (`Alt+Shift+ArrowUp/Down`) moves the current block up or down directly.
 - **Floating Selection FormatBar (`#format-bar`):**
   - Appears near non-empty text selections in headings, prose, and table cells (deferred until pointer-up during drags; clears `#mode-bar` at the top edge).
-  - Actions: Bold (`⌘B`), Italic (`⌘I`), Strikethrough (`⌘⇧X`), Inline Code (`⌘E`), Link (`⌘K`).
+  - Actions: Bold (`⌘B`), Italic (`⌘I`), Strikethrough (`⌘⇧X`), Inline Code (`⌘E`), Link (`⌘K`). `⌘⇧H` toggles `==highlight==`, and pasting an `http(s)://` URL onto selected text wraps it as `[selection](url)`.
+- **Callouts & Code Blocks:**
+  - All 5 GFM/Obsidian callouts (`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`, with optional custom titles) render as tinted cards with a 3.5px accent bar, clickable type-switcher badge, `/` menu entries, and `Enter` continuation.
+  - Fenced code blocks (` ```lang `) render inside a rounded `--rail` card with an optional language label and Copy button (`#code-copy-*`).
+  - Bare `http(s)://` URLs autolink and open the Link Preview Card.
+- **Floating Link Preview & Action Card (`#link-card`):**
+  - Appears directly below the active Markdown link (`[label](target)` or `<url>`) when a collapsed caret sits inside it in Rich or Live mode (in headings, prose, or table cells), flipping above if near the bottom viewport edge.
+  - **Header bar:** clickable target path/URL (`#link-card-open`, opening external URLs, Space pages, or jumping to in-document `#heading` anchors) plus compact icon actions: **Edit** (`#link-card-edit`), **Copy** (`#link-card-copy`, with checkmark feedback), and **Remove / Unlink** (`#link-card-remove`, unwrapping `[label](url)` back to plain `label` in one undoable Loro edit).
+  - **Preview body:** displays the resolved title, folder/host row, excerpt (from Space page content, in-document section prose, Markdown title attribute, or URL), and metadata footer (page/link kind and backlink count).
+  - **Inline Edit form:** clicking Edit switches `#link-card` into an inline form (`#link-edit-label`, `#link-edit-url`, Save/Cancel, `Enter` to apply, `Escape` to cancel) committing one undoable Loro edit. `Escape` in preview mode dismisses the card until the caret leaves or re-clicks the link.
 
 ---
 

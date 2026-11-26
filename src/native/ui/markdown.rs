@@ -1,7 +1,22 @@
 //! Read-only Markdown, in the notebook's reading projection
 //! (`preview::document`): the same lines, spans and tables everywhere.
+use super::{Icon, icon};
 use dioxus_native::prelude::*;
 use margin_editor_core::preview::{self, Block, Passage};
+
+fn callout_badge_icon(style: &str) -> Icon {
+    if style.contains("callout-tip") {
+        Icon::Spark
+    } else if style.contains("callout-important") {
+        Icon::Important
+    } else if style.contains("callout-warning") {
+        Icon::AlertTriangle
+    } else if style.contains("callout-caution") {
+        Icon::AlertOctagon
+    } else {
+        Icon::Info
+    }
+}
 
 /// A passage's spans. `ids` adds the checkbox ids the Split preview uses to
 /// toggle them; read-only views leave them out so ids stay unique.
@@ -16,6 +31,11 @@ pub fn runs(p: &Passage, ids: bool) -> Element {
                     id: ids.then(|| format!("reading-box-{}", run.from)),
                     "{run.text}"
                     if run.text.starts_with('☑') { span { class: "marker-tick" } }
+                }
+            } else if run.style.starts_with("callout-badge") {
+                span { class: "{run.style}",
+                    {icon(callout_badge_icon(&run.style))}
+                    span { "{run.text}" }
                 }
             } else {
                 span { class: "{run.style}", "{run.text}" }

@@ -792,3 +792,79 @@ fn only_one_menu_is_open_at_a_time() {
         assert!(shown(s, "col-menu-0-1") && !shown(s, "row-menu-0-1"));
     });
 }
+
+#[test]
+fn link_card_visual_showcase() {
+    const MD: &str = "# Field notes\n\nLorem ipsum *labore et dolore* magna aliqua. Ut enim ad minim veniam, ~~quis nostrud~~ `ullamco laboris` commodo consequat. Duis aute irure dolor in [Work Log](brain/log \"Append-only audit trail. Add one dated entry per turn that creates, edits, or restructures content. The knowledge-base skill describes what to log and the entry shape.\") in voluptate velit esse.\n\nVisit the [Canal guide](https://example.com/canal/guide \"Field guide for acoustic lock recordings along the northern canal.\") or jump to [Listening stops](#listening-stops).\n\n## Listening stops\n\nMorning fog along the lock gate before the first barge passes.\n\n- North lock — water through the gate\n- Footbridge — steps on the steel deck";
+    run("link-card-showcase", MD, (860, 560), 2, |s| {
+        s.button("rich-mode");
+        let work_pos = MD.find("Work Log").unwrap() + 2;
+        open_body_at(&mut s.doc, [work_pos; 2]);
+        assert!(s.doc.inner.borrow().get_element_by_id("link-card").is_some());
+        s.capture("rich-internal-link-card");
+
+        s.button("link-card-edit");
+        assert!(
+            s.doc
+                .inner
+                .borrow()
+                .get_element_by_id("link-edit-label")
+                .is_some()
+        );
+        s.capture("rich-link-edit-form");
+
+        s.button("link-edit-cancel");
+        let ext_pos = MD.find("Canal guide").unwrap() + 2;
+        open_body_at(&mut s.doc, [ext_pos; 2]);
+        assert!(s.doc.inner.borrow().get_element_by_id("link-card").is_some());
+        s.capture("rich-external-link-card");
+
+        s.button("live-mode");
+        open_body_at(&mut s.doc, [work_pos; 2]);
+        assert!(s.doc.inner.borrow().get_element_by_id("link-card").is_some());
+        s.capture("live-internal-link-card");
+    });
+
+    // Also verify placement in a tall scrolled document (testing viewport scroll + flip-above).
+    const LONG_MD: &str = "# Long note\n\nLine 01\n\nLine 02\n\nLine 03\n\nLine 04\n\nLine 05\n\nLine 06\n\nLine 07\n\nLine 08\n\nLine 09\n\nLine 10\n\nLine 11\n\nLine 12\n\nSee [Work Log](brain/log \"Append-only audit trail.\") here.\n\nLine 14\n\nLine 15\n\nLine 16\n\nLine 17\n\nLine 18";
+    run("link-card-scrolled", LONG_MD, (860, 480), 2, |s| {
+        s.button("rich-mode");
+        let work_pos = LONG_MD.find("Work Log").unwrap() + 2;
+        open_body_at(&mut s.doc, [work_pos; 2]);
+        assert!(s.doc.inner.borrow().viewport_scroll().y > 0.0);
+        assert!(s.doc.inner.borrow().get_element_by_id("link-card").is_some());
+        let card = bounds(&s.doc, "link-card");
+        let caret = s.state().caret_rect.expect("caret geometry");
+        assert!(
+            card[1] >= 40.0 && card[1] + card[3] <= 480.0,
+            "scrolled link card must remain inside viewport: card={card:?} caret={caret:?}"
+        );
+        let gap_above = (caret[1] - (card[1] + card[3])).abs();
+        let gap_below = (card[1] - (caret[1] + caret[3])).abs();
+        assert!(
+            gap_above < 24.0 || gap_below < 24.0,
+            "scrolled link card must anchor right beside link: card={card:?} caret={caret:?}"
+        );
+        s.capture("scrolled-rich-link-card");
+    });
+}
+
+#[test]
+fn callouts_visual_showcase() {
+    const MD: &str = "# Field guide\n\n> [!NOTE]\n> Useful context with **bold** and `48 kHz` audio notes.\n\n> [!TIP] Quick shortcut\n> Type `/callout` or `/warning` on an empty line to insert a callout.\n\n> [!IMPORTANT]\n> Untouched Markdown bytes stay exact in Loro.\n\n> [!WARNING]\n> Check the lock gate before stepping onto the footbridge.\n\n> [!CAUTION]\n> High water level after heavy rain.";
+    run("callouts-showcase", MD, (860, 720), 2, |s| {
+        s.button("rich-mode");
+        s.capture("rich-callouts");
+
+        let note_start = MD.find("> [!NOTE]").unwrap();
+        s.button(&format!("callout-badge-{note_start}"));
+        assert!(s.doc.inner.borrow().get_element_by_id("callout-menu").is_some());
+        s.capture("rich-callout-type-picker");
+        s.named(NamedKey::Escape);
+
+        s.button("live-mode");
+        let tip_pos = MD.find("[!TIP]").unwrap() + 3;
+        open_body_at(&mut s.doc, [tip_pos; 2]);
+        s.capture("live-callouts-editing-tag");
+    });
+}

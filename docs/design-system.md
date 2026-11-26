@@ -50,7 +50,7 @@ Each is a Dioxus component (or a function) exported from `ui`. Props not listed 
 
 | Component | When | API |
 | --- | --- | --- |
-| `Popover` | Any floating surface: a menu, a picker. Surface, `--line` border, `--radius-l`, `--shadow-pop`. The caller places it (`class` / `style`). | `Popover { id?, class?, style?, role?, label?, keep_focus? = true, contain? = true, children }`. `keep_focus` keeps the caret in the text; `contain` keeps presses from the page below. |
+| `Popover` | Any floating surface: a menu, a picker, the link preview card (`.ui-link-card`). Surface, `--line` border, `--radius-l`, `--shadow-pop`. The caller places it (`class` / `style`). | `Popover { id?, class?, style?, role?, label?, keep_focus? = true, contain? = true, children }`. `keep_focus` keeps the caret in the text; `contain` keeps presses from the page below. |
 | `Menu` | A list of actions (`menu`) or of choices that follow typing (`listbox`, the slash menu) | `Menu { id?, class?, style?, role?, label?, children }` — a `Popover` with `.ui-menu` |
 | `MenuItem` | One entry: icon or short badge (`H1`, `↑`), label, an optional mono hint (`#`, `- [ ]`) | `MenuItem { label, id?, icon?, badge?, hint?, active?, selected?, danger?, disabled?, option?, onhover?, onclick }`. `active` is the keyboard highlight (moved by `onhover`), `option` makes it a listbox option. |
 | `MenuSection` / `MenuSeparator` / `MenuRow` | A small caps heading, a rule between groups, a row of icon buttons (alignment) | `MenuSection { label }`, `MenuSeparator {}`, `MenuRow { children }` |

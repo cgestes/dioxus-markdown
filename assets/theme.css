@@ -43,8 +43,11 @@
 
   /* Status */
   --ok: #3f9a6e;
+  --ok-wash: #ebf7f1;
+  --ok-line: #bde2ce;
   --info: #2c6a91;
-  --info-wash: #e2edf5;
+  --info-wash: #ebf3f9;
+  --info-line: #bfd6e7;
   --warn: #c97a16;
   --warn-ink: #5f4c17;
   --warn-wash: #f8f2e1;

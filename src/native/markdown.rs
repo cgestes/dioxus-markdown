@@ -1,34 +1,81 @@
 //! Presentation ranges live in the same UTF-8 source coordinate space as Parley and Loro.
-use super::{Field, Writing};
+use super::ui::{Button, Icon, Menu, MenuItem, Variant, icon};
+use super::{Field, Writing, report};
 use dioxus_native::prelude::*;
+use margin_editor_core::callout::CalloutKind;
 use parley::Cluster;
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
 
-pub(super) const STRONG: u16 = 1;
-pub(super) const ITALIC: u16 = 2;
-pub(super) const CODE: u16 = 4;
-pub(super) const LINK: u16 = 8;
-pub(super) const STRIKE: u16 = 16;
-pub(super) const HEADING: u16 = 32;
-pub(super) const QUOTE: u16 = 64;
-pub(super) const RULE: u16 = 128;
-pub(super) const PUNCTUATION: u16 = 256;
-pub(super) const BULLET: u16 = 512;
-pub(super) const QUOTE_MARK: u16 = 2048;
-pub(super) const DONE: u16 = 4096;
-pub(super) const CODE_BLOCK: u16 = 8192;
+pub(super) const STRONG: u32 = 1;
+pub(super) const ITALIC: u32 = 2;
+pub(super) const CODE: u32 = 4;
+pub(super) const LINK: u32 = 8;
+pub(super) const STRIKE: u32 = 16;
+pub(super) const HEADING: u32 = 32;
+pub(super) const QUOTE: u32 = 64;
+pub(super) const RULE: u32 = 128;
+pub(super) const PUNCTUATION: u32 = 256;
+pub(super) const BULLET: u32 = 512;
+pub(super) const QUOTE_MARK: u32 = 2048;
+pub(super) const DONE: u32 = 4096;
+pub(super) const CODE_BLOCK: u32 = 8192;
+pub(super) const CALLOUT_TITLE: u32 = 1 << 15;
+pub(super) const CALLOUT_NOTE: u32 = 1 << 16;
+pub(super) const CALLOUT_TIP: u32 = 1 << 17;
+pub(super) const CALLOUT_IMPORTANT: u32 = 1 << 18;
+pub(super) const CALLOUT_WARNING: u32 = 1 << 19;
+pub(super) const CALLOUT_CAUTION: u32 = 1 << 20;
+pub(super) const HIGHLIGHT: u32 = 1 << 21;
+pub(super) const CALLOUT_ANY: u32 =
+    CALLOUT_NOTE | CALLOUT_TIP | CALLOUT_IMPORTANT | CALLOUT_WARNING | CALLOUT_CAUTION;
+
+pub(super) fn callout_style(kind: CalloutKind) -> u32 {
+    match kind {
+        CalloutKind::Note => CALLOUT_NOTE,
+        CalloutKind::Tip => CALLOUT_TIP,
+        CalloutKind::Important => CALLOUT_IMPORTANT,
+        CalloutKind::Warning => CALLOUT_WARNING,
+        CalloutKind::Caution => CALLOUT_CAUTION,
+    }
+}
+
+fn callout_kind_from_style(style: u32) -> Option<CalloutKind> {
+    if style & CALLOUT_NOTE != 0 {
+        Some(CalloutKind::Note)
+    } else if style & CALLOUT_TIP != 0 {
+        Some(CalloutKind::Tip)
+    } else if style & CALLOUT_IMPORTANT != 0 {
+        Some(CalloutKind::Important)
+    } else if style & CALLOUT_WARNING != 0 {
+        Some(CalloutKind::Warning)
+    } else if style & CALLOUT_CAUTION != 0 {
+        Some(CalloutKind::Caution)
+    } else {
+        None
+    }
+}
+
+pub(super) fn callout_icon(kind: CalloutKind) -> Icon {
+    match kind {
+        CalloutKind::Note => Icon::Info,
+        CalloutKind::Tip => Icon::Spark,
+        CalloutKind::Important => Icon::Important,
+        CalloutKind::Warning => Icon::AlertTriangle,
+        CalloutKind::Caution => Icon::AlertOctagon,
+    }
+}
 
 #[derive(Clone, PartialEq)]
 pub struct Token {
     range: Range<usize>,
-    style: u16,
+    style: u32,
 }
 
 pub fn syntax(md: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut links: Vec<(Range<usize>, usize)> = Vec::new();
-    let mut stack = vec![(0u16, None)];
+    let mut stack = vec![(0u32, None)];
     for (event, mut range) in Parser::new_ext(
         md,
         Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS,
@@ -215,11 +262,219 @@ pub fn CaretOverlay(writing: Writing, field: Field) -> Element {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct CalloutBox {
+    pub field: Field,
+    pub start: usize,
+    pub kind: CalloutKind,
+    pub top: f32,
+    pub height: f32,
+    pub badge_x: f32,
+    pub badge_y: f32,
+    pub badge_w: f32,
+    pub badge_h: f32,
+    pub revealed: bool,
+}
+
+impl CalloutBox {
+    pub fn draw(self) -> Element {
+        let Self {
+            start,
+            kind,
+            top,
+            height,
+            ..
+        } = self;
+        rsx! {
+            div {
+                key: "cb-{start}",
+                id: "callout-{start}",
+                class: "callout-bg {kind.css_class()}",
+                aria_hidden: "true",
+                style: format!("top:{top:.1}px; height:{height:.1}px;"),
+            }
+        }
+    }
+
+    pub fn draw_bar(self) -> Element {
+        let Self {
+            start,
+            kind,
+            top,
+            height,
+            ..
+        } = self;
+        rsx! {
+            span {
+                key: "cbar-{start}",
+                class: "callout-bar {kind.css_class()}",
+                aria_hidden: "true",
+                style: format!("top:{top:.1}px; height:{height:.1}px;"),
+            }
+        }
+    }
+
+    pub fn draw_badge(self, writing: Writing) -> Element {
+        let Self {
+            start,
+            kind,
+            badge_x,
+            badge_y,
+            badge_w,
+            badge_h,
+            ..
+        } = self;
+        let open = *writing.callout_menu.read() == Some(start);
+        rsx! {
+            div {
+                key: "cbadge-{start}",
+                class: "callout-badge-anchor",
+                class: if open { "menu-open" },
+                style: format!("left:{badge_x:.1}px; top:{badge_y:.1}px;"),
+                button {
+                    id: "callout-badge-{start}",
+                    class: "callout-badge-btn {kind.css_class()}",
+                    class: if open { "open" },
+                    aria_label: format!("Callout type: {}", kind.label()),
+                    aria_expanded: if open { "true" } else { "false" },
+                    title: "Change callout type",
+                    style: format!("min-width:{badge_w:.1}px; height:{badge_h:.1}px;"),
+                    onpointerdown: move |e| {
+                        e.prevent_default();
+                        e.stop_propagation();
+                    },
+                    onclick: move |e| {
+                        e.stop_propagation();
+                        let mut w = writing;
+                        let next = (*w.callout_menu.peek() != Some(start)).then_some(start);
+                        w.callout_menu.set(next);
+                    },
+                    span { class: "callout-tag-inner",
+                        {icon(callout_icon(kind))}
+                        span { "{kind.label()}" }
+                    }
+                }
+                if open {
+                    Menu {
+                        id: "callout-menu",
+                        class: "callout-menu",
+                        label: "Callout type",
+                        style: format!("left:0px; top:{:.1}px;", badge_h + 2.0),
+                        for option in CalloutKind::ALL {
+                            MenuItem {
+                                key: "{option.tag()}",
+                                id: format!("callout-pick-{}", option.tag().to_ascii_lowercase()),
+                                label: option.label().to_owned(),
+                                icon: callout_icon(option),
+                                selected: option == kind,
+                                onclick: move |_| writing.set_callout_kind(start, option),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct CodeBox {
+    pub field: Field,
+    pub start: usize,
+    pub lang: String,
+    pub body_range: Range<usize>,
+    pub top: f32,
+    pub height: f32,
+}
+
+impl CodeBox {
+    pub fn draw(self) -> Element {
+        let Self {
+            start, top, height, ..
+        } = self;
+        rsx! {
+            div {
+                key: "code-bg-{start}",
+                id: "code-block-{start}",
+                class: "code-bg",
+                aria_hidden: "true",
+                style: format!("top:{top:.1}px; height:{height:.1}px;"),
+            }
+        }
+    }
+
+    pub fn draw_tools(self, writing: Writing) -> Element {
+        let Self {
+            start,
+            lang,
+            body_range,
+            top,
+            ..
+        } = self;
+        rsx! {
+            CodeBlockTools {
+                key: "code-tools-{start}",
+                writing,
+                start,
+                lang,
+                body_range,
+                top: top + 5.0,
+            }
+        }
+    }
+}
+
+#[component]
+fn CodeBlockTools(
+    writing: Writing,
+    start: usize,
+    lang: String,
+    body_range: Range<usize>,
+    top: f32,
+) -> Element {
+    let mut copied = use_signal(|| false);
+    rsx! {
+        div {
+            class: "code-tools",
+            style: format!("top:{top:.1}px;"),
+            onpointerdown: move |e| {
+                e.prevent_default();
+                e.stop_propagation();
+            },
+            if !lang.is_empty() {
+                span { class: "code-lang", "{lang}" }
+            }
+            Button {
+                id: format!("code-copy-{start}"),
+                variant: Variant::Icon,
+                label: "Copy code",
+                tip: if copied() { "Copied" } else { "Copy code" },
+                icon: if copied() { Icon::Check } else { Icon::Copy },
+                selected: copied().then_some(true),
+                keep_focus: true,
+                onclick: move |_| {
+                    let md = writing.contents.read();
+                    if let Some(snippet) = md.get(body_range.clone())
+                        && let Some(handle) = writing.root.peek().as_ref()
+                        && handle
+                            .doc()
+                            .shell_provider
+                            .set_clipboard_text(snippet.to_owned())
+                            .is_ok()
+                    {
+                        copied.set(true);
+                    }
+                },
+            }
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct Ink {
     pub field: Field,
     at: usize,
-    style: u16,
+    style: u32,
     text: String,
     x: f32,
     y: f32,
@@ -243,17 +498,24 @@ impl Ink {
             letter,
             ..
         } = self;
+        let callout = callout_kind_from_style(style);
+        let callout_cls = callout.map_or("", CalloutKind::css_class);
+        let is_callout_quote_mark = callout.is_some() && style & QUOTE_MARK != 0;
+        let is_callout_title = callout.is_some() && style & CALLOUT_TITLE != 0;
         rsx! {
             span {
-                key: "{at}", id: "ink-{at}", class: "md-ink", aria_hidden: "true",
+                key: "{at}", id: "ink-{at}", class: "md-ink {callout_cls}", aria_hidden: "true",
                 class: if style & (STRONG | HEADING) != 0 { "strong" },
                 class: if style & ITALIC != 0 { "emphasis" },
                 class: if style & CODE != 0 { "code" },
                 class: if style & CODE_BLOCK != 0 { "code-block" },
                 class: if style & LINK != 0 { "link" },
+                class: if style & HIGHLIGHT != 0 { "highlight" },
                 class: if style & STRIKE != 0 { "strike" },
                 class: if style & QUOTE != 0 { "quote" },
-                class: if style & QUOTE_MARK != 0 { "quote-mark" },
+                class: if style & QUOTE_MARK != 0 && !is_callout_quote_mark { "quote-mark" },
+                class: if is_callout_quote_mark { "callout-quote-mark" },
+                class: if is_callout_title { "callout-title-ink" },
                 class: if style & RULE != 0 { "rule" },
                 class: if style & PUNCTUATION != 0 { "punctuation" },
                 class: if style & DONE != 0 { "done" },
@@ -262,11 +524,13 @@ impl Ink {
                 } else {
                     format!("left:{x}px; top:{y}px; width:{width}px; height:{height}px; line-height:{height}px;")
                 },
-                if style == BULLET {
+                if is_callout_quote_mark {
+                    ""
+                } else if style & BULLET != 0 {
                     "•"
-                } else if style == QUOTE_MARK {
+                } else if style & QUOTE_MARK != 0 {
                     span { class: "quote-bar" }
-                } else if style == RULE {
+                } else if style & RULE != 0 {
                     span { class: "rule-line" }
                 } else {
                     "{text}"
@@ -276,7 +540,7 @@ impl Ink {
     }
 }
 
-const INLINE_STYLES: u16 = STRONG | ITALIC | CODE | LINK | STRIKE | PUNCTUATION;
+const INLINE_STYLES: u32 = STRONG | ITALIC | CODE | LINK | STRIKE | HIGHLIGHT | PUNCTUATION;
 
 impl Writing {
     pub fn inline_fields(self) -> Vec<Field> {
@@ -367,14 +631,18 @@ impl Writing {
                     let start = run_range.start.max(token.display.start);
                     let end = run_range.end.min(token.display.end);
                     let slice = text[start..end].trim_end_matches(['\n', '\r']);
+                    let reveal_syntax = token.style == PUNCTUATION
+                        || (!rich
+                            && token.style & CALLOUT_ANY != 0
+                            && token.style & QUOTE_MARK != 0);
                     if slice.is_empty()
                         || slice.contains('\t')
-                        || (token.style == PUNCTUATION
+                        || (reveal_syntax
                             && node.is_focussed()
                             && !whole_cell
                             && selection.start <= start + slice.len()
                             && selection.end >= start)
-                        || (token.style != PUNCTUATION
+                        || (!reveal_syntax
                             && node.is_focussed()
                             && !whole_cell
                             && !selection.is_empty()
@@ -426,6 +694,204 @@ impl Writing {
             }
         }
         result
+    }
+
+    fn vertical_band(
+        layout: &parley::Layout<blitz_dom::node::TextBrush>,
+        proj: &super::projection::Projection,
+        raw_len: usize,
+        range: &Range<usize>,
+        scroll_top: f32,
+        scale: f32,
+        top_inset: f32,
+        pad_y: f32,
+    ) -> (f32, f32) {
+        let d_start = proj.source_to_display(range.start).min(raw_len);
+        let d_end = proj
+            .source_to_display(range.end.saturating_sub(1).max(range.start))
+            .min(raw_len);
+        let first_geom =
+            parley::Cursor::from_byte_index(layout, d_start, parley::Affinity::Downstream)
+                .geometry(layout, 0.0);
+        let last_geom =
+            parley::Cursor::from_byte_index(layout, d_end, parley::Affinity::Downstream)
+                .geometry(layout, 0.0);
+        let min_y = (first_geom.y0.min(last_geom.y0) as f32 - scroll_top) / scale;
+        let max_y = (first_geom.y1.max(last_geom.y1) as f32 - scroll_top) / scale;
+        (
+            top_inset + min_y - pad_y,
+            (max_y - min_y + pad_y * 2.0).max(28.0),
+        )
+    }
+
+    pub fn measured_callouts(self, field: Field) -> Vec<CalloutBox> {
+        let handle = self.root.peek();
+        let Some(handle) = handle.as_ref() else {
+            return Vec::new();
+        };
+        let doc = handle.doc();
+        let Some(node) = doc
+            .get_element_by_id(&field.id())
+            .and_then(|id| doc.get_node(id))
+        else {
+            return Vec::new();
+        };
+        let Some(input) = node.element_data().and_then(|e| e.text_input_data()) else {
+            return Vec::new();
+        };
+        let Some(layout) = input.editor.try_layout() else {
+            return Vec::new();
+        };
+        let proj = self.projection_peek(field);
+        if input.editor.is_composing() || input.editor.raw_text() != proj.display {
+            return Vec::new();
+        }
+        let md = self.contents.read();
+        let field_range = self.range(field, &md);
+        let parsed = self.parsed.read();
+        let rich = *self.edit_mode.peek() == super::projection::EditMode::Rich;
+        let selection = input.editor.raw_selection().text_range();
+        let scale = layout.scale();
+        let scroll_top = if input.is_multiline {
+            input.scroll_offset * scale
+        } else {
+            0.0
+        };
+        let l = node.final_layout();
+        let left_inset = l.border.left + l.padding.left;
+        let top_inset = l.border.top + l.padding.top;
+        let raw_len = input.editor.raw_text().len();
+        let mut boxes = Vec::new();
+        for c in &parsed.callouts {
+            if c.range.start < field_range.start || c.range.end > field_range.end {
+                continue;
+            }
+            let (top, height) = Self::vertical_band(
+                layout,
+                &proj,
+                raw_len,
+                &c.range,
+                scroll_top,
+                scale,
+                top_inset,
+                7.0,
+            );
+            let tag_d_start = proj.source_to_display(c.tag_range.start).min(raw_len);
+            let tag_d_end = proj.source_to_display(c.tag_range.end).min(raw_len);
+            let tag_start_geom =
+                parley::Cursor::from_byte_index(layout, tag_d_start, parley::Affinity::Downstream)
+                    .geometry(layout, 0.0);
+            let tag_end_geom =
+                parley::Cursor::from_byte_index(layout, tag_d_end, parley::Affinity::Downstream)
+                    .geometry(layout, 0.0);
+            let badge_x = left_inset + tag_start_geom.x0 as f32 / scale;
+            let badge_y = top_inset + (tag_start_geom.y0 as f32 - scroll_top) / scale;
+            let badge_w = ((tag_end_geom.x0 - tag_start_geom.x0) as f32 / scale).max(24.0);
+            let badge_h = ((tag_start_geom.y1 - tag_start_geom.y0) as f32 / scale).max(20.0);
+            let revealed = !rich
+                && node.is_focussed()
+                && selection.start <= tag_d_end
+                && selection.end >= tag_d_start;
+
+            boxes.push(CalloutBox {
+                field,
+                start: c.range.start,
+                kind: c.kind,
+                top,
+                height,
+                badge_x,
+                badge_y,
+                badge_w,
+                badge_h,
+                revealed,
+            });
+        }
+        boxes
+    }
+
+    pub fn measured_code_blocks(self, field: Field) -> Vec<CodeBox> {
+        let handle = self.root.peek();
+        let Some(handle) = handle.as_ref() else {
+            return Vec::new();
+        };
+        let doc = handle.doc();
+        let Some(node) = doc
+            .get_element_by_id(&field.id())
+            .and_then(|id| doc.get_node(id))
+        else {
+            return Vec::new();
+        };
+        let Some(input) = node.element_data().and_then(|e| e.text_input_data()) else {
+            return Vec::new();
+        };
+        let Some(layout) = input.editor.try_layout() else {
+            return Vec::new();
+        };
+        let proj = self.projection_peek(field);
+        if input.editor.is_composing() || input.editor.raw_text() != proj.display {
+            return Vec::new();
+        }
+        let md = self.contents.read();
+        let field_range = self.range(field, &md);
+        let parsed = self.parsed.read();
+        let scale = layout.scale();
+        let scroll_top = if input.is_multiline {
+            input.scroll_offset * scale
+        } else {
+            0.0
+        };
+        let l = node.final_layout();
+        let top_inset = l.border.top + l.padding.top;
+        let raw_len = input.editor.raw_text().len();
+        parsed
+            .code_blocks
+            .iter()
+            .filter(|cb| cb.range.start >= field_range.start && cb.range.end <= field_range.end)
+            .map(|cb| {
+                let (top, height) = Self::vertical_band(
+                    layout,
+                    &proj,
+                    raw_len,
+                    &cb.range,
+                    scroll_top,
+                    scale,
+                    top_inset,
+                    6.0,
+                );
+                CodeBox {
+                    field,
+                    start: cb.range.start,
+                    lang: cb.lang.clone(),
+                    body_range: cb.body_range.clone(),
+                    top,
+                    height,
+                }
+            })
+            .collect()
+    }
+
+    pub fn set_callout_kind(mut self, callout_start: usize, kind: CalloutKind) {
+        self.callout_menu.set(None);
+        let tag_range = self
+            .parsed
+            .read()
+            .callouts
+            .iter()
+            .find(|c| c.range.start == callout_start)
+            .map(|c| c.tag_range.clone());
+        let Some(range) = tag_range else {
+            return;
+        };
+        let replacement = format!("[!{}]", kind.tag());
+        if let Some(sel) = self.absolute_selection() {
+            self.note.peek().remember_selection(sel);
+        }
+        let result = self.note.write().replace(range.clone(), &replacement);
+        if result.is_ok() {
+            let caret = range.start + replacement.len();
+            self.open(self.field_at(caret), [caret; 2]);
+        }
+        report(result, self.message);
     }
 
     pub fn measured_caret(self) -> Option<CaretInk> {

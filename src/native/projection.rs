@@ -7,15 +7,16 @@
 //!   tightly with zero ghost gaps, while the span containing the cursor expands
 //!   inline so its Markdown delimiters can be edited directly.
 use super::markdown::{
-    BULLET, CODE, CODE_BLOCK, DONE, HEADING, ITALIC, LINK, PUNCTUATION, QUOTE, QUOTE_MARK, RULE,
-    STRONG, STRIKE,
+    BULLET, CALLOUT_ANY, CALLOUT_TITLE, CODE, CODE_BLOCK, DONE, HEADING, HIGHLIGHT, ITALIC, LINK,
+    PUNCTUATION, QUOTE, QUOTE_MARK, RULE, STRIKE, STRONG, callout_style,
 };
 use margin_editor_core::{
+    callout::{ParsedCallout, parse_callouts, strip_quote_marker},
     checkbox::{Marker, marker_beside},
     edit::{Splice, text_change},
     table,
 };
-use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
 
 /// 3-byte UTF-8 EM SPACE used in proportional Rich mode (1em square checkbox slot).
@@ -48,7 +49,7 @@ pub struct Piece {
 pub struct DisplayToken {
     pub display: Range<usize>,
     pub source_start: usize,
-    pub style: u16,
+    pub style: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,7 +82,7 @@ pub struct Projection {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct RawToken {
     range: Range<usize>,
-    style: u16,
+    style: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -93,16 +94,122 @@ struct CollapseGroup {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParsedLink {
+    pub outer: Range<usize>,
+    pub label_range: Range<usize>,
+    pub url: String,
+    pub title: String,
+    pub is_autolink: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParsedCodeBlock {
+    pub range: Range<usize>,
+    pub lang: String,
+    pub body_range: Range<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParsedMarkdown {
     groups: Vec<CollapseGroup>,
     tokens: Vec<RawToken>,
+    pub links: Vec<ParsedLink>,
+    pub callouts: Vec<ParsedCallout>,
+    pub code_blocks: Vec<ParsedCodeBlock>,
+}
+
+fn find_bare_urls(text: &str, base: usize) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        let next = [rest.find("https://"), rest.find("http://")]
+            .into_iter()
+            .flatten()
+            .min();
+        let Some(rel) = next else {
+            break;
+        };
+        let start = at + rel;
+        if start > 0
+            && text[..start]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || matches!(c, '(' | '[' | '<'))
+        {
+            at = start + 4;
+            continue;
+        }
+        let tail = &text[start..];
+        let mut end = tail
+            .find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"' | '\''))
+            .unwrap_or(tail.len());
+        while end > 0 {
+            let last = tail[..end].chars().next_back().unwrap();
+            if matches!(last, '.' | ',' | ';' | ':' | '!' | '?') {
+                end -= last.len_utf8();
+            } else if last == ')'
+                && tail[..end].bytes().filter(|&b| b == b')').count()
+                    > tail[..end].bytes().filter(|&b| b == b'(').count()
+            {
+                end -= 1;
+            } else {
+                break;
+            }
+        }
+        let scheme_len = if tail.starts_with("https://") { 8 } else { 7 };
+        if end > scheme_len + 2 && tail[scheme_len..end].contains('.') {
+            out.push(base + start..base + start + end);
+        }
+        at = start + end.max(scheme_len);
+    }
+    out
+}
+
+fn find_highlights(text: &str, base: usize) -> Vec<(Range<usize>, Range<usize>, Range<usize>)> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    while let Some(rel_open) = text[at..].find("==") {
+        let open = at + rel_open;
+        let inner_start = open + 2;
+        let Some(rel_close) = text[inner_start..].find("==") else {
+            break;
+        };
+        let inner_end = inner_start + rel_close;
+        let body = &text[inner_start..inner_end];
+        if !body.is_empty()
+            && !body.contains('\n')
+            && !body.starts_with(' ')
+            && !body.ends_with(' ')
+        {
+            out.push((
+                base + open..base + inner_end + 2,
+                base + open..base + inner_start,
+                base + inner_end..base + inner_end + 2,
+            ));
+            at = inner_end + 2;
+        } else {
+            at = inner_start;
+        }
+    }
+    out
+}
+
+struct ActiveLink {
+    outer: Range<usize>,
+    open_len: usize,
+    last_child: usize,
+    meta: Option<(String, String, bool)>,
 }
 
 pub fn parse_markdown(md: &str) -> ParsedMarkdown {
+    let callouts = parse_callouts(md);
     let mut groups = Vec::new();
     let mut tokens = Vec::new();
-    let mut links: Vec<(Range<usize>, usize, usize)> = Vec::new(); // (outer, open_len, last_child_end)
-    let mut stack: Vec<(u16, Option<(Range<usize>, Range<usize>, Range<usize>)>)> = vec![(0, None)];
+    let mut parsed_links = Vec::new();
+    let mut code_blocks = Vec::new();
+    let mut links: Vec<ActiveLink> = Vec::new();
+    let mut stack: Vec<(u32, Option<(Range<usize>, Range<usize>, Range<usize>)>)> = vec![(0, None)];
 
     for (event, mut range) in Parser::new_ext(
         md,
@@ -111,9 +218,12 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
     .into_offset_iter()
     {
         let inherited = stack.last().unwrap().0;
-        for (outer, _, last_child) in &mut links {
-            if range != *outer && range.start >= outer.start && range.end <= outer.end {
-                *last_child = (*last_child).max(range.end);
+        for active in &mut links {
+            if range != active.outer
+                && range.start >= active.outer.start
+                && range.end <= active.outer.end
+            {
+                active.last_child = active.last_child.max(range.end);
             }
         }
         let style = match event {
@@ -124,7 +234,13 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                     Tag::Strikethrough => STRIKE,
                     Tag::Link { .. } | Tag::Image { .. } => LINK,
                     Tag::Heading { .. } => HEADING,
-                    Tag::BlockQuote(_) => QUOTE,
+                    Tag::BlockQuote(_) => {
+                        if let Some(c) = callouts.iter().find(|c| c.range.start == range.start) {
+                            callout_style(c.kind)
+                        } else {
+                            QUOTE
+                        }
+                    }
                     Tag::CodeBlock(_) => CODE_BLOCK,
                     _ => 0,
                 };
@@ -141,21 +257,51 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                     _ => 0,
                 };
                 let raw = &md[range.clone()];
-                if matches!(tag, Tag::Link { .. } | Tag::Image { .. }) {
-                    let opening = if raw.starts_with("![") {
-                        2
-                    } else if raw.starts_with(['[', '<']) {
-                        1
-                    } else {
-                        0
-                    };
-                    if opening > 0 {
-                        tokens.push(RawToken {
-                            range: range.start..range.start + opening,
-                            style: PUNCTUATION,
+                match &tag {
+                    Tag::Link {
+                        link_type,
+                        dest_url,
+                        title,
+                        ..
+                    } => {
+                        let opening = if raw.starts_with(['[', '<']) { 1 } else { 0 };
+                        if opening > 0 {
+                            tokens.push(RawToken {
+                                range: range.start..range.start + opening,
+                                style: PUNCTUATION,
+                            });
+                        }
+                        let is_autolink =
+                            matches!(link_type, LinkType::Autolink | LinkType::Email);
+                        links.push(ActiveLink {
+                            outer: range.clone(),
+                            open_len: opening,
+                            last_child: range.start + opening,
+                            meta: Some((dest_url.to_string(), title.to_string(), is_autolink)),
                         });
-                        links.push((range.clone(), opening, range.start + opening));
                     }
+                    Tag::Image { .. } => {
+                        let opening = if raw.starts_with("![") {
+                            2
+                        } else if raw.starts_with(['[', '<']) {
+                            1
+                        } else {
+                            0
+                        };
+                        if opening > 0 {
+                            tokens.push(RawToken {
+                                range: range.start..range.start + opening,
+                                style: PUNCTUATION,
+                            });
+                            links.push(ActiveLink {
+                                outer: range.clone(),
+                                open_len: opening,
+                                last_child: range.start + opening,
+                                meta: None,
+                            });
+                        }
+                    }
+                    _ => {}
                 }
                 if matches!(tag, Tag::Item) && raw.starts_with(['-', '*', '+']) {
                     let trimmed = raw[1..].trim_start_matches([' ', '\t']);
@@ -168,10 +314,29 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                     });
                 }
                 if matches!(tag, Tag::BlockQuote(_)) && raw.starts_with('>') {
-                    tokens.push(RawToken {
-                        range: range.start..range.start + 1,
-                        style: QUOTE_MARK,
-                    });
+                    if let Some(c) = callouts.iter().find(|c| c.range.start == range.start) {
+                        let cbit = callout_style(c.kind);
+                        for mark in &c.quote_marks {
+                            tokens.push(RawToken {
+                                range: mark.clone(),
+                                style: QUOTE_MARK | cbit,
+                            });
+                        }
+                    } else if inherited & (QUOTE | CALLOUT_ANY) == 0 {
+                        let mut off = range.start;
+                        for raw_line in raw.split_inclusive('\n') {
+                            let line = raw_line.trim_end_matches(['\r', '\n']);
+                            let mut col = 0;
+                            while let Some((gt, content)) = strip_quote_marker(&line[col..]) {
+                                tokens.push(RawToken {
+                                    range: off + col + gt..off + col + gt + 1,
+                                    style: QUOTE_MARK,
+                                });
+                                col += content;
+                            }
+                            off += raw_line.len();
+                        }
+                    }
                 }
                 let mut pair = if count != 0 && range.len() >= 2 * count {
                     let open = range.start..range.start + count;
@@ -184,7 +349,7 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                 } else {
                     None
                 };
-                if matches!(tag, Tag::CodeBlock(CodeBlockKind::Fenced(_)))
+                if let Tag::CodeBlock(CodeBlockKind::Fenced(ref info)) = tag
                     && let Some(&ch) = raw.as_bytes().first()
                 {
                     let ticks = raw.bytes().take_while(|b| *b == ch).count();
@@ -196,11 +361,17 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                             style: PUNCTUATION,
                         });
                         let tail = raw.trim_end_matches(['\n', '\r', ' ', '\t']);
+                        let body_start = (range.start + first_line_end + usize::from(first_line_end < raw.len())).min(range.end);
+                        let mut body_end = range.start + tail.len();
                         if let Some((_, final_line)) = tail.rsplit_once('\n') {
                             let last = final_line.trim_start();
                             if last.len() >= ticks && last.bytes().all(|b| b == ch) {
                                 let close =
                                     range.start + tail.len() - last.len()..range.start + tail.len();
+                                body_end = close.start.saturating_sub(1).max(body_start);
+                                if body_end > body_start && md.as_bytes().get(body_end - 1) == Some(&b'\r') {
+                                    body_end -= 1;
+                                }
                                 pair = Some((
                                     range.clone(),
                                     range.start..range.start + header_end,
@@ -208,6 +379,12 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                                 ));
                             }
                         }
+                        let lang = info.split_whitespace().next().unwrap_or("").to_owned();
+                        code_blocks.push(ParsedCodeBlock {
+                            range: range.start..range.start + tail.len(),
+                            lang,
+                            body_range: body_start..body_end.max(body_start),
+                        });
                     }
                 }
                 if add == HEADING {
@@ -236,23 +413,37 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
             }
             Event::End(tag) => {
                 if matches!(tag, TagEnd::Link | TagEnd::Image)
-                    && links.last().is_some_and(|(outer, _, _)| *outer == range)
-                    && let Some((outer, open_len, last)) = links.pop()
+                    && links.last().is_some_and(|a| a.outer == range)
+                    && let Some(active) = links.pop()
                 {
-                    let open = outer.start..outer.start + open_len;
-                    let close = (last < outer.end).then_some(last..outer.end);
-                    if let Some(c) = &close {
-                        tokens.push(RawToken {
-                            range: c.clone(),
-                            style: PUNCTUATION,
+                    let label_start = (active.outer.start + active.open_len).min(active.outer.end);
+                    let label_end = active.last_child.clamp(label_start, active.outer.end);
+                    if active.open_len > 0 {
+                        let open = active.outer.start..label_start;
+                        let close = (label_end < active.outer.end)
+                            .then_some(label_end..active.outer.end);
+                        if let Some(c) = &close {
+                            tokens.push(RawToken {
+                                range: c.clone(),
+                                style: PUNCTUATION,
+                            });
+                        }
+                        groups.push(CollapseGroup {
+                            outer: active.outer.clone(),
+                            open,
+                            close,
+                            is_heading_prefix: false,
                         });
                     }
-                    groups.push(CollapseGroup {
-                        outer,
-                        open,
-                        close,
-                        is_heading_prefix: false,
-                    });
+                    if let Some((url, title, is_autolink)) = active.meta {
+                        parsed_links.push(ParsedLink {
+                            outer: active.outer,
+                            label_range: label_start..label_end,
+                            url,
+                            title,
+                            is_autolink,
+                        });
+                    }
                 }
                 if let Some((_, Some((outer, open, close)))) = stack.pop() {
                     let is_fence = md[open.clone()].starts_with("```")
@@ -298,16 +489,101 @@ pub fn parse_markdown(md: &str) -> ParsedMarkdown {
                 }
             }
             Event::Rule => RULE,
-            Event::Text(_) => inherited,
+            Event::Text(_) => {
+                if inherited & (CODE | CODE_BLOCK | LINK) == 0 {
+                    let slice = &md[range.clone()];
+                    for url_range in find_bare_urls(slice, range.start) {
+                        tokens.push(RawToken {
+                            range: url_range.clone(),
+                            style: inherited | LINK,
+                        });
+                        parsed_links.push(ParsedLink {
+                            outer: url_range.clone(),
+                            label_range: url_range.clone(),
+                            url: md[url_range].to_owned(),
+                            title: String::new(),
+                            is_autolink: true,
+                        });
+                    }
+                    for (outer, open, close) in find_highlights(slice, range.start) {
+                        let inner = open.end..close.start;
+                        groups.push(CollapseGroup {
+                            outer,
+                            open: open.clone(),
+                            close: Some(close.clone()),
+                            is_heading_prefix: false,
+                        });
+                        tokens.push(RawToken {
+                            range: open,
+                            style: PUNCTUATION | (inherited & CALLOUT_ANY),
+                        });
+                        tokens.push(RawToken {
+                            range: inner,
+                            style: inherited | HIGHLIGHT,
+                        });
+                        tokens.push(RawToken {
+                            range: close,
+                            style: PUNCTUATION | (inherited & CALLOUT_ANY),
+                        });
+                    }
+                }
+                // Plain body text inside a callout renders directly via native Parley
+                // over the `.callout-bg` backdrop; only inline-styled runs need overlays.
+                if inherited & CALLOUT_ANY != 0 && (inherited & !CALLOUT_ANY) == 0 {
+                    0
+                } else {
+                    inherited
+                }
+            }
             _ => continue,
         };
         if style != 0 && !range.is_empty() {
-            tokens.push(RawToken { range, style });
+            let in_callout_header = callouts
+                .iter()
+                .any(|c| range.start < c.header_line.end && range.end > c.tag_range.start);
+            if !in_callout_header {
+                let effective = if style == PUNCTUATION || style == BULLET {
+                    style | (inherited & CALLOUT_ANY)
+                } else {
+                    style
+                };
+                tokens.push(RawToken {
+                    range,
+                    style: effective,
+                });
+            }
+        }
+    }
+    for c in &callouts {
+        let cbit = callout_style(c.kind);
+        if let Some(tr) = &c.title_range {
+            tokens.push(RawToken {
+                range: tr.clone(),
+                style: CALLOUT_TITLE | cbit,
+            });
+        }
+    }
+    // Tag punctuation/bullet tokens that sit inside a callout so their overlay
+    // background blends seamlessly into the callout wash.
+    for t in &mut tokens {
+        if t.style & CALLOUT_ANY == 0
+            && let Some(c) = callouts
+                .iter()
+                .find(|c| t.range.start >= c.range.start && t.range.end <= c.range.end)
+        {
+            t.style |= callout_style(c.kind);
         }
     }
     groups.sort_by_key(|g| (g.outer.start, g.outer.end));
     tokens.sort_by_key(|t| (t.range.start, t.range.end));
-    ParsedMarkdown { groups, tokens }
+    parsed_links.sort_by_key(|l| (l.outer.start, l.outer.end));
+    ParsedMarkdown {
+        groups,
+        tokens,
+        links: parsed_links,
+        callouts,
+        code_blocks,
+    }
 }
 
 impl Projection {
@@ -501,7 +777,7 @@ impl Projection {
         };
 
         // Map styled tokens into display byte ranges.
-        const INLINE: u16 = STRONG | ITALIC | CODE | LINK | STRIKE | PUNCTUATION;
+        const INLINE: u32 = STRONG | ITALIC | CODE | LINK | STRIKE | HIGHLIGHT | PUNCTUATION;
         let mut disp_tokens = Vec::new();
         let start_idx = raw_tokens.partition_point(|t| t.range.end <= field_range.start);
         for t in raw_tokens[start_idx..]

@@ -1,6 +1,7 @@
 //! Slash command menu (`/`) on an empty line for fast keyboard/mouse block insertion.
 use super::{Field, Icon, Writing, report};
 use dioxus_native::prelude::*;
+use margin_editor_core::callout::CalloutKind;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct SlashState {
@@ -19,6 +20,7 @@ pub enum SlashKind {
     Bullet,
     Task,
     Quote,
+    Callout(CalloutKind),
     CodeBlock,
     Table,
     Rule,
@@ -86,9 +88,54 @@ const ITEMS: &[SlashItem] = &[
         id: "slash-quote",
         title: "Blockquote",
         hint: ">",
-        keywords: &["quote", "blockquote", "callout"],
+        keywords: &["quote", "blockquote"],
         glyph: None,
         icon: Some(Icon::Quote),
+    },
+    SlashItem {
+        kind: SlashKind::Callout(CalloutKind::Note),
+        id: "slash-callout",
+        title: "Note callout",
+        hint: "[!NOTE]",
+        keywords: &["callout", "note", "info", "admonition", "banner"],
+        glyph: None,
+        icon: Some(Icon::Info),
+    },
+    SlashItem {
+        kind: SlashKind::Callout(CalloutKind::Tip),
+        id: "slash-tip",
+        title: "Tip callout",
+        hint: "[!TIP]",
+        keywords: &["tip", "callout", "hint", "idea", "admonition"],
+        glyph: None,
+        icon: Some(Icon::Spark),
+    },
+    SlashItem {
+        kind: SlashKind::Callout(CalloutKind::Important),
+        id: "slash-important",
+        title: "Important callout",
+        hint: "[!IMPORTANT]",
+        keywords: &["important", "callout", "key", "admonition"],
+        glyph: None,
+        icon: Some(Icon::Important),
+    },
+    SlashItem {
+        kind: SlashKind::Callout(CalloutKind::Warning),
+        id: "slash-warning",
+        title: "Warning callout",
+        hint: "[!WARNING]",
+        keywords: &["warning", "warn", "callout", "alert", "admonition"],
+        glyph: None,
+        icon: Some(Icon::AlertTriangle),
+    },
+    SlashItem {
+        kind: SlashKind::Callout(CalloutKind::Caution),
+        id: "slash-caution",
+        title: "Caution callout",
+        hint: "[!CAUTION]",
+        keywords: &["caution", "danger", "callout", "error", "admonition"],
+        glyph: None,
+        icon: Some(Icon::AlertOctagon),
     },
     SlashItem {
         kind: SlashKind::CodeBlock,
@@ -133,13 +180,21 @@ pub fn matching_items(query: &str) -> Vec<&'static SlashItem> {
     if q.is_empty() {
         return ITEMS.iter().collect();
     }
-    ITEMS
-        .iter()
-        .filter(|item| {
-            item.title.to_ascii_lowercase().contains(&q)
-                || item.keywords.iter().any(|k| k.contains(&q))
-        })
-        .collect()
+    let mut primary = Vec::new();
+    let mut callouts = Vec::new();
+    for item in ITEMS {
+        if item.title.to_ascii_lowercase().contains(&q)
+            || item.keywords.iter().any(|k| k.contains(&q))
+        {
+            if matches!(item.kind, SlashKind::Callout(_)) {
+                callouts.push(item);
+            } else {
+                primary.push(item);
+            }
+        }
+    }
+    primary.extend(callouts);
+    primary
 }
 
 impl Writing {
@@ -319,6 +374,7 @@ impl Writing {
                 self.toggle_line_task(field);
             }
             SlashKind::Quote => self.toggle_line_prefix("> "),
+            SlashKind::Callout(kind) => self.insert_callout(kind),
             SlashKind::CodeBlock => self.insert_code_block(),
             SlashKind::Table => self.insert_table(false),
             SlashKind::Rule => self.insert_rule(),

@@ -138,6 +138,11 @@ impl Writing {
                 e.stop_propagation();
                 return true;
             }
+            if mods.shift() && k.eq_ignore_ascii_case("h") && self.toggle_highlight() {
+                e.prevent_default();
+                e.stop_propagation();
+                return true;
+            }
             use margin_editor_core::format::Style;
             let style = match (k.to_ascii_lowercase().as_str(), mods.shift()) {
                 ("b", false) => Some(Style::Bold),
@@ -204,6 +209,21 @@ impl Writing {
             );
         } else if primary && matches!(&key,Key::Character(s) if s.eq_ignore_ascii_case("a")) {
             self.open(self.field_at(md.len()), [0, md.len()]);
+        } else if !span
+            && primary
+            && !selected.is_empty()
+            && !matches!(field, Field::TitleGap | Field::Source)
+            && matches!(&key, Key::Character(k) if k.eq_ignore_ascii_case("v"))
+            && let Some(url) = self
+                .root
+                .peek()
+                .as_ref()
+                .and_then(|h| h.doc().shell_provider.get_clipboard_text().ok())
+                .and_then(|clip| smart_paste_url(&clip, &md[selected.clone()]))
+        {
+            let label = &md[selected.clone()];
+            let wrapped = format!("[{label}]({url})");
+            self.edit_range(selected, &wrapped);
         } else if !span
             && primary
             && matches!(field, Field::Title | Field::Heading(_) | Field::TitleGap)
@@ -276,4 +296,81 @@ impl Writing {
         e.stop_propagation();
         true
     }
+
+    fn toggle_highlight(mut self) -> bool {
+        if self.cells.peek().is_some() {
+            return false;
+        }
+        let Some([anchor, head]) = (*self.selected_text.peek()).or_else(|| self.absolute_selection())
+        else {
+            return false;
+        };
+        let (lo, hi) = (anchor.min(head), anchor.max(head));
+        if lo == hi {
+            return false;
+        }
+        let md = self.contents.read().clone();
+        let selected = &md[lo..hi];
+        if selected.contains('\n') || selected.trim().is_empty() {
+            return false;
+        }
+        self.note.peek().remember_selection([anchor, head]);
+        let (range, replacement, next_sel) = if lo >= 2
+            && hi + 2 <= md.len()
+            && &md[lo - 2..lo] == "=="
+            && &md[hi..hi + 2] == "=="
+        {
+            let inner = selected.to_owned();
+            let s = lo - 2;
+            let e = s + inner.len();
+            (
+                lo - 2..hi + 2,
+                inner,
+                if anchor <= head { [s, e] } else { [e, s] },
+            )
+        } else if selected.len() > 4 && selected.starts_with("==") && selected.ends_with("==") {
+            let inner = selected[2..selected.len() - 2].to_owned();
+            let e = lo + inner.len();
+            (
+                lo..hi,
+                inner,
+                if anchor <= head { [lo, e] } else { [e, lo] },
+            )
+        } else {
+            let wrapped = format!("=={selected}==");
+            let s = lo + 2;
+            let e = hi + 2;
+            (
+                lo..hi,
+                wrapped,
+                if anchor <= head { [s, e] } else { [e, s] },
+            )
+        };
+        let result = self.note.write().replace(range, &replacement);
+        if result.is_ok() {
+            self.open(self.field_at(next_sel[1]), next_sel);
+        }
+        report(result, self.message);
+        true
+    }
+}
+
+fn smart_paste_url(clipboard: &str, selected: &str) -> Option<String> {
+    let url = clipboard.trim();
+    if url.is_empty()
+        || url.chars().any(char::is_whitespace)
+        || !(url.starts_with("https://") || url.starts_with("http://"))
+    {
+        return None;
+    }
+    let sel = selected.trim();
+    if sel.is_empty()
+        || selected.contains('\n')
+        || sel.starts_with("https://")
+        || sel.starts_with("http://")
+        || selected.contains("](")
+    {
+        return None;
+    }
+    Some(url.to_owned())
 }

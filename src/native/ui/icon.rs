@@ -61,11 +61,19 @@ pub enum Icon {
     Back,
     Open,
     Check,
+    Pencil,
+    Copy,
+    Trash,
+    Clock,
+    Info,
+    Important,
+    AlertTriangle,
+    AlertOctagon,
 }
 
 impl Icon {
     /// Every icon, for the gallery.
-    pub const ALL: [Icon; 52] = [
+    pub const ALL: [Icon; 60] = [
         Icon::Bold,
         Icon::Italic,
         Icon::Strike,
@@ -118,6 +126,14 @@ impl Icon {
         Icon::Back,
         Icon::Open,
         Icon::Check,
+        Icon::Pencil,
+        Icon::Copy,
+        Icon::Trash,
+        Icon::Clock,
+        Icon::Info,
+        Icon::Important,
+        Icon::AlertTriangle,
+        Icon::AlertOctagon,
     ];
 
     /// The glyph of a conversation's source.
@@ -197,6 +213,14 @@ impl Icon {
             Self::Back => "M19 12H5M11 18l-6-6 6-6",
             Self::Open => "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
             Self::Check => "m5 12.5 4.5 4.5L19 7.5",
+            Self::Pencil => "M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z",
+            Self::Copy => "M9 9h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2ZM5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1",
+            Self::Trash => "M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6",
+            Self::Clock => "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 6v6l4 2",
+            Self::Info => "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 16v-4M12 8h.01",
+            Self::Important => "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2ZM12 7v4M12 15h.01",
+            Self::AlertTriangle => "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3ZM12 9v4M12 17h.01",
+            Self::AlertOctagon => "M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86ZM12 8v4M12 16h.01",
         }
     }
 

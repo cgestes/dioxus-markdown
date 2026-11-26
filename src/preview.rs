@@ -190,6 +190,63 @@ fn inline_style(tags: &[&str]) -> String {
         .join(" ")
 }
 
+fn split_highlights(line: &mut Passage, md: &str) {
+    if line.kind == "pre" {
+        return;
+    }
+    let old = std::mem::take(&mut line.runs);
+    for run in old {
+        if !run.literal || run.style.contains("code") || !run.text.contains("==") {
+            line.runs.push(run);
+            continue;
+        }
+        let mut at = 0usize;
+        let s = run.text.as_str();
+        while let Some(rel_open) = s[at..].find("==") {
+            let open = at + rel_open;
+            let body_start = open + 2;
+            let Some(rel_close) = s[body_start..].find("==") else {
+                break;
+            };
+            let close = body_start + rel_close;
+            let body = &s[body_start..close];
+            if body.is_empty() || body.starts_with(' ') || body.ends_with(' ') {
+                push_run(
+                    line,
+                    run.from + at,
+                    run.from + body_start,
+                    &s[at..body_start],
+                    &run.style,
+                    true,
+                );
+                at = body_start;
+                continue;
+            }
+            if open > at {
+                push_run(line, run.from + at, run.from + open, &s[at..open], &run.style, true);
+            }
+            let hi_style = if run.style.is_empty() {
+                "highlight".to_owned()
+            } else {
+                format!("{} highlight", run.style)
+            };
+            push_run(
+                line,
+                run.from + body_start,
+                run.from + close,
+                body,
+                &hi_style,
+                true,
+            );
+            at = close + 2;
+        }
+        if at < s.len() {
+            push_run(line, run.from + at, run.to, &s[at..], &run.style, true);
+        }
+    }
+    let _ = md;
+}
+
 pub fn document(md: &str) -> Vec<Block> {
     let mut at = 0;
     let mut lines: Vec<_> = md
@@ -312,6 +369,41 @@ pub fn document(md: &str) -> Vec<Block> {
     }
     for line in &mut lines {
         split_markers(line, md, &markers);
+        split_highlights(line, md);
+    }
+    for callout in crate::callout::parse_callouts(md) {
+        let first = line_of(&lines, callout.range.start);
+        let last = line_of(&lines, callout.range.end.saturating_sub(1));
+        let cls = callout.kind.css_class();
+        for (idx, line) in lines[first..=last].iter_mut().enumerate() {
+            let mut kind = format!("callout {cls}");
+            if idx == 0 {
+                kind.push_str(" callout-first callout-head");
+            }
+            if first + idx == last {
+                kind.push_str(" callout-last");
+            }
+            line.kind = kind;
+            if idx == 0 {
+                let mut runs = vec![Run {
+                    from: callout.tag_range.start,
+                    to: callout.tag_range.end,
+                    text: callout.kind.label().into(),
+                    style: format!("callout-badge {cls}"),
+                    literal: false,
+                }];
+                if let Some(title) = &callout.title_range {
+                    runs.push(Run {
+                        from: title.start,
+                        to: title.end,
+                        text: format!(" {}", &md[title.clone()]),
+                        style: "callout-title".into(),
+                        literal: false,
+                    });
+                }
+                line.runs = runs;
+            }
+        }
     }
     let mut tables = table::tables(md).into_iter().peekable();
     let mut output = Vec::new();

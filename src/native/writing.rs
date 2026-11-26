@@ -65,6 +65,9 @@ pub(super) struct Writing {
     pub empty_line: Signal<Option<(Field, f32, f32)>>,
     pub slash_menu: Signal<Option<super::slash::SlashState>>,
     pub slash_selected: Signal<usize>,
+    pub link_card: Signal<Option<super::link_card::LinkCardState>>,
+    pub link_dismissed: Signal<Option<Range<usize>>>,
+    pub link_editing: Signal<bool>,
     pub block_menu: Signal<Option<usize>>,
     pub block_drag: Signal<Option<BlockDrag>>,
 
@@ -74,6 +77,9 @@ pub(super) struct Writing {
     pub caret_line_col: Signal<Option<[usize; 2]>>,
     pub syntax: Memo<Vec<super::markdown::Token>>,
     pub ink: Signal<Vec<super::markdown::Ink>>,
+    pub callout_boxes: Signal<Vec<super::markdown::CalloutBox>>,
+    pub code_boxes: Signal<Vec<super::markdown::CodeBox>>,
+    pub callout_menu: Signal<Option<usize>>,
     pub caret: Signal<Option<super::markdown::CaretInk>>,
     pub active: Signal<Option<Field>>,
     // Keep the origin of an open body stable when its first text becomes a heading.
@@ -394,9 +400,15 @@ impl Writing {
         self.empty_line.set(None);
         self.slash_menu.set(None);
         self.slash_selected.set(0);
+        self.link_card.set(None);
+        self.link_dismissed.set(None);
+        self.link_editing.set(false);
         self.block_menu.set(None);
         self.block_drag.set(None);
         self.draft_comment.set(None);
+        self.callout_boxes.set(Vec::new());
+        self.code_boxes.set(Vec::new());
+        self.callout_menu.set(None);
         self.caret.set(None);
         self.table_menu.set(None);
         self.mouse_box.set(None);
@@ -459,6 +471,7 @@ impl Writing {
         }
         self.refresh_empty_line();
         self.refresh_slash();
+        self.refresh_link_card();
         self.sync_active_comment_at(selected[1]);
     }
 
@@ -811,6 +824,52 @@ impl Writing {
         report(result, self.message);
     }
 
+    pub fn insert_callout(mut self, kind: margin_editor_core::callout::CalloutKind) {
+        let Some(field) = *self.active.peek() else {
+            return;
+        };
+        if !matches!(field, Field::Body(_) | Field::TitleGap) {
+            return;
+        }
+        let Some(selected @ [_, head]) = self.absolute_selection() else {
+            return;
+        };
+        let md = self.contents.read().clone();
+        let eol = table::eol(&md);
+        let tag = kind.tag();
+        if field == Field::TitleGap {
+            let insert = format!("{eol}> [!{tag}]{eol}> ");
+            let caret = head + insert.len();
+            self.note.peek().remember_selection(selected);
+            let result = self.note.write().replace(head..head, &insert);
+            if result.is_ok() {
+                self.body.set(None);
+                self.open(self.field_at(caret), [caret; 2]);
+            }
+            report(result, self.message);
+            return;
+        }
+        let line_start = md[..head].rfind('\n').map_or(0, |i| i + 1);
+        let line_end = head + md[head..].find('\n').unwrap_or(md.len() - head);
+        let existing = md[line_start..line_end].trim_end_matches('\r');
+        self.note.peek().remember_selection(selected);
+        let (range, insert, caret) = if existing.trim().is_empty() {
+            let text = format!("> [!{tag}]{eol}> ");
+            let pos = line_start + text.len();
+            (line_start..line_end, text, pos)
+        } else {
+            let body = existing.trim_start_matches("> ");
+            let text = format!("> [!{tag}]{eol}> {body}");
+            let pos = line_start + text.len();
+            (line_start..line_end, text, pos)
+        };
+        let result = self.note.write().replace(range, &insert);
+        if result.is_ok() {
+            self.open(self.field_at(caret), [caret; 2]);
+        }
+        report(result, self.message);
+    }
+
     pub fn insert_rule(mut self) {
         let md = self.contents.read().clone();
         let pos = self
@@ -990,6 +1049,16 @@ impl Writing {
         if event.key() == Key::Named(NamedKey::Escape) && self.block_menu.peek().is_some() {
             event.prevent_default();
             self.block_menu.set(None);
+            return;
+        }
+        if event.key() == Key::Named(NamedKey::Escape) && self.callout_menu.peek().is_some() {
+            event.prevent_default();
+            self.callout_menu.set(None);
+            return;
+        }
+        if event.key() == Key::Named(NamedKey::Escape) && self.link_card.peek().is_some() {
+            event.prevent_default();
+            self.dismiss_link_card();
             return;
         }
         if self.document_key(field, &event)

@@ -216,6 +216,18 @@ impl Writing {
         if self.slash_menu.peek().is_some() && !inside("slash-menu") {
             self.slash_menu.set(None);
         }
+        let c_menu = *self.callout_menu.peek();
+        if let Some(start) = c_menu
+            && !inside("callout-menu")
+            && !inside(&format!("callout-badge-{start}"))
+        {
+            self.callout_menu.set(None);
+        }
+        if self.link_card.peek().is_some() && !inside("link-card") {
+            if *self.link_editing.peek() || !inside("paper") {
+                self.dismiss_link_card();
+            }
+        }
     }
 
     pub(super) fn clear_cells(mut self) {
@@ -486,7 +498,11 @@ impl Writing {
             Key::Named(NamedKey::Escape) => {
                 event.prevent_default();
                 event.stop_propagation();
-                self.grid_exit(t, true);
+                if self.link_card.peek().is_some() {
+                    self.dismiss_link_card();
+                } else {
+                    self.grid_exit(t, true);
+                }
                 return;
             }
             _ => return,
@@ -614,6 +630,7 @@ pub fn Heading(writing: Writing, field: Field) -> Element {
                     if let Some(handle) = e.downcast::<NodeHandle>() { handle.doc_mut().resolve(0.0); }
                     mounted_field(e, field, writing.focus);
                     writing.refresh_boxes();
+                    writing.refresh_link_card();
                 },
                 onfocus: move |_| writing.track_field(field), onclick: move |_| writing.pointer(field),
                 onpointerup: move |_| writing.track_field(field),
@@ -689,6 +706,8 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
             for (bidx, top) in prose_handles {
                 BlockHandle { key: "bh-{bidx}", writing, block_idx: bidx, total: total_blocks, top }
             }
+            {(writing.callout_boxes)().into_iter().filter(|cb| cb.field == field).map(|cb| cb.draw())}
+            {(writing.code_boxes)().into_iter().filter(|cb| cb.field == field).map(|cb| cb.draw())}
             div { class: "prose-block",
                 textarea {
                     id: field.id(), class: "body-editor", aria_label: "Edit note body", value: "{body}", style,
@@ -697,13 +716,17 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
                         if let Some(handle) = e.downcast::<NodeHandle>() { handle.doc_mut().resolve(0.0); }
                         mounted_field(e, field, writing.focus);
                         writing.refresh_boxes();
+                        writing.refresh_link_card();
                     },
                     onfocus: move |_| writing.track_field(field),
                     onclick: move |e| writing.click_body(field, e),
                     onpointerup: move |_| writing.track_field(field),
                     onkeydown: move |e| writing.key(field, e),
                     onkeyup: move |_| writing.track_field(field),
-                    onscroll: move |_| writing.refresh_boxes(),
+                    onscroll: move |_| {
+                        writing.refresh_boxes();
+                        writing.refresh_link_card();
+                    },
                     oninput: move |e| writing.input(field, &e.value()),
                     "{body}"
                 }
@@ -714,6 +737,9 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
                 super::markdown::CaretOverlay { writing, field }
                 EmptyLineBar { writing, field }
             }
+            {(writing.callout_boxes)().into_iter().filter(|cb| cb.field == field).map(|cb| cb.draw_bar())}
+            {(writing.callout_boxes)().into_iter().filter(|cb| cb.field == field && !cb.revealed).map(|cb| cb.draw_badge(writing))}
+            {(writing.code_boxes)().into_iter().filter(|cb| cb.field == field).map(|cb| cb.draw_tools(writing))}
         }
     }
 }
@@ -803,6 +829,8 @@ pub fn EmptyLineBar(writing: Writing, field: Field) -> Element {
                 onclick: move |_| { writing.toggle_line_task(field); } }
             Button { id: "empty-quote", class: "empty-tool", variant: Variant::Icon, label: "Quote", tip: "Blockquote", icon: super::Icon::Quote,
                 onclick: move |_| { writing.toggle_line_prefix("> "); } }
+            Button { id: "empty-callout", class: "empty-tool", variant: Variant::Icon, label: "Callout", tip: "Callout box", icon: super::Icon::Info,
+                onclick: move |_| { writing.insert_callout(margin_editor_core::callout::CalloutKind::Note); } }
             Button { id: "empty-code", class: "empty-tool", variant: Variant::Icon, label: "Code block", icon: super::Icon::Code,
                 onclick: move |_| { writing.insert_code_block(); } }
             Button { id: "empty-table", class: "empty-tool", variant: Variant::Icon, label: "Table", tip: "Insert table", icon: super::Icon::Table,
@@ -1098,7 +1126,10 @@ fn GridRow(
                                 input {
                                     id: field.id(), "data-range-keys": if selected && !*writing.cell_editing.read() { "true" }, class: "grid-cell",
                                     aria_label: format!("Row {}, column {}", row + 1, col + 1), value,
-                                    onmounted: move |e| mounted_field(e, field, writing.focus),
+                                    onmounted: move |e| {
+                                        mounted_field(e, field, writing.focus);
+                                        writing.refresh_link_card();
+                                    },
                                     onfocus: move |_| writing.track_field(field),
                                     onpointerup: move |_| writing.track_field(field),
                                     onkeydown: move |e| writing.cell_key(index, row, col, e),
@@ -1303,6 +1334,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                             }
                         }
                     }
+                    writing.refresh_link_card();
                 },
                 for (r, _) in grid.rows.iter().enumerate() {
                     GridRow { key: "{r}", writing, index, row: r, last: r + 1 == grid.rows.len(), open_col, open_row, hovered_col, hovered_row,

@@ -187,7 +187,12 @@ struct Locked {
 }
 
 impl Locked {
-    fn wrapping_key(&self, password: Option<&Path>, create: bool) -> Result<Zeroizing<[u8; 32]>> {
+    fn wrapping_key(
+        &self,
+        dir: &Path,
+        password: Option<&Path>,
+        create: bool,
+    ) -> Result<Zeroizing<[u8; 32]>> {
         let mut key = Zeroizing::new([0; 32]);
         if let Some(salt) = self.salt {
             let path = password.context("this device requires --passphrase-file")?;
@@ -202,24 +207,63 @@ impl Locked {
                 .map_err(|e| anyhow!(e))?;
         } else {
             ensure!(password.is_none(), "this device uses the OS keychain");
-            let entry = keyring::Entry::new("Margin personal vault", &self.slot)?;
-            if create {
-                OsRng.fill_bytes(key.as_mut());
-                entry
-                    .set_secret(key.as_ref())
-                    .context("could not store the vault wrapping key in the OS keychain")?;
-            } else {
-                let bytes = Zeroizing::new(
+            // Dev builds store the wrapping key in a 0600 file inside the vault
+            // directory instead of the OS keychain, because every rebuild is a
+            // new unsigned binary that macOS Keychain would prompt for again.
+            #[cfg(debug_assertions)]
+            {
+                let key_path = dir.join("dev-wrapping.key");
+                if create {
+                    OsRng.fill_bytes(key.as_mut());
+                    write_dev_key(&key_path, key.as_ref())?;
+                } else {
+                    let bytes = Zeroizing::new(fs::read(&key_path).with_context(|| {
+                        format!(
+                            "missing dev wrapping key at {}; this vault may belong to a release build",
+                            key_path.display()
+                        )
+                    })?);
+                    ensure!(bytes.len() == 32, "invalid dev wrapping key");
+                    key.copy_from_slice(&bytes);
+                }
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                let _ = dir;
+                let entry = keyring::Entry::new("Margin personal vault", &self.slot)?;
+                if create {
+                    OsRng.fill_bytes(key.as_mut());
                     entry
-                        .get_secret()
-                        .context("could not unlock the vault in the OS keychain")?,
-                );
-                ensure!(bytes.len() == 32, "invalid keychain entry");
-                key.copy_from_slice(&bytes);
+                        .set_secret(key.as_ref())
+                        .context("could not store the vault wrapping key in the OS keychain")?;
+                } else {
+                    let bytes = Zeroizing::new(
+                        entry
+                            .get_secret()
+                            .context("could not unlock the vault in the OS keychain")?,
+                    );
+                    ensure!(bytes.len() == 32, "invalid keychain entry");
+                    key.copy_from_slice(&bytes);
+                }
             }
         }
         Ok(key)
     }
+}
+
+#[cfg(debug_assertions)]
+fn write_dev_key(path: &Path, data: &[u8]) -> Result<()> {
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut f = opts.open(path)?;
+    f.write_all(data)?;
+    f.sync_all()?;
+    Ok(())
 }
 
 pub fn save_identity(dir: &Path, id: &Identity, pass: Option<&Path>, create: bool) -> Result<()> {
@@ -235,7 +279,7 @@ pub fn save_identity(dir: &Path, id: &Identity, pass: Option<&Path>, create: boo
     } else {
         serde_json::from_slice(&fs::read(&path)?)?
     };
-    let key = locked.wrapping_key(pass, create)?;
+    let key = locked.wrapping_key(dir, pass, create)?;
     locked.iv = random();
     locked.ciphertext = b64(&seal(
         &key,
@@ -257,7 +301,7 @@ pub fn save_identity(dir: &Path, id: &Identity, pass: Option<&Path>, create: boo
 pub fn load_identity(dir: &Path, pass: Option<&Path>) -> Result<Identity> {
     let locked: Locked =
         serde_json::from_slice(&fs::read(dir.join("device.json")).context("open vault device")?)?;
-    let key = locked.wrapping_key(pass, false)?;
+    let key = locked.wrapping_key(dir, pass, false)?;
     let bytes = Zeroizing::new(open(
         &key,
         &locked.iv,
@@ -277,4 +321,27 @@ pub fn write_secret(path: &Path, data: &[u8]) -> Result<()> {
     temp.as_file().sync_all()?;
     temp.persist_noclobber(path)?;
     Ok(())
+}
+
+#[cfg(all(test, debug_assertions))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dev_builds_wrap_identity_with_local_key_file_without_keychain() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let id = Identity::from_recovery(&Recovery::new());
+        save_identity(tmp.path(), &id, None, true)?;
+        let key_path = tmp.path().join("dev-wrapping.key");
+        assert!(key_path.exists());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&key_path)?.permissions().mode() & 0o777, 0o600);
+        }
+        let loaded = load_identity(tmp.path(), None)?;
+        assert_eq!(loaded.local, id.local);
+        assert_eq!(loaded.paired.vault, id.paired.vault);
+        Ok(())
+    }
 }

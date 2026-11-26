@@ -2696,6 +2696,421 @@ fn long_table_cell_keeps_caret_visible_while_scrolling_and_craft_handles_sit_on_
     }
 }
 
+#[test]
+fn link_card_preview_copy_edit_remove_dismiss_and_anchor_jump() {
+    const MD: &str = "# Field notes\n\nSee [Work Log](brain/log \"Append-only audit trail. Add one dated entry per turn.\") and [canal guide](https://example.com/guide) or jump to [Listening stops](#listening-stops).\n\n## Listening stops\n\nMorning fog along the lock gate.\n\n| Stop | Notes |\n| :--- | :--- |\n| [North lock](locks/north) | 45 s |";
+    let config = dioxus_native::DocumentConfig {
+        font_ctx: Some(typefaces::notebook_fonts()),
+        viewport: Some(Viewport {
+            window_size: (820, 560),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut doc = DioxusDocument::new(VirtualDom::new(|| notebook(MD)), config);
+    doc.initial_build();
+    render(&mut doc);
+    let clipboard = std::sync::Arc::new(TestClipboard::default());
+    doc.inner.borrow_mut().shell_provider = clipboard.clone();
+
+    let text_of = |doc: &DioxusDocument, elem: &str| -> String {
+        let dom = doc.inner.borrow();
+        let node_id = dom.get_element_by_id(elem).unwrap();
+        let mut out = String::new();
+        fn walk(dom: &blitz_dom::BaseDocument, id: NodeId, out: &mut String) {
+            if let Some(node) = dom.get_node(id) {
+                if let Some(t) = node.text_data() {
+                    out.push_str(&t.content);
+                }
+                for &child in &node.children {
+                    walk(dom, child, out);
+                }
+            }
+        }
+        walk(&dom, node_id, &mut out);
+        out
+    };
+
+    let place_caret = |doc: &mut DioxusDocument, pos: usize| {
+        doc.vdom.in_scope(ScopeId::APP, || {
+            let w = consume_context::<Writing>();
+            w.open(w.field_at(pos), [pos; 2]);
+        });
+        render(doc);
+    };
+
+    // 1. Resting cursor outside links shows no link card.
+    place_caret(&mut doc, MD.find("See ").unwrap() + 1);
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_none());
+
+    // 2. Caret inside internal page link opens #link-card with target, title, folder, excerpt, backlinks.
+    let work_pos = MD.find("Work Log").unwrap() + 2;
+    place_caret(&mut doc, work_pos);
+    assert!(
+        doc.inner.borrow().get_element_by_id("link-card").is_some(),
+        "caret inside link should open #link-card"
+    );
+    let card_text = text_of(&doc, "link-card");
+    assert!(card_text.contains("brain/log"), "card text: {card_text}");
+    assert!(card_text.contains("Work Log"), "card text: {card_text}");
+    assert!(card_text.contains("brain"), "card text: {card_text}");
+    assert!(
+        card_text.contains("Append-only audit trail"),
+        "card text: {card_text}"
+    );
+    assert!(card_text.contains("1 backlink"), "card text: {card_text}");
+
+    // 3. Copy button copies the link target URL/path to clipboard.
+    click(&mut doc, "link-card-copy");
+    assert_eq!(clipboard.0.lock().unwrap().as_str(), "brain/log");
+
+    // 4. Non-empty selection inside a link prefers FormatBar over LinkCard.
+    let sel_start = MD.find("Work Log").unwrap();
+    open_body_at(&mut doc, [sel_start, sel_start + 4]);
+    assert!(doc.inner.borrow().get_element_by_id("format-bar").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_none());
+
+    // 5. Escape dismisses the card until caret leaves and re-enters the link.
+    place_caret(&mut doc, work_pos);
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_some());
+    press(&mut doc, Key::Named(NamedKey::Escape), false);
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_none());
+    // Still dismissed while moving within the same link.
+    place_caret(&mut doc, work_pos + 2);
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_none());
+    // Leaving the link and returning reopens it.
+    place_caret(&mut doc, MD.find("See ").unwrap() + 1);
+    place_caret(&mut doc, work_pos);
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_some());
+
+    // 6. Edit button opens inline form, saves in one undoable Loro edit, and Undo restores.
+    click(&mut doc, "link-card-edit");
+    assert!(doc.inner.borrow().get_element_by_id("link-edit-label").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("link-edit-url").is_some());
+    doc.vdom.in_scope(ScopeId::APP, || {
+        let w = consume_context::<Writing>();
+        w.save_edited_link("Daily Log", "brain/daily-log");
+    });
+    render(&mut doc);
+    assert_eq!(
+        markdown(&doc),
+        MD.replace(
+            "[Work Log](brain/log \"Append-only audit trail. Add one dated entry per turn.\")",
+            "[Daily Log](brain/daily-log \"Append-only audit trail. Add one dated entry per turn.\")",
+        )
+    );
+    click(&mut doc, "undo");
+    assert_eq!(markdown(&doc), MD);
+
+    // 7. Remove button unwraps [label](url) -> label in one undoable edit, and Undo restores.
+    place_caret(&mut doc, work_pos);
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_some());
+    click(&mut doc, "link-card-remove");
+    assert_eq!(
+        markdown(&doc),
+        MD.replace(
+            "[Work Log](brain/log \"Append-only audit trail. Add one dated entry per turn.\")",
+            "Work Log",
+        )
+    );
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_none());
+    click(&mut doc, "undo");
+    assert_eq!(markdown(&doc), MD);
+
+    // 8. In-document heading anchor resolves heading & prose excerpt, and clicking target jumps to it.
+    let anchor_pos = MD.find("#listening-stops").unwrap() - 3;
+    place_caret(&mut doc, anchor_pos);
+    let anchor_text = text_of(&doc, "link-card");
+    assert!(anchor_text.contains("#listening-stops"), "{anchor_text}");
+    assert!(anchor_text.contains("Listening stops"), "{anchor_text}");
+    assert!(
+        anchor_text.contains("Morning fog along the lock gate"),
+        "{anchor_text}"
+    );
+    click(&mut doc, "link-card-open");
+    assert_eq!(
+        doc.inner.borrow().get_focussed_node_id(),
+        Some(id(&doc, "note-heading-0"))
+    );
+
+    // 9. Rich mode & table cell links also open #link-card cleanly.
+    click(&mut doc, "rich-mode");
+    let cell_pos = MD.find("North lock").unwrap() + 2;
+    place_caret(&mut doc, cell_pos);
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_some());
+    let cell_card = text_of(&doc, "link-card");
+    assert!(cell_card.contains("locks/north"), "{cell_card}");
+    assert!(cell_card.contains("North lock"), "{cell_card}");
+    assert!(cell_card.contains("locks"), "{cell_card}");
+
+    // 10. External URL link shows host and External link metadata.
+    let ext_pos = MD.find("canal guide").unwrap() + 2;
+    place_caret(&mut doc, ext_pos);
+    let ext_card = text_of(&doc, "link-card");
+    assert!(ext_card.contains("example.com/guide"), "{ext_card}");
+    assert!(ext_card.contains("canal guide"), "{ext_card}");
+    assert!(ext_card.contains("External link"), "{ext_card}");
+
+    // 11. Round-tripping from Source mode into a link also opens #link-card immediately.
+    open_markdown(&mut doc, MD, work_pos);
+    assert!(
+        doc.inner.borrow().get_element_by_id("link-card").is_some(),
+        "switching from Source mode into a link should open #link-card"
+    );
+
+    // 12. Verify popover placement: sits cleanly below the full link span (even when expanded
+    // across lines in Live mode) and tracks viewport scroll accurately.
+    let card_rect = bounds(&doc, "link-card");
+    let body_rect = bounds(&doc, "note-body");
+    assert!(
+        card_rect[1] > body_rect[1] + 20.0 && card_rect[0] >= 8.0,
+        "link card should sit below the link in Live mode: card={card_rect:?} body={body_rect:?}"
+    );
+}
+
+#[test]
+fn enter_continues_and_exits_blockquotes_in_live_rich_and_source() {
+    let mut doc = editor();
+    click(&mut doc, "note-body");
+    select(&doc, "note-body", [0, value(&doc, "note-body").len()]);
+
+    // 1. Enter continues a blockquote; Enter on empty `> ` exits cleanly with a blank line.
+    commit_text(&mut doc, "> First line");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(value(&doc, "note-body"), "> First line\n> ");
+    commit_text(&mut doc, "Second line");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(value(&doc, "note-body"), "> First line\n> Second line\n> ");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    commit_text(&mut doc, "Outside");
+    assert_eq!(
+        value(&doc, "note-body"),
+        "> First line\n> Second line\n\nOutside"
+    );
+
+    // 2. Nested blockquotes peel one level at a time, and Backspace strips `> `.
+    let text = value(&doc, "note-body");
+    select(&doc, "note-body", [0, text.len()]);
+    commit_text(&mut doc, "> > Deep");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(value(&doc, "note-body"), "> > Deep\n> > ");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(value(&doc, "note-body"), "> > Deep\n> ");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(value(&doc, "note-body"), "> > Deep\n\n");
+
+    // 3. List item inside a blockquote continues with both `> ` and list prefix.
+    let text = value(&doc, "note-body");
+    select(&doc, "note-body", [0, text.len()]);
+    commit_text(&mut doc, "> - Item");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(value(&doc, "note-body"), "> - Item\n> - ");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(value(&doc, "note-body"), "> - Item\n> ");
+
+    // 4. `> ` inside a fenced code block stays literal.
+    let text = value(&doc, "note-body");
+    select(&doc, "note-body", [0, text.len()]);
+    commit_text(&mut doc, "```text\n> literal\n```");
+    move_body(&mut doc, ["```text\n> literal".len(); 2]);
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(value(&doc, "note-body"), "```text\n> literal\n\n```");
+
+    // 5. Also works in Source mode.
+    click(&mut doc, "source-mode");
+    let src_len = value(&doc, "markdown").len();
+    select(&doc, "markdown", [0, src_len]);
+    commit_text(&mut doc, "# Title\n\n> Quoted");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(markdown(&doc), "# Title\n\n> Quoted\n> ");
+}
+
+#[test]
+fn callouts_render_insert_via_slash_and_empty_bar_and_continue_on_enter() {
+    const MD: &str = "# Field notes\n\n> [!NOTE]\n> Recorder packed with **fresh** batteries.\n\n> [!TIP] Quick check\n> Press `/` on an empty line.\n\n> [!WARNING]\n> Check the lock gate.\n\n";
+    let config = dioxus_native::DocumentConfig {
+        font_ctx: Some(typefaces::notebook_fonts()),
+        viewport: Some(Viewport {
+            window_size: (860, 620),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut doc = DioxusDocument::new(VirtualDom::new(|| notebook(MD)), config);
+    doc.initial_build();
+    render(&mut doc);
+
+    // 1. All three callouts produce backdrop boxes in the editor.
+    for tag in ["[!NOTE]", "[!TIP]", "[!WARNING]"] {
+        let start = MD.find(tag).unwrap() - 2;
+        assert!(
+            doc.inner
+                .borrow()
+                .get_element_by_id(&format!("callout-{start}"))
+                .is_some(),
+            "missing callout backdrop for {tag}"
+        );
+    }
+
+    // 2. Typing `/warning` on the trailing empty line inserts a warning callout and places caret on body line.
+    let end = MD.len();
+    open_body_at(&mut doc, [end; 2]);
+    for ch in "/warn".chars() {
+        press(&mut doc, Key::Character(ch.to_string()), false);
+    }
+    assert!(doc.inner.borrow().get_element_by_id("slash-warning").is_some());
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert!(
+        markdown(&doc).ends_with("> [!WARNING]\n> "),
+        "markdown was: {:?}",
+        markdown(&doc)
+    );
+
+    // 3. Typing body + Enter continues the callout; second Enter exits cleanly.
+    commit_text(&mut doc, "Watch the current");
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert!(markdown(&doc).ends_with("> [!WARNING]\n> Watch the current\n> "));
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    commit_text(&mut doc, "After callout");
+    assert!(
+        markdown(&doc).ends_with("> [!WARNING]\n> Watch the current\n\nAfter callout"),
+        "markdown was: {:?}",
+        markdown(&doc)
+    );
+
+    // 4. Empty-line Callout icon inserts a Note callout on an empty line, and clicking its badge switches type.
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert!(doc.inner.borrow().get_element_by_id("empty-callout").is_some());
+    click(&mut doc, "empty-callout");
+    assert!(
+        markdown(&doc).ends_with("> [!NOTE]\n> "),
+        "markdown was: {:?}",
+        markdown(&doc)
+    );
+    let note_start = markdown(&doc).rfind("> [!NOTE]").unwrap();
+    click(&mut doc, &format!("callout-badge-{note_start}"));
+    assert!(doc.inner.borrow().get_element_by_id("callout-menu").is_some());
+    for kind_id in [
+        "callout-pick-note",
+        "callout-pick-tip",
+        "callout-pick-important",
+        "callout-pick-warning",
+        "callout-pick-caution",
+    ] {
+        assert!(
+            doc.inner.borrow().get_element_by_id(kind_id).is_some(),
+            "missing callout type option {kind_id}"
+        );
+    }
+    click(&mut doc, "callout-pick-caution");
+    assert!(
+        markdown(&doc).ends_with("> [!CAUTION]\n> "),
+        "markdown after badge switch was: {:?}",
+        markdown(&doc)
+    );
+    click(&mut doc, "undo");
+    assert!(markdown(&doc).ends_with("> [!NOTE]\n> "));
+
+    // 5. Read-only preview::document classifies callouts with kind and header badge.
+    let blocks = margin_editor_core::preview::document(MD);
+    assert!(blocks.iter().any(|b| matches!(
+        b,
+        margin_editor_core::preview::Block::Text { passage }
+            if passage.kind.contains("callout-note") && passage.kind.contains("callout-head")
+    )));
+    assert!(blocks.iter().any(|b| matches!(
+        b,
+        margin_editor_core::preview::Block::Text { passage }
+            if passage.kind.contains("callout-tip")
+                && passage.runs.iter().any(|r| r.text.contains("Quick check"))
+    )));
+}
+
+#[test]
+fn highlights_bare_urls_smart_url_paste_and_code_block_copy() {
+    const MD: &str = "# Notes\n\nCheck ==key phrase== and https://example.com/docs today.\n\n> Line one\n> Line two\n\n```rust\nfn main() {}\n```";
+    let config = dioxus_native::DocumentConfig {
+        font_ctx: Some(typefaces::notebook_fonts()),
+        viewport: Some(Viewport {
+            window_size: (860, 620),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut doc = DioxusDocument::new(VirtualDom::new(|| notebook(MD)), config);
+    doc.initial_build();
+    render(&mut doc);
+    let clipboard = std::sync::Arc::new(TestClipboard::default());
+    doc.inner.borrow_mut().shell_provider = clipboard.clone();
+
+    // 1. Highlight delimiters collapse tightly at rest in Live/Rich mode and read-only preview splits highlight runs.
+    assert!(!value(&doc, "note-body").contains("=="));
+    let preview_blocks = margin_editor_core::preview::document(MD);
+    assert!(preview_blocks.iter().any(|b| matches!(
+        b,
+        margin_editor_core::preview::Block::Text { passage }
+            if passage
+                .runs
+                .iter()
+                .any(|r| r.text == "key phrase" && r.style.contains("highlight"))
+    )));
+
+    // 2. Bare URL autolink opens the Link Card (without a Remove button since it has no wrapper).
+    let url_pos = MD.find("https://example.com/docs").unwrap() + 10;
+    open_body_at(&mut doc, [url_pos; 2]);
+    assert!(doc.inner.borrow().get_element_by_id("link-card").is_some());
+    assert!(doc.inner.borrow().get_element_by_id("link-card-remove").is_none());
+
+    // 3. Fenced code block renders a card + Copy button that copies only the code body.
+    let code_start = MD.find("```rust").unwrap();
+    assert!(
+        doc.inner
+            .borrow()
+            .get_element_by_id(&format!("code-block-{code_start}"))
+            .is_some()
+    );
+    click(&mut doc, &format!("code-copy-{code_start}"));
+    assert_eq!(clipboard.0.lock().unwrap().as_str(), "fn main() {}");
+
+    // 4. Smart URL paste onto selected text wraps it as `[selection](url)` in one undoable edit.
+    *clipboard.0.lock().unwrap() = "https://margin.example/guide".into();
+    let today_start = MD.find("today").unwrap();
+    open_body_at(&mut doc, [today_start, today_start + "today".len()]);
+    doc.handle_ui_event(UiEvent::KeyDown(BlitzKeyEvent {
+        key: Key::Character("v".into()),
+        code: Code::Unidentified,
+        modifiers: Modifiers::META,
+        location: Location::Standard,
+        is_auto_repeating: false,
+        is_composing: false,
+        state: KeyState::Pressed,
+        text: None,
+    }));
+    render(&mut doc);
+    assert_eq!(
+        markdown(&doc),
+        MD.replace("today", "[today](https://margin.example/guide)")
+    );
+    click(&mut doc, "undo");
+    assert_eq!(markdown(&doc), MD);
+
+    // 5. Cmd+Shift+H toggles `==highlight==` around selected text.
+    open_body_at(&mut doc, [today_start, today_start + "today".len()]);
+    doc.handle_ui_event(UiEvent::KeyDown(BlitzKeyEvent {
+        key: Key::Character("h".into()),
+        code: Code::Unidentified,
+        modifiers: Modifiers::META | Modifiers::SHIFT,
+        location: Location::Standard,
+        is_auto_repeating: false,
+        is_composing: false,
+        state: KeyState::Pressed,
+        text: None,
+    }));
+    render(&mut doc);
+    assert_eq!(markdown(&doc), MD.replace("today", "==today=="));
+}
+
 #[path = "tests/live_workflows.rs"]
 mod live_workflows;
 

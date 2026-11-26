@@ -179,6 +179,18 @@ impl Writing {
         if *self.ink.peek() != ink {
             self.ink.set(ink);
         }
+        let callout_boxes = (0..=count)
+            .flat_map(|i| self.measured_callouts(Field::Body(i)))
+            .collect::<Vec<_>>();
+        if *self.callout_boxes.peek() != callout_boxes {
+            self.callout_boxes.set(callout_boxes);
+        }
+        let code_boxes = (0..=count)
+            .flat_map(|i| self.measured_code_blocks(Field::Body(i)))
+            .collect::<Vec<_>>();
+        if *self.code_boxes.peek() != code_boxes {
+            self.code_boxes.set(code_boxes);
+        }
         let next = (0..=count)
             .flat_map(|i| self.measured_boxes(Field::Body(i)))
             .collect::<Vec<_>>();
@@ -302,6 +314,7 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
     let mut resized = true;
     let mut wheeled = false;
     let mut previous = None;
+    let mut prev_scroll = (0u64, 0u64, None::<(u64, u64)>);
     // Window hooks run before Blitz. On the following redraw its text editor
     // has the updated IME/selection geometry. Idle redraws need no note scan.
     dioxus_native::use_window_event(move |event, _| match event {
@@ -321,12 +334,17 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
             if changed_size {
                 handle.doc_mut().resolve(0.0);
             }
-            let current = {
+            let (current, cur_scroll) = {
                 let doc = handle.doc();
-                doc.get_focussed_node_id().and_then(|id| {
+                let vs = doc.viewport_scroll();
+                let cur = doc.get_focussed_node_id().and_then(|id| {
                     let text = doc.get_node(id)?.element_data()?.text_input_data()?;
                     Some((id, text.editor.generation(), text.scroll_offset.to_bits()))
-                })
+                });
+                let rect_pos = cur
+                    .and_then(|(id, _, _)| doc.get_client_bounding_rect(id))
+                    .map(|r| (r.x.to_bits(), r.y.to_bits()));
+                (cur, (vs.x.to_bits(), vs.y.to_bits(), rect_pos))
             };
             let gen_changed = match (current, previous) {
                 (Some((id, rev, _)), Some((pid, prev, _))) => id != pid || rev != prev,
@@ -336,15 +354,26 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
             if gen_changed && let Some((id, _, _)) = current {
                 super::selection_model::keep_caret_in_view(&mut handle.doc_mut(), id);
             }
-            let settled = {
+            let (settled, settled_scroll) = {
                 let doc = handle.doc();
-                doc.get_focussed_node_id().and_then(|id| {
+                let vs = doc.viewport_scroll();
+                let cur = doc.get_focussed_node_id().and_then(|id| {
                     let text = doc.get_node(id)?.element_data()?.text_input_data()?;
                     Some((id, text.editor.generation(), text.scroll_offset.to_bits()))
-                })
+                });
+                let rect_pos = cur
+                    .and_then(|(id, _, _)| doc.get_client_bounding_rect(id))
+                    .map(|r| (r.x.to_bits(), r.y.to_bits()));
+                (cur, (vs.x.to_bits(), vs.y.to_bits(), rect_pos))
             };
-            if changed_size || did_wheel || settled != previous {
+            if changed_size
+                || did_wheel
+                || settled != previous
+                || settled_scroll != prev_scroll
+                || cur_scroll != prev_scroll
+            {
                 previous = settled;
+                prev_scroll = settled_scroll;
                 if writing.drag.peek().is_none() {
                     if writing.focus.peek().is_none()
                         && let Some(field) = *writing.active.peek()
@@ -354,6 +383,7 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
                     writing.refresh_format_position();
                     writing.refresh_empty_line();
                     writing.refresh_slash();
+                    writing.refresh_link_card();
                 }
                 writing.refresh_boxes();
             }

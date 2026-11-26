@@ -32,10 +32,15 @@ pub fn is_hex(s: &str, len: usize) -> bool {
 }
 
 pub fn default_dir() -> Result<PathBuf> {
+    let name = if cfg!(debug_assertions) {
+        "personal-dev"
+    } else {
+        "personal"
+    };
     Ok(directories::ProjectDirs::from("org", "Margin", "Margin")
         .context("missing app data directory")?
         .data_local_dir()
-        .join("personal"))
+        .join(name))
 }
 
 pub(crate) fn database(path: &Path) -> Result<Connection> {
