@@ -390,9 +390,9 @@ impl Writing {
         }
         let selection = input.editor.raw_selection().text_range();
         let whole_cell = matches!(field, Field::Cell(..))
-            && self.cells.peek().is_some()
+            && self.grid.cells.peek().is_some()
             && *self.active.peek() == Some(field)
-            && !*self.cell_editing.peek();
+            && !*self.grid.editing.peek();
         let scale = layout.scale();
         let top = if input.is_multiline {
             input.scroll_offset * scale
@@ -698,7 +698,7 @@ impl Writing {
     }
 
     pub fn measured_caret(self) -> Option<CaretInk> {
-        if self.span.peek().is_some() || self.cells.peek().is_some() {
+        if self.span.peek().is_some() || self.grid.cells.peek().is_some() {
             return None;
         }
         let field = (*self.active.peek())?;

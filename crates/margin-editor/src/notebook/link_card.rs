@@ -16,6 +16,16 @@ use std::ops::Range;
 const CARD_WIDTH: f64 = 336.0;
 const CARD_EST_HEIGHT: f64 = 176.0;
 
+/// The card of the link under the caret.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct Links {
+    pub card: Signal<Option<LinkCardState>>,
+    /// A link whose card was closed; it stays closed until the caret leaves it.
+    pub dismissed: Signal<Option<Range<usize>>>,
+    /// The card's fields are being edited.
+    pub editing: Signal<bool>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LinkCardState {
     pub field: Field,
@@ -157,23 +167,23 @@ impl Writing {
     }
 
     pub(super) fn refresh_link_card(mut self) {
-        if *self.link_editing.peek() && self.link_card.peek().is_some() {
+        if *self.links.editing.peek() && self.links.card.peek().is_some() {
             return;
         }
         let next = self.compute_link_card();
-        if *self.link_card.peek() != next {
-            self.link_card.set(next);
+        if *self.links.card.peek() != next {
+            self.links.card.set(next);
         }
     }
 
     fn compute_link_card(mut self) -> Option<LinkCardState> {
         if self.drag.peek().is_some()
             || self.span.peek().is_some()
-            || self.cells.peek().is_some()
+            || self.grid.cells.peek().is_some()
             || self.selected_text.peek().is_some()
-            || self.slash_menu.peek().is_some()
-            || self.table_menu.peek().is_some()
-            || self.block_menu.peek().is_some()
+            || self.slash.menu.peek().is_some()
+            || self.grid.menu.peek().is_some()
+            || self.handles.menu.peek().is_some()
             || self.callout_menu.peek().is_some()
             || self.code_lang_menu.peek().is_some()
             || self.marker.peek().is_some()
@@ -189,12 +199,12 @@ impl Writing {
             return None;
         }
         let Some(link) = self.link_at_pos(field, b) else {
-            if self.link_dismissed.peek().is_some() {
-                self.link_dismissed.set(None);
+            if self.links.dismissed.peek().is_some() {
+                self.links.dismissed.set(None);
             }
             return None;
         };
-        if self.link_dismissed.peek().as_ref() == Some(&link.outer) {
+        if self.links.dismissed.peek().as_ref() == Some(&link.outer) {
             return None;
         }
         let handle = self.root.peek().clone()?;
@@ -247,17 +257,17 @@ impl Writing {
     }
 
     pub(super) fn dismiss_link_card(mut self) {
-        self.link_editing.set(false);
-        let card = self.link_card.peek().clone();
+        self.links.editing.set(false);
+        let card = self.links.card.peek().clone();
         if let Some(card) = card {
-            self.link_dismissed.set(Some(card.link.outer));
-            self.link_card.set(None);
+            self.links.dismissed.set(Some(card.link.outer));
+            self.links.card.set(None);
         }
     }
 
     pub(super) fn cancel_link_edit(mut self) {
-        self.link_editing.set(false);
-        if let Some(card) = self.link_card.peek().clone() {
+        self.links.editing.set(false);
+        if let Some(card) = self.links.card.peek().clone() {
             let pos = card.link.label_range.start.min(card.link.outer.end);
             self.open(card.field, [pos; 2]);
         }
@@ -301,9 +311,9 @@ impl Writing {
     ) {
         self.note.peek().remember_selection(remember_sel);
         let result = self.note.write().replace(range, replacement);
-        self.link_editing.set(false);
-        self.link_dismissed.set(None);
-        self.link_card.set(None);
+        self.links.editing.set(false);
+        self.links.dismissed.set(None);
+        self.links.card.set(None);
         if result.is_ok() {
             self.open(self.field_at(next_caret), [next_caret; 2]);
         }
@@ -311,7 +321,7 @@ impl Writing {
     }
 
     pub(super) fn remove_active_link(self) {
-        let Some(card) = self.link_card.peek().clone() else {
+        let Some(card) = self.links.card.peek().clone() else {
             return;
         };
         let md = self.contents.read().clone();
@@ -333,7 +343,7 @@ impl Writing {
     }
 
     pub(crate) fn save_edited_link(self, new_label: &str, new_url: &str) {
-        let Some(card) = self.link_card.peek().clone() else {
+        let Some(card) = self.links.card.peek().clone() else {
             return;
         };
         let md = self.contents.read().clone();
@@ -521,7 +531,7 @@ fn LinkPreviewBody(
                         edit_url.set(start_edit_url.clone());
                         copied_url.set(None);
                         let mut w = writing;
-                        w.link_editing.set(true);
+                        w.links.editing.set(true);
                     },
                 }
                 Button {
@@ -590,7 +600,7 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
     let fetching = use_signal(|| None::<String>);
 
     use_effect(move || {
-        if (writing.link_editing)()
+        if (writing.links.editing)()
             && let Some(handle) = writing.root.peek().as_ref()
         {
             {
@@ -604,10 +614,10 @@ pub(super) fn LinkCard(writing: Writing) -> Element {
         }
     });
 
-    let Some(card) = (writing.link_card)() else {
+    let Some(card) = (writing.links.card)() else {
         return rsx! {};
     };
-    let editing = (writing.link_editing)();
+    let editing = (writing.links.editing)();
     let md = writing.contents.read();
     let parsed = writing.parsed.read();
     let space_root = writing.page.read().as_ref().map(|p| p.files.web_url(""));

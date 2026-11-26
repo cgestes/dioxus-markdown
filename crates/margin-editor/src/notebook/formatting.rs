@@ -11,11 +11,11 @@ impl Writing {
             return None;
         }
         let [anchor, head] = (*self.selected_text.peek())?;
-        if self.cells.peek().is_some() || self.table_menu.peek().is_some() {
+        if self.grid.cells.peek().is_some() || self.grid.menu.peek().is_some() {
             return None;
         }
         let field = (*self.active.peek())?;
-        if *self.quiet_cell.peek() == Some(field)
+        if *self.grid.quiet.peek() == Some(field)
             || matches!(field, Field::TitleGap | Field::Source)
         {
             return None;
@@ -110,7 +110,7 @@ impl Writing {
         }
     }
     pub(super) fn format(mut self, style: Style) -> bool {
-        if self.cells.peek().is_some() {
+        if self.grid.cells.peek().is_some() {
             return false;
         }
         let Some(range) = (*self.selected_text.peek()).or_else(|| self.absolute_selection()) else {
@@ -139,7 +139,7 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
         .map(|(name, keys)| format!("{name} ({})", shortcut(keys)));
     let styles = use_memo(move || {
         let range = (writing.selected_text)()?;
-        if writing.cells.read().is_some() || writing.table_menu.read().is_some() {
+        if writing.grid.cells.read().is_some() || writing.grid.menu.read().is_some() {
             return None;
         }
         let selection = InlineSelection::read(&writing.contents.read(), range)?;

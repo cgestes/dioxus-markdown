@@ -4,6 +4,13 @@ use crate::Icon;
 use crate::prelude::*;
 use margin_editor_core::callout::CalloutKind;
 
+/// The slash menu: what it offers, and the highlighted row.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct Slash {
+    pub menu: Signal<Option<SlashState>>,
+    pub selected: Signal<usize>,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct SlashState {
     pub field: Field,
@@ -201,32 +208,32 @@ pub fn matching_items(query: &str) -> Vec<&'static SlashItem> {
 impl Writing {
     pub fn refresh_slash(mut self) {
         let next = self.compute_slash();
-        let prev = self.slash_menu.peek().clone();
+        let prev = self.slash.menu.peek().clone();
         if prev != next {
             match (&prev, &next) {
                 (Some(p), Some(n)) if p.slash_source == n.slash_source => {
                     let count = matching_items(&n.query).len().max(1);
-                    let sel = (*self.slash_selected.peek()).min(count - 1);
-                    if *self.slash_selected.peek() != sel {
-                        self.slash_selected.set(sel);
+                    let sel = (*self.slash.selected.peek()).min(count - 1);
+                    if *self.slash.selected.peek() != sel {
+                        self.slash.selected.set(sel);
                     }
                 }
                 _ => {
-                    if *self.slash_selected.peek() != 0 {
-                        self.slash_selected.set(0);
+                    if *self.slash.selected.peek() != 0 {
+                        self.slash.selected.set(0);
                     }
                 }
             }
             if prev.is_none() && next.is_some() {
                 self.close_menus();
             }
-            self.slash_menu.set(next);
+            self.slash.menu.set(next);
         }
     }
 
     fn compute_slash(self) -> Option<SlashState> {
         if self.span.peek().is_some()
-            || self.cells.peek().is_some()
+            || self.grid.cells.peek().is_some()
             || self.drag.peek().is_some()
             || self.selected_text.peek().is_some()
             || self.marker.peek().is_some()
@@ -294,7 +301,7 @@ impl Writing {
     }
 
     pub fn slash_key(mut self, event: &KeyboardEvent) -> bool {
-        let Some(state) = self.slash_menu.peek().clone() else {
+        let Some(state) = self.slash.menu.peek().clone() else {
             return false;
         };
         if event.is_composing()
@@ -306,27 +313,27 @@ impl Writing {
         }
         let matches = matching_items(&state.query);
         if matches.is_empty() {
-            self.slash_menu.set(None);
+            self.slash.menu.set(None);
             return false;
         }
-        let sel = (*self.slash_selected.peek()).min(matches.len() - 1);
+        let sel = (*self.slash.selected.peek()).min(matches.len() - 1);
         match event.key() {
             Key::Named(NamedKey::Escape) => {
                 event.prevent_default();
                 event.stop_propagation();
-                self.slash_menu.set(None);
+                self.slash.menu.set(None);
                 true
             }
             Key::Named(NamedKey::ArrowDown) => {
                 event.prevent_default();
                 event.stop_propagation();
-                self.slash_selected.set((sel + 1) % matches.len());
+                self.slash.selected.set((sel + 1) % matches.len());
                 true
             }
             Key::Named(NamedKey::ArrowUp) => {
                 event.prevent_default();
                 event.stop_propagation();
-                self.slash_selected.set(if sel == 0 {
+                self.slash.selected.set(if sel == 0 {
                     matches.len() - 1
                 } else {
                     sel - 1
@@ -345,7 +352,7 @@ impl Writing {
     }
 
     pub fn execute_slash(mut self, kind: SlashKind) {
-        let Some(state) = self.slash_menu.take() else {
+        let Some(state) = self.slash.menu.take() else {
             return;
         };
         let end = state.slash_source + 1 + state.query.len();
@@ -386,14 +393,14 @@ impl Writing {
 
 #[component]
 pub fn SlashMenu(writing: Writing) -> Element {
-    let Some(state) = (writing.slash_menu)() else {
+    let Some(state) = (writing.slash.menu)() else {
         return rsx! {};
     };
     let matches = matching_items(&state.query);
     if matches.is_empty() {
         return rsx! {};
     }
-    let active_idx = (writing.slash_selected)().min(matches.len() - 1);
+    let active_idx = (writing.slash.selected)().min(matches.len() - 1);
     rsx! {
         crate::ui::Menu {
             id: "slash-menu",
@@ -413,8 +420,8 @@ pub fn SlashMenu(writing: Writing) -> Element {
                     active: i == active_idx,
                     onhover: move |_| {
                         let mut w = writing;
-                        if *w.slash_selected.peek() != i {
-                            w.slash_selected.set(i);
+                        if *w.slash.selected.peek() != i {
+                            w.slash.selected.set(i);
                         }
                     },
                     onclick: move |_| writing.execute_slash(item.kind),

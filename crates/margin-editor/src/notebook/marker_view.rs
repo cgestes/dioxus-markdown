@@ -251,8 +251,8 @@ impl Writing {
                         .collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>();
-            if *self.row_heights.peek() != row_heights {
-                self.row_heights.set(row_heights);
+            if *self.grid.row_heights.peek() != row_heights {
+                self.grid.row_heights.set(row_heights);
             }
         }
         if *self.boxes.peek() != next {
@@ -340,8 +340,8 @@ pub(super) fn WindowLayout(writing: Writing) -> Element {
     // has settled; the overlays are then measured against the new layout.
     crate::platform::use_field_watch(writing.root, move |event| match event {
         FieldEvent::Composing => {
-            if writing.cells.peek().is_some() {
-                writing.cell_editing.set(true);
+            if writing.grid.cells.peek().is_some() {
+                writing.grid.editing.set(true);
             }
         }
         FieldEvent::ViewportChanged => {

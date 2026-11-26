@@ -32,8 +32,8 @@ impl Writing {
     }
 
     pub fn open(mut self, field: Field, absolute: ByteSelection) {
-        if self.quiet_cell.peek().is_some() {
-            self.quiet_cell.set(None);
+        if self.grid.quiet.peek().is_some() {
+            self.grid.quiet.set(None);
         }
         self.keep_cells_in(field);
         if self.parked_selection.peek().is_some() {
@@ -87,7 +87,7 @@ impl Writing {
 
     pub(super) fn history(mut self, source: bool, redo: bool) {
         self.clear_cells();
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         let selected = if source {
             super::selection(self.root, Field::Source)
         } else {

@@ -15,6 +15,13 @@ pub(crate) enum TableMenu {
     Row(usize, usize),
 }
 
+/// The handles beside each block: the open menu, and a block being dragged.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct BlockHandles {
+    pub menu: Signal<Option<usize>>,
+    pub drag: Signal<Option<BlockDrag>>,
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct BlockDrag {
     pub from: usize,
@@ -50,10 +57,6 @@ pub(crate) struct Writing {
     pub goal_x: Signal<Option<f64>>,
     // A selection that extends beyond the focused input, in Markdown byte offsets.
     pub span: Signal<Option<ByteSelection>>,
-    pub cells: Signal<Option<(usize, table::CellRect)>>,
-    pub cell_editing: Signal<bool>,
-    pub table_menu: Signal<Option<TableMenu>>,
-    pub quiet_cell: Signal<Option<Field>>,
     pub selected_text: Signal<Option<ByteSelection>>,
     pub format_position: Signal<Option<[i32; 2]>>,
     pub pressed_box: Signal<Option<usize>>,
@@ -65,20 +68,10 @@ pub(crate) struct Writing {
     pub dom_dirty: Signal<bool>,
     pub last_tracked: Signal<Option<TrackedKey>>,
     pub empty_line: Signal<Option<(Field, f32, f32)>>,
-    pub slash_menu: Signal<Option<super::slash::SlashState>>,
-    pub slash_selected: Signal<usize>,
-    pub link_card: Signal<Option<super::link_card::LinkCardState>>,
-    pub link_dismissed: Signal<Option<Range<usize>>>,
-    pub link_editing: Signal<bool>,
-    pub block_menu: Signal<Option<usize>>,
-    pub block_drag: Signal<Option<BlockDrag>>,
 
     pub draft_table: Signal<Option<usize>>,
     pub heights: Signal<Vec<usize>>,
     pub heading_heights: Signal<Vec<usize>>,
-    /// Laid-out height of each table row, header first, so the row strip
-    /// beside a table follows rows that grow with wrapped cell text.
-    pub row_heights: Signal<Vec<Vec<f64>>>,
     pub caret_line_col: Signal<Option<[usize; 2]>>,
     pub ink: Signal<Vec<super::markdown::Ink>>,
     pub callout_boxes: Signal<Vec<super::markdown::CalloutBox>>,
@@ -93,18 +86,11 @@ pub(crate) struct Writing {
     pub marker: Signal<Option<usize>>,
     pub boxes: Signal<Vec<MarkerBox>>,
     pub literal: Signal<Option<(usize, usize)>>,
-    pub comments: Signal<Vec<crate::comments::CommentThread>>,
-    pub comments_open: Signal<bool>,
-    pub active_comment: Signal<Option<usize>>,
-    pub draft_comment: Signal<Option<crate::comments::DraftComment>>,
-    /// Who answers comments: the page's agent, or the local stand-in.
-    pub comment_agent: Signal<crate::comments::CommentAgent>,
-    /// The page's comment file in the space, when the notebook edits a page.
-    pub comment_file: Signal<crate::comments::CommentFile>,
-    /// Replies still arriving, by message id; only their bubbles re-render.
-    pub comment_stream: Signal<std::collections::HashMap<String, String>>,
-    /// Where every thread is now, and the text under it.
-    pub comment_ranges: Memo<Vec<crate::comments::Placed>>,
+    pub grid: super::grid::TableUi,
+    pub slash: super::slash::Slash,
+    pub links: super::link_card::Links,
+    pub handles: BlockHandles,
+    pub discussion: crate::comments::Discussion,
     /// The page this notebook edits, if any, and where it stands.
     pub page: Signal<Option<crate::support::page::PageSource>>,
     pub page_state: Signal<crate::support::page::PageState>,
@@ -327,7 +313,7 @@ impl Writing {
 
     fn compute_empty_line(self) -> Option<(Field, f32, f32)> {
         if self.span.peek().is_some()
-            || self.cells.peek().is_some()
+            || self.grid.cells.peek().is_some()
             || self.drag.peek().is_some()
             || self.selected_text.peek().is_some()
             || self.marker.peek().is_some()
@@ -378,14 +364,14 @@ impl Writing {
     /// One menu at a time: the slash, block, table, and callout menus close the
     /// others when they open, however the caret got where it is.
     pub(super) fn close_menus(mut self) {
-        if self.slash_menu.peek().is_some() {
-            self.slash_menu.set(None);
+        if self.slash.menu.peek().is_some() {
+            self.slash.menu.set(None);
         }
-        if self.block_menu.peek().is_some() {
-            self.block_menu.set(None);
+        if self.handles.menu.peek().is_some() {
+            self.handles.menu.set(None);
         }
-        if self.table_menu.peek().is_some() {
-            self.table_menu.set(None);
+        if self.grid.menu.peek().is_some() {
+            self.grid.menu.set(None);
         }
         if self.callout_menu.peek().is_some() {
             self.callout_menu.set(None);
@@ -397,12 +383,12 @@ impl Writing {
 
     pub(super) fn show_table_menu(mut self, menu: Option<TableMenu>) {
         self.close_menus();
-        self.table_menu.set(menu);
+        self.grid.menu.set(menu);
     }
 
     pub(super) fn show_block_menu(mut self, block: Option<usize>) {
         self.close_menus();
-        self.block_menu.set(block);
+        self.handles.menu.set(block);
     }
 
     pub(super) fn show_callout_menu(mut self, callout_start: Option<usize>) {
@@ -419,20 +405,20 @@ impl Writing {
         self.clear_cells();
         self.selected_text.set(None);
         self.empty_line.set(None);
-        self.slash_menu.set(None);
-        self.slash_selected.set(0);
-        self.link_card.set(None);
-        self.link_dismissed.set(None);
-        self.link_editing.set(false);
-        self.block_menu.set(None);
-        self.block_drag.set(None);
-        self.draft_comment.set(None);
+        self.slash.menu.set(None);
+        self.slash.selected.set(0);
+        self.links.card.set(None);
+        self.links.dismissed.set(None);
+        self.links.editing.set(false);
+        self.handles.menu.set(None);
+        self.handles.drag.set(None);
+        self.discussion.draft.set(None);
         self.callout_boxes.set(Vec::new());
         self.code_boxes.set(Vec::new());
         self.callout_menu.set(None);
         self.code_lang_menu.set(None);
         self.caret.set(None);
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         self.mouse_box.set(None);
         *self.last_tracked.write_unchecked() = None;
         self.cursor_source.set(None);
@@ -956,7 +942,7 @@ impl Writing {
     }
 
     pub fn move_block_dir(mut self, block_idx: usize, down: bool) {
-        self.block_menu.set(None);
+        self.handles.menu.set(None);
         let md = self.contents.read().clone();
         let list = super::blocks::split_blocks(&md);
         let Some((splices, caret)) = super::blocks::move_block(&md, &list, block_idx, down) else {
@@ -974,7 +960,7 @@ impl Writing {
     }
 
     pub fn move_block_to_slot(mut self, from: usize, to_slot: usize) {
-        self.block_menu.set(None);
+        self.handles.menu.set(None);
         let md = self.contents.read().clone();
         let list = super::blocks::split_blocks(&md);
         let Some((splices, caret)) = super::blocks::move_block_to(&md, &list, from, to_slot) else {
@@ -993,8 +979,8 @@ impl Writing {
 
     pub fn start_block_drag(mut self, block_idx: usize, client_y: f64) {
         self.end_drag();
-        self.table_menu.set(None);
-        self.block_drag.set(Some(BlockDrag {
+        self.grid.menu.set(None);
+        self.handles.drag.set(Some(BlockDrag {
             from: block_idx,
             start_y: client_y,
             dragging: false,
@@ -1004,7 +990,7 @@ impl Writing {
     }
 
     pub fn duplicate_block_at(mut self, block_idx: usize) {
-        self.block_menu.set(None);
+        self.handles.menu.set(None);
         let md = self.contents.read().clone();
         let list = super::blocks::split_blocks(&md);
         let Some((splices, caret)) = super::blocks::duplicate_block(&md, &list, block_idx) else {
@@ -1022,7 +1008,7 @@ impl Writing {
     }
 
     pub fn delete_block_at(mut self, block_idx: usize) {
-        self.block_menu.set(None);
+        self.handles.menu.set(None);
         let md = self.contents.read().clone();
         let list = super::blocks::split_blocks(&md);
         let Some((splices, caret)) = super::blocks::delete_block(&md, &list, block_idx) else {
@@ -1068,9 +1054,9 @@ impl Writing {
         if event.is_composing() {
             return;
         }
-        if event.key() == Key::Named(NamedKey::Escape) && self.block_menu.peek().is_some() {
+        if event.key() == Key::Named(NamedKey::Escape) && self.handles.menu.peek().is_some() {
             event.prevent_default();
-            self.block_menu.set(None);
+            self.handles.menu.set(None);
             return;
         }
         if event.key() == Key::Named(NamedKey::Escape) && self.callout_menu.peek().is_some() {
@@ -1083,7 +1069,7 @@ impl Writing {
             self.code_lang_menu.set(None);
             return;
         }
-        if event.key() == Key::Named(NamedKey::Escape) && self.link_card.peek().is_some() {
+        if event.key() == Key::Named(NamedKey::Escape) && self.links.card.peek().is_some() {
             event.prevent_default();
             self.dismiss_link_card();
             return;

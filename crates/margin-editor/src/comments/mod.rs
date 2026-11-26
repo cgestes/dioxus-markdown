@@ -78,7 +78,7 @@ pub struct CommentThread {
     pub cursors: Option<(Cursor, Cursor)>,
     /// The quote the agent saw on its last reply.
     pub seen: Option<String>,
-    /// The reply being written (its text streams in `Writing::comment_stream`).
+    /// The reply being written (its text streams in `Discussion::stream`).
     #[serde(skip)]
     pub pending: Option<String>,
     /// Replies that failed; shown, never saved.
@@ -86,6 +86,27 @@ pub struct CommentThread {
     pub failed: Vec<String>,
     /// Proposal states as of the last saved page, by message id.
     pub saved: HashMap<String, ProposalState>,
+}
+
+/// The notebook's comment threads, the pane that shows them, and the
+/// agent that answers.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct Discussion {
+    pub threads: Signal<Vec<CommentThread>>,
+    /// Whether the comments pane is open.
+    pub open: Signal<bool>,
+    /// The thread the pane shows expanded, by id.
+    pub active: Signal<Option<usize>>,
+    /// A comment being written on a selection, before it becomes a thread.
+    pub draft: Signal<Option<DraftComment>>,
+    /// Who answers comments: the page's agent, or the local stand-in.
+    pub agent: Signal<CommentAgent>,
+    /// The page's comment file on the server, when the notebook edits a page.
+    pub file: Signal<CommentFile>,
+    /// Replies still arriving, by message id; only their bubbles re-render.
+    pub stream: Signal<HashMap<String, String>>,
+    /// Where every thread is now, and the text under it.
+    pub ranges: Memo<Vec<Placed>>,
 }
 
 /// The page's comment file: its version, and saves in flight.
@@ -315,7 +336,7 @@ pub struct Placed {
     pub text: String,
 }
 
-/// Every thread that is still in the text (see `Writing::comment_ranges`).
+/// Every thread that is still in the text (see `Discussion::ranges`).
 pub fn ranges(note: &Note, md: &str, threads: &[CommentThread]) -> Vec<Placed> {
     threads
         .iter()
@@ -328,13 +349,13 @@ pub fn ranges(note: &Note, md: &str, threads: &[CommentThread]) -> Vec<Placed> {
 
 impl Writing {
     fn with_thread<R>(mut self, id: usize, f: impl FnOnce(&mut CommentThread) -> R) -> Option<R> {
-        self.comments.write().iter_mut().find(|t| t.id == id).map(f)
+        self.discussion.threads.write().iter_mut().find(|t| t.id == id).map(f)
     }
 
     /// The text under a thread now; its saved quote when the text is gone.
     /// Subscribes the caller to changes of any thread's text.
     fn thread_text(&self, t: &CommentThread) -> String {
-        self.comment_ranges
+        self.discussion.ranges
             .read()
             .iter()
             .find(|p| p.id == t.id)
@@ -364,9 +385,9 @@ impl Writing {
             });
         let quote = range.as_ref().map(|r| md[r.clone()].trim().to_owned());
         drop(md);
-        self.comments_open.set(true);
+        self.discussion.open.set(true);
         if let (Some(range), Some(quote)) = (range, quote.filter(|q| !q.is_empty())) {
-            self.draft_comment.set(Some(DraftComment { range, quote }));
+            self.discussion.draft.set(Some(DraftComment { range, quote }));
             self.format_position.set(None);
         }
     }
@@ -375,14 +396,14 @@ impl Writing {
         if text.trim().is_empty() {
             return;
         }
-        let Some(draft) = self.draft_comment.take() else {
+        let Some(draft) = self.discussion.draft.take() else {
             return;
         };
         let thread = {
             let md = self.contents.peek();
             let now = dates::stamp();
             CommentThread {
-                id: self.comments.peek().iter().map(|t| t.id).max().unwrap_or(0) + 1,
+                id: self.discussion.threads.peek().iter().map(|t| t.id).max().unwrap_or(0) + 1,
                 cursors: self.note.peek().anchor_range_in(&md, draft.range.clone()),
                 file: file::Thread {
                     id: new_key(),
@@ -395,8 +416,8 @@ impl Writing {
             }
         };
         let id = thread.id;
-        self.comments.write().insert(0, thread);
-        self.active_comment.set(Some(id));
+        self.discussion.threads.write().insert(0, thread);
+        self.discussion.active.set(Some(id));
         self.post(id, text.trim());
     }
 
@@ -417,7 +438,7 @@ impl Writing {
     /// into a new message, and a `margin-edit` block at its end becomes the
     /// message's proposal (it never shows as text).
     fn post(self, thread_id: usize, prompt: &str) {
-        let agent = self.comment_agent.peek().clone();
+        let agent = self.discussion.agent.peek().clone();
         let page = self.page.peek().as_ref().map_or_else(|| "note.md".to_string(), |p| p.path.clone());
         let Some((ask, reply, quote)) = self.with_thread(thread_id, |t| {
             let md = self.contents.peek();
@@ -443,7 +464,7 @@ impl Writing {
         self.save_comments();
         // The agent is read-only; anything that needs approval is refused.
         let mut events = turn(agent.chat, ask, || false);
-        let mut stream = self.comment_stream;
+        let mut stream = self.discussion.stream;
         spawn(async move {
             let mut text = String::new();
             let mut outcome = None;
@@ -494,7 +515,7 @@ impl Writing {
     fn swap_proposal(mut self, thread_id: usize, message: usize, apply: bool) {
         let found = {
             let md = self.contents.peek();
-            let threads = self.comments.peek();
+            let threads = self.discussion.threads.peek();
             threads.iter().find(|t| t.id == thread_id).and_then(|t| {
                 let p = t.file.messages.get(message)?.proposal.clone()?;
                 let range = thread_range(&self.note.peek(), &md, t)?;
@@ -553,28 +574,28 @@ impl Writing {
 
     pub fn delete_comment_thread(mut self, thread_id: usize) {
         let removed = {
-            let mut threads = self.comments.write();
+            let mut threads = self.discussion.threads.write();
             let at = threads.iter().position(|t| t.id == thread_id);
             at.map(|i| threads.remove(i))
         };
         if let Some(t) = removed {
-            self.comment_file.write().tombstones.push(file::Thread {
+            self.discussion.file.write().tombstones.push(file::Thread {
                 id: t.file.id,
                 updated: dates::stamp(),
                 deleted: true,
                 ..Default::default()
             });
         }
-        if *self.active_comment.peek() == Some(thread_id) {
-            self.active_comment.set(None);
+        if *self.discussion.active.peek() == Some(thread_id) {
+            self.discussion.active.set(None);
         }
         self.save_comments();
     }
 
     pub fn jump_to_comment(mut self, thread_id: usize) {
-        self.active_comment.set(Some(thread_id));
+        self.discussion.active.set(Some(thread_id));
         let range = self
-            .comment_ranges
+            .discussion.ranges
             .peek()
             .iter()
             .find(|p| p.id == thread_id)
@@ -585,19 +606,19 @@ impl Writing {
     }
 
     pub fn sync_active_comment_at(mut self, pos: usize) {
-        if !*self.comments_open.peek() {
+        if !*self.discussion.open.peek() {
             return;
         }
         let hit = self
-            .comment_ranges
+            .discussion.ranges
             .peek()
             .iter()
             .find(|p| pos >= p.range.start && pos <= p.range.end)
             .map(|p| p.id);
         if let Some(id) = hit
-            && *self.active_comment.peek() != Some(id)
+            && *self.discussion.active.peek() != Some(id)
         {
-            self.active_comment.set(Some(id));
+            self.discussion.active.set(Some(id));
         }
     }
 
@@ -605,7 +626,7 @@ impl Writing {
     /// states of the last saved page, finished messages only.
     pub(super) fn comment_file_now(&self, page: &str) -> file::Sidecar {
         let mut out = file::Sidecar::new(page);
-        for t in self.comments.peek().iter() {
+        for t in self.discussion.threads.peek().iter() {
             let mut thread = t.file.clone();
             thread
                 .messages
@@ -617,13 +638,13 @@ impl Writing {
             }
             out.threads.push(thread);
         }
-        out.threads.extend(self.comment_file.peek().tombstones.iter().cloned());
+        out.threads.extend(self.discussion.file.peek().tombstones.iter().cloned());
         out
     }
 
     /// The page was saved: anchors and proposal states now describe it.
     pub(super) fn commit_comments(self) {
-        let mut comments = self.comments;
+        let mut comments = self.discussion.threads;
         {
             let md = self.contents.peek();
             let note = self.note.peek();
@@ -649,7 +670,7 @@ impl Writing {
         let Some(page) = self.page.peek().clone() else {
             return;
         };
-        let mut state = self.comment_file;
+        let mut state = self.discussion.file;
         {
             let mut f = state.write();
             if !f.loaded {
@@ -719,8 +740,8 @@ impl Writing {
                 });
             }
         }
-        self.comments.set(threads);
-        self.comment_file.write().tombstones = tombstones;
+        self.discussion.threads.set(threads);
+        self.discussion.file.write().tombstones = tombstones;
     }
 }
 
@@ -730,7 +751,7 @@ pub fn use_comment_file(writing: Writing) {
         let Some(page) = writing.page.peek().clone() else {
             return;
         };
-        let mut state = writing.comment_file;
+        let mut state = writing.discussion.file;
         spawn(async move {
             let PageSource { files, path, .. } = page;
             match work(move || files.read(&file::sidecar_path(&path))).await {
@@ -754,14 +775,14 @@ pub fn use_comment_file(writing: Writing) {
 /// Paints warm inline highlights behind/over anchored comment ranges using Parley geometry.
 #[component]
 pub fn CommentInk(writing: Writing, field: Field) -> Element {
-    let ranges = writing.comment_ranges.read();
+    let ranges = writing.discussion.ranges.read();
     if ranges.is_empty() {
         return rsx! {};
     }
     writing.ink.read();
     writing.boxes.read();
     writing.caret.read();
-    let active_id = *writing.active_comment.read();
+    let active_id = *writing.discussion.active.read();
     let md = writing.contents.read();
     let bounds = writing.range(field, &md);
     let hits: Vec<(usize, Range<usize>, bool, bool)> = ranges
@@ -826,24 +847,24 @@ pub fn CommentInk(writing: Writing, field: Field) -> Element {
 /// re-renders this message only.
 #[component]
 fn StreamingReply(writing: Writing, id: String, author: String) -> Element {
-    let body = writing.comment_stream.read().get(&id).cloned().unwrap_or_default();
+    let body = writing.discussion.stream.read().get(&id).cloned().unwrap_or_default();
     rsx! { Message { author, body, ai: true, pending: true, style: MessageStyle::Thread } }
 }
 
 #[component]
 pub fn CommentsPane(writing: Writing) -> Element {
     let mut writing = writing;
-    if !(writing.comments_open)() {
+    if !(writing.discussion.open)() {
         return rsx! {};
     }
     let mut filter = use_signal(|| CommentFilter::Open);
-    let threads = writing.comments.read();
+    let threads = writing.discussion.threads.read();
     let open_count = threads.iter().filter(|t| !t.file.resolved).count();
     let resolved_count = threads.len() - open_count;
-    let active_id = *writing.active_comment.read();
-    let draft = writing.draft_comment.read().clone();
+    let active_id = *writing.discussion.active.read();
+    let draft = writing.discussion.draft.read().clone();
     let cur_filter = filter();
-    let error = writing.comment_file.read().error.clone();
+    let error = writing.discussion.file.read().error.clone();
     let segments = vec![
         Segment { id: "filter-comments-open", label: "Open", tip: None, selected: cur_filter == CommentFilter::Open },
         Segment { id: "filter-comments-resolved", label: "Resolved", tip: None, selected: cur_filter == CommentFilter::Resolved },
@@ -866,7 +887,7 @@ pub fn CommentsPane(writing: Writing) -> Element {
                     if open_count > 0 { Badge { text: open_count.to_string(), tone: Tone::Warn } }
                     span { class: "comments-grow" }
                     Button { id: "close-comments", label: "Close comments", text: "×", variant: Variant::Ghost,
-                        onclick: move |_| writing.comments_open.set(false) }
+                        onclick: move |_| writing.discussion.open.set(false) }
                 }
                 Segmented { label: "Which threads", items: segments, onselect: move |i: usize| {
                     filter.set([CommentFilter::Open, CommentFilter::Resolved, CommentFilter::All][i]);
@@ -879,7 +900,7 @@ pub fn CommentsPane(writing: Writing) -> Element {
                     Card { id: "new-comment-card", class: "comment-card draft",
                         div { class: "comment-card-head",
                             span { class: "comment-quote", "{draft.quote}" }
-                            Badge { text: writing.comment_agent.read().alias.clone(), tone: Tone::Accent }
+                            Badge { text: writing.discussion.agent.read().alias.clone(), tone: Tone::Accent }
                         }
                         div { class: "comment-chips",
                             for (label, ask) in [("Tighten", "Tighten this phrasing"), ("Polish", "Polish and make clearer"), ("Add detail", "Add field detail")] {
@@ -889,10 +910,10 @@ pub fn CommentsPane(writing: Writing) -> Element {
                         Composer { placeholder: "Comment or ask the agent to edit…", send_label: "Post",
                             field_id: "new-comment-input", send_id: "new-comment-post",
                             onsend: move |text: String| writing.submit_draft_comment(&text),
-                            onescape: move |_| writing.draft_comment.set(None) }
+                            onescape: move |_| writing.discussion.draft.set(None) }
                         div { class: "comment-draft-foot",
                             Button { id: "new-comment-cancel", label: "Cancel", variant: Variant::Link,
-                                onclick: move |_| writing.draft_comment.set(None) }
+                                onclick: move |_| writing.discussion.draft.set(None) }
                         }
                     }
                 }
@@ -916,7 +937,7 @@ pub fn CommentsPane(writing: Writing) -> Element {
 #[component]
 fn ThreadCard(writing: Writing, id: usize, active: bool) -> Element {
     let mut writing = writing;
-    let threads = writing.comments.read();
+    let threads = writing.discussion.threads.read();
     let Some(thread) = threads.iter().find(|t| t.id == id) else {
         return rsx! {};
     };
@@ -926,7 +947,7 @@ fn ThreadCard(writing: Writing, id: usize, active: bool) -> Element {
     let quote = current.clone();
     rsx! {
         Card { id: format!("comment-thread-{tid}"), class: format!("comment-card{}{}", if active { " active" } else { "" }, if resolved { " resolved" } else { "" }),
-            onclick: move |_| if *writing.active_comment.peek() != Some(tid) { writing.active_comment.set(Some(tid)) },
+            onclick: move |_| if *writing.discussion.active.peek() != Some(tid) { writing.discussion.active.set(Some(tid)) },
             div { class: "comment-card-head",
                 Button { id: format!("comment-jump-{tid}"), label: "Jump to anchored text", text: quote, variant: Variant::Bare,
                     class: "comment-quote-btn", stop: true, onclick: move |_| writing.jump_to_comment(tid) }

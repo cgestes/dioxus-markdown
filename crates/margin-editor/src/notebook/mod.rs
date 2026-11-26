@@ -306,10 +306,13 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         logical_blocks: use_memo(move || blocks::split_blocks(&contents.read())),
         goal_x: use_signal(|| None),
         span: use_signal(|| None),
-        cells: use_signal(|| None),
-        cell_editing: use_signal(|| false),
-        table_menu: use_signal(|| None),
-        quiet_cell: use_signal(|| None),
+        grid: grid::TableUi {
+            cells: use_signal(|| None),
+            editing: use_signal(|| false),
+            menu: use_signal(|| None),
+            quiet: use_signal(|| None),
+            row_heights: use_signal(Vec::new),
+        },
         selected_text: use_signal(|| None),
         format_position: use_signal(|| None),
         drag: use_signal(|| None),
@@ -321,16 +324,11 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         dom_dirty: use_signal(|| true),
         last_tracked: use_signal(|| None),
         empty_line: use_signal(|| None),
-        slash_menu: use_signal(|| None),
-        slash_selected: use_signal(|| 0),
-        link_card: use_signal(|| None),
-        link_dismissed: use_signal(|| None),
-        link_editing: use_signal(|| false),
-        block_menu: use_signal(|| None),
-        block_drag: use_signal(|| None),
+        slash: slash::Slash { menu: use_signal(|| None), selected: use_signal(|| 0) },
+        links: link_card::Links { card: use_signal(|| None), dismissed: use_signal(|| None), editing: use_signal(|| false) },
+        handles: writing::BlockHandles { menu: use_signal(|| None), drag: use_signal(|| None) },
         heights: use_signal(Vec::new),
         heading_heights: use_signal(Vec::new),
-        row_heights: use_signal(Vec::new),
         caret_line_col: use_signal(|| None),
         ink: use_signal(Vec::new),
         callout_boxes: use_signal(Vec::new),
@@ -344,17 +342,19 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         marker: use_signal(|| None),
         boxes: use_signal(Vec::new),
         literal: use_signal(|| None),
-        comments,
-        comments_open,
-        active_comment,
-        draft_comment,
-        comment_agent: use_signal(move || agent),
-        comment_file: use_signal(crate::comments::CommentFile::default),
-        comment_stream: use_signal(Default::default),
-        comment_ranges: use_memo(move || {
-            let md = contents.read();
-            crate::comments::ranges(&note.read(), &md, &comments.read())
-        }),
+        discussion: crate::comments::Discussion {
+            threads: comments,
+            open: comments_open,
+            active: active_comment,
+            draft: draft_comment,
+            agent: use_signal(move || agent),
+            file: use_signal(crate::comments::CommentFile::default),
+            stream: use_signal(Default::default),
+            ranges: use_memo(move || {
+                let md = contents.read();
+                crate::comments::ranges(&note.read(), &md, &comments.read())
+            }),
+        },
         page_state: use_signal({
             let etag = page_source.as_ref().and_then(|p| p.etag.clone());
             move || page::PageState { etag, saved_rev: *doc_rev.peek(), ..Default::default() }
@@ -465,19 +465,19 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         writing.boxes.read();
         writing.format_position.read();
         writing.empty_line.read();
-        writing.slash_menu.read();
-        writing.link_card.read();
-        writing.link_editing.read();
-        writing.block_menu.read();
-        writing.block_drag.read();
-        writing.table_menu.read();
-        writing.cells.read();
+        writing.slash.menu.read();
+        writing.links.card.read();
+        writing.links.editing.read();
+        writing.handles.menu.read();
+        writing.handles.drag.read();
+        writing.grid.menu.read();
+        writing.grid.cells.read();
         writing.span.read();
         writing.edit_mode.read();
-        writing.comments.read();
-        writing.comments_open.read();
-        writing.active_comment.read();
-        writing.draft_comment.read();
+        writing.discussion.threads.read();
+        writing.discussion.open.read();
+        writing.discussion.active.read();
+        writing.discussion.draft.read();
         view.read();
         let dirty = writing.dom_dirty;
         *dirty.write_unchecked() = true;
@@ -548,7 +548,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         style { "{ui::CSS}" }
         style { "{CSS}" }
         crate::platform::Head {}
-        main { class: "notebook", class: if embedded { "embedded" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
+        main { class: "notebook", class: if embedded { "embedded" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.handles.drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
             onpointerdown: move |event| { writing.clear_goal(); writing.dismiss_menu_at(event.client_coordinates().x,event.client_coordinates().y); },
             onpointermove: move |e| writing.pointer_move(e),
             onpointerup: move |_| writing.end_drag(),
@@ -626,8 +626,8 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                         ui::Button { id: "redo", variant: ui::Variant::Icon, label: "Redo", tip: redo_tip, icon: Icon::Redo, disabled: !note.read().can_redo(), onclick: move |_| writing.history(source(), true) }
                     }
                     {
-                        let open_comments = writing.comments.read().iter().filter(|t| !t.file.resolved).count();
-                        let panel_open = (writing.comments_open)() && !source();
+                        let open_comments = writing.discussion.threads.read().iter().filter(|t| !t.file.resolved).count();
+                        let panel_open = (writing.discussion.open)() && !source();
                         let tip = format!("Toggle comments ({} to comment on selection)", shortcut("Shift+M"));
                         rsx! {
                             span { class: "dock-comments",
@@ -669,9 +669,9 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                 div { class: "editor-shell",
                     div { class: "editor-main",
                         div { class: "paper", id: "paper",
-                    class: if writing.block_drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
+                    class: if writing.handles.drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
                     onpointerdown: move |e| writing.pointer_down(e),
-                    if let Some(y) = writing.block_drag.read().filter(|d| d.dragging).and_then(|d| d.indicator_y) {
+                    if let Some(y) = writing.handles.drag.read().filter(|d| d.dragging).and_then(|d| d.indicator_y) {
                         div { id: "block-drop-line", class: "block-drop-line", aria_hidden: "true", style: "top:{y:.1}px;",
                             span { class: "block-drop-dot" }
                         }

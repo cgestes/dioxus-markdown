@@ -29,7 +29,7 @@ pub(crate) struct State {
 pub(crate) fn snapshot(writing: Writing) -> State {
     let mut state = State {
         editor_field: (*writing.active.peek()).map(Field::id),
-        cell_selection: (*writing.cells.peek())
+        cell_selection: (*writing.grid.cells.peek())
             .map(|(table, rect)| (table, rect.anchor, rect.head)),
         ..State::default()
     };

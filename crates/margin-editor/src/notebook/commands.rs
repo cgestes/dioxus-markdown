@@ -280,7 +280,7 @@ impl Writing {
     pub(super) fn paste(self, field: Field, text: &str) -> bool {
         // A selected range of cells takes the values.
         if let Field::Cell(t, r, c) = field
-            && !*self.cell_editing.peek()
+            && !*self.grid.editing.peek()
             && let Some(rect) = self.cell_range(t)
         {
             self.clear_or_fill(t, rect, text, r, c);
@@ -296,10 +296,9 @@ impl Writing {
             }
             if !selected.is_empty()
                 && !matches!(field, Field::TitleGap | Field::Source)
-                && let Some(url) = smart_paste_url(text, &md[selected.clone()])
+                && let Some(link) = margin_projection::paste::link_over_selection(text, &md[selected.clone()])
             {
-                let wrapped = format!("[{}]({url})", &md[selected.clone()]);
-                self.edit_range(selected, &wrapped);
+                self.edit_range(selected, &link);
                 return true;
             }
             // Single-line platform inputs discard line endings. Paste a
@@ -328,7 +327,7 @@ impl Writing {
     }
 
     fn toggle_highlight(mut self) -> bool {
-        if self.cells.peek().is_some() {
+        if self.grid.cells.peek().is_some() {
             return false;
         }
         let Some([anchor, head]) = (*self.selected_text.peek()).or_else(|| self.absolute_selection())
@@ -380,24 +379,4 @@ impl Writing {
         report(result, self.message);
         true
     }
-}
-
-fn smart_paste_url(clipboard: &str, selected: &str) -> Option<String> {
-    let url = clipboard.trim();
-    if url.is_empty()
-        || url.chars().any(char::is_whitespace)
-        || !(url.starts_with("https://") || url.starts_with("http://"))
-    {
-        return None;
-    }
-    let sel = selected.trim();
-    if sel.is_empty()
-        || selected.contains('\n')
-        || sel.starts_with("https://")
-        || sel.starts_with("http://")
-        || selected.contains("](")
-    {
-        return None;
-    }
-    Some(url.to_owned())
 }

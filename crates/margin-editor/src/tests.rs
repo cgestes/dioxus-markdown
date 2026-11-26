@@ -1139,7 +1139,7 @@ fn native_drag_from_cell_to_cell_selects_a_rectangle_and_escape_collapses_it() {
     render(&mut doc);
     let range = || {
         doc.vdom
-            .in_scope(ScopeId::APP, || *consume_context::<Writing>().cells.peek())
+            .in_scope(ScopeId::APP, || *consume_context::<Writing>().grid.cells.peek())
     };
     assert_eq!(
         range(),
@@ -1156,7 +1156,7 @@ fn native_drag_from_cell_to_cell_selects_a_rectangle_and_escape_collapses_it() {
     press(&mut doc, Key::Named(NamedKey::Escape), false);
     assert_focus(&doc, "cell-0-2-2", [1, 1]);
     assert!(doc.vdom.in_scope(ScopeId::APP, || {
-        consume_context::<Writing>().cells.peek().is_none()
+        consume_context::<Writing>().grid.cells.peek().is_none()
     }));
 }
 
@@ -2151,9 +2151,9 @@ fn anchored_comments_create_reply_apply_undo_and_resolve() {
         let mut w = consume_context::<Writing>();
         let seeded = comments::seed_sample_comments(&w.note.peek());
         assert_eq!(seeded.len(), 2);
-        w.comments.set(seeded);
-        w.active_comment.set(Some(1));
-        w.comments_open.set(true);
+        w.discussion.threads.set(seeded);
+        w.discussion.active.set(Some(1));
+        w.discussion.open.set(true);
     });
     render(&mut doc);
     assert!(doc.inner.borrow().get_element_by_id("comments-pane").is_some());
@@ -2237,7 +2237,7 @@ fn anchored_comments_create_reply_apply_undo_and_resolve() {
     click(&mut doc, "comment-send-3");
     let msg_count = doc.vdom.in_scope(ScopeId::APP, || {
         consume_context::<Writing>()
-            .comments
+            .discussion.threads
             .read()
             .iter()
             .find(|t| t.id == 3)
@@ -2270,9 +2270,9 @@ fn comment_proposals_go_stale_instead_of_overwriting_edited_text() {
     doc.vdom.in_scope(ScopeId::APP, || {
         let mut w = consume_context::<Writing>();
         let seeded = comments::seed_sample_comments(&w.note.peek());
-        w.comments.set(seeded);
-        w.active_comment.set(Some(1));
-        w.comments_open.set(true);
+        w.discussion.threads.set(seeded);
+        w.discussion.active.set(Some(1));
+        w.discussion.open.set(true);
     });
     render(&mut doc);
     // Someone rewrites the commented cell after the suggestion was made.
@@ -2308,7 +2308,7 @@ fn comment_files_round_trip_and_reattach_after_outside_edits() {
             }
         }
         seeded[1].file.resolved = true;
-        w.comments.set(seeded);
+        w.discussion.threads.set(seeded);
         w.comment_file_now("field-notes.md")
     });
     assert_eq!(saved.threads.len(), 2);
@@ -2321,7 +2321,7 @@ fn comment_files_round_trip_and_reattach_after_outside_edits() {
         let w = consume_context::<Writing>();
         let json = saved.to_json();
         w.load_comment_file(margin_editor_core::comments::Sidecar::parse(&json).unwrap());
-        let threads = w.comments.peek();
+        let threads = w.discussion.threads.peek();
         let md = w.note.peek().markdown();
         assert_eq!(threads.len(), 2);
         for t in threads.iter() {
@@ -3153,23 +3153,23 @@ fn live_comment_streams_a_reply_and_saves_the_thread() {
     };
     // The page has no comment file yet: loading finds it absent.
     settle(&mut doc, 20, &|d| {
-        let f = doc_writing(d).comment_file;
+        let f = doc_writing(d).discussion.file;
         let state = f.peek();
         state.is_loaded() || state.error.is_some()
     });
-    assert_eq!(doc_writing(&doc).comment_file.peek().error, None);
+    assert_eq!(doc_writing(&doc).discussion.file.peek().error, None);
     let quote = "Front-left proximity sensor failing";
     let at = text.find(quote).unwrap();
     doc.vdom.in_scope(ScopeId::APP, || {
         let mut w = consume_context::<Writing>();
-        w.draft_comment.set(Some(DraftComment { range: at..at + quote.len(), quote: quote.into() }));
+        w.discussion.draft.set(Some(DraftComment { range: at..at + quote.len(), quote: quote.into() }));
         w.submit_draft_comment("Shorten this to a few words.");
     });
     settle(&mut doc, 240, &|d| {
-        doc_writing(d).comments.peek().first().is_some_and(|t| t.pending.is_none())
-            && !doc_writing(d).comment_file.peek().is_saving()
+        doc_writing(d).discussion.threads.peek().first().is_some_and(|t| t.pending.is_none())
+            && !doc_writing(d).discussion.file.peek().is_saving()
     });
-    let thread = doc_writing(&doc).comments.peek().first().cloned().expect("thread");
+    let thread = doc_writing(&doc).discussion.threads.peek().first().cloned().expect("thread");
     let reply = thread.file.messages.last().unwrap().clone();
     println!("reply: {}\nproposal: {:?}", reply.body, reply.proposal.as_ref().map(|p| &p.new));
     let saved = space.read(&file::sidecar_path(page));

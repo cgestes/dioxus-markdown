@@ -531,7 +531,7 @@ fn compact_toolbar_and_table_stay_in_place_while_editing() {
                 "the longer description wraps onto more lines"
             );
             let row = bounds(&s.doc, "slot-0-1-0")[3];
-            let strip = s.writing(|w| w.row_heights.peek()[0][1]);
+            let strip = s.writing(|w| w.grid.row_heights.peek()[0][1]);
             assert_eq!(strip, row, "the row menu strip follows the grown row");
         };
         steady(s);
@@ -640,7 +640,7 @@ fn rectangular_selection_cycles_copies_clears_and_deletes_only_its_columns() {
         s.click_at_text("cell-0-2-2", 0);
         click_with(&mut s.doc, "cell-0-1-1", None, Modifiers::SHIFT);
         let rect = s
-            .writing(|w| *w.cells.peek())
+            .writing(|w| *w.grid.cells.peek())
             .expect("Shift-click selects cells")
             .1;
         assert_eq!(rect.count(), 4);
@@ -827,9 +827,9 @@ fn ux_polish_showcase_renders_rich_markdown_and_table_controls() {
                 seeded.sort_by_key(|t| t.id);
             }
             let first = seeded.first().map(|t| t.id);
-            w.comments.set(seeded);
-            w.active_comment.set(first);
-            w.comments_open.set(true);
+            w.discussion.threads.set(seeded);
+            w.discussion.active.set(first);
+            w.discussion.open.set(true);
         });
         render(&mut s.doc);
         s.capture("live-comments-pane");

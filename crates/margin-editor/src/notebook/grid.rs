@@ -6,6 +6,22 @@ use crate::ui::{Button, Menu, MenuItem, MenuRow, MenuSeparator, Toolbar, Toolbar
 use crate::prelude::*;
 use pulldown_cmark::Alignment;
 
+/// The tables' interface state.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct TableUi {
+    /// The selected cells: a table and a rectangle of its cells.
+    pub cells: Signal<Option<(usize, table::CellRect)>>,
+    /// A cell's text is being edited (rather than its cells selected).
+    pub editing: Signal<bool>,
+    /// The open column or row menu.
+    pub menu: Signal<Option<super::writing::TableMenu>>,
+    /// A cell a command opened: its format bar stays hidden until you type.
+    pub quiet: Signal<Option<Field>>,
+    /// Laid-out height of each table row, header first, so the row strip
+    /// beside a table follows rows that grow with wrapped cell text.
+    pub row_heights: Signal<Vec<Vec<f64>>>,
+}
+
 impl Writing {
     pub fn finish_table_line(mut self, enter: bool) -> bool {
         let Some(at) = *self.draft_table.peek() else {
@@ -78,13 +94,13 @@ impl Writing {
         let bounds = self.tables.read()[t].cell(r, c);
         let field = Field::Cell(t, r, c);
         self.open(field, [bounds.start, bounds.end]);
-        self.quiet_cell.set(Some(field));
+        self.grid.quiet.set(Some(field));
         self.refresh_format_position();
     }
 
     fn add_row(mut self, t: usize, col: usize) {
         self.clear_cells();
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         let md = self.contents.read().clone();
         let grid = self.tables.read()[t].clone();
         let edit = grid.append_row(&md);
@@ -94,7 +110,7 @@ impl Writing {
 
     fn insert_row_at(mut self, t: usize, at: usize, col: usize) {
         self.clear_cells();
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         let md = self.contents.read().clone();
         let grid = self.tables.read()[t].clone();
         if let Some(range) = self.absolute_selection() {
@@ -110,7 +126,7 @@ impl Writing {
 
     fn insert_column_at(mut self, t: usize, row: usize, col: usize) {
         self.clear_cells();
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         let md = self.contents.read().clone();
         let grid = self.tables.read()[t].clone();
         if let Some(range) = self.absolute_selection() {
@@ -127,7 +143,7 @@ impl Writing {
 
     fn move_row_dir(mut self, t: usize, row: usize, col: usize, down: bool) {
         self.clear_cells();
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         let md = self.contents.read().clone();
         let grid = self.tables.read()[t].clone();
         let edits = grid.move_row(&md, row, down);
@@ -147,7 +163,7 @@ impl Writing {
 
     fn move_column_dir(mut self, t: usize, row: usize, col: usize, right: bool) {
         self.clear_cells();
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         let md = self.contents.read().clone();
         let grid = self.tables.read()[t].clone();
         let edits = grid.move_column(&md, col, right);
@@ -166,7 +182,7 @@ impl Writing {
     }
 
     fn align_columns(mut self, t: usize, rect: table::CellRect, alignment: Alignment) {
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         let md = self.contents.read().clone();
         let grid = self.tables.read()[t].clone();
         let edits = grid.set_alignment(&md, rect.cols(), alignment);
@@ -193,7 +209,7 @@ impl Writing {
                 .and_then(|n| doc.get_client_bounding_rect(n))
                 .is_some_and(|b| x >= b.x && x < b.x + b.width && y >= b.y && y < b.y + b.height)
         };
-        let t_menu = *self.table_menu.peek();
+        let t_menu = *self.grid.menu.peek();
         if let Some(menu) = t_menu {
             let (btn_id, pop_id) = match menu {
                 super::writing::TableMenu::Column(t, c) => {
@@ -204,18 +220,18 @@ impl Writing {
                 }
             };
             if !inside(&btn_id) && !inside(&pop_id) {
-                self.table_menu.set(None);
+                self.grid.menu.set(None);
             }
         }
-        let b_menu = *self.block_menu.peek();
+        let b_menu = *self.handles.menu.peek();
         if let Some(b) = b_menu
             && !inside("block-menu")
             && !inside(&format!("block-handle-{b}"))
         {
-            self.block_menu.set(None);
+            self.handles.menu.set(None);
         }
-        if self.slash_menu.peek().is_some() && !inside("slash-menu") {
-            self.slash_menu.set(None);
+        if self.slash.menu.peek().is_some() && !inside("slash-menu") {
+            self.slash.menu.set(None);
         }
         let c_menu = *self.callout_menu.peek();
         if let Some(start) = c_menu
@@ -231,24 +247,24 @@ impl Writing {
         {
             self.code_lang_menu.set(None);
         }
-        if self.link_card.peek().is_some() && !inside("link-card") {
-            if *self.link_editing.peek() || !inside("paper") {
+        if self.links.card.peek().is_some() && !inside("link-card") {
+            if *self.links.editing.peek() || !inside("paper") {
                 self.dismiss_link_card();
             }
         }
     }
 
     pub(super) fn clear_cells(mut self) {
-        if self.cells.peek().is_some() {
-            self.cells.set(None);
+        if self.grid.cells.peek().is_some() {
+            self.grid.cells.set(None);
         }
-        if *self.cell_editing.peek() {
-            self.cell_editing.set(false);
+        if *self.grid.editing.peek() {
+            self.grid.editing.set(false);
         }
     }
 
     pub(super) fn keep_cells_in(self, field: Field) {
-        if let Some((index, rect)) = *self.cells.peek()
+        if let Some((index, rect)) = *self.grid.cells.peek()
             && !matches!(field, Field::Cell(t,r,c) if t == index && rect.rows().contains(&r) && rect.cols().contains(&c))
         {
             self.clear_cells();
@@ -257,9 +273,9 @@ impl Writing {
 
     pub(super) fn select_cells(mut self, t: usize, rect: table::CellRect) {
         let [r, c] = rect.head;
-        self.table_menu.set(None);
-        self.cells.set((rect.count() > 1).then_some((t, rect)));
-        self.cell_editing.set(false);
+        self.grid.menu.set(None);
+        self.grid.cells.set((rect.count() > 1).then_some((t, rect)));
+        self.grid.editing.set(false);
         self.focus_cell(t, r, c);
     }
 
@@ -273,7 +289,7 @@ impl Writing {
         if result.is_ok() {
             self.focus_cell(t, r, c);
         }
-        self.cell_editing.set(false);
+        self.grid.editing.set(false);
         report(result, self.message);
     }
 
@@ -304,7 +320,7 @@ impl Writing {
             self.note.peek().remember_selection(range);
         }
         self.clear_cells();
-        self.table_menu.set(None);
+        self.grid.menu.set(None);
         let result = self.note.write().splice(&edits);
         if result.is_ok() {
             self.focus_cell(t, r, c);
@@ -316,7 +332,7 @@ impl Writing {
     pub(super) fn cell_range(self, t: usize) -> Option<table::CellRect> {
         let grid = self.tables.read();
         let (height, width) = (grid[t].rows.len(), grid[t].width());
-        self.cells
+        self.grid.cells
             .peek()
             .as_ref()
             .filter(|(index, rect)| {
@@ -356,11 +372,11 @@ impl Writing {
             };
             self.select_cells(t, next);
         } else if let Some(rect) = rect {
-            let editing = *self.cell_editing.peek();
+            let editing = *self.grid.editing.peek();
             match key {
                 Key::Named(NamedKey::Tab) if (mods - Modifiers::SHIFT).is_empty() => {
                     let [row, col] = rect.step(r, c, mods.shift());
-                    self.cell_editing.set(false);
+                    self.grid.editing.set(false);
                     self.focus_cell(t, row, col);
                 }
                 Key::Named(NamedKey::Escape) => {
@@ -423,7 +439,7 @@ impl Writing {
                 )
             )
         {
-            self.quiet_cell.set(None);
+            self.grid.quiet.set(None);
         }
         if self.range_key(t, r, c, &event) || self.document_key(field, &event) {
             return;
@@ -495,7 +511,7 @@ impl Writing {
             Key::Named(NamedKey::Escape) => {
                 event.prevent_default();
                 event.stop_propagation();
-                if self.link_card.peek().is_some() {
+                if self.links.card.peek().is_some() {
                     self.dismiss_link_card();
                 } else {
                     self.grid_exit(t, true);
@@ -529,8 +545,8 @@ impl Writing {
         if self.replace_span_input(field, value) {
             return;
         }
-        if self.cells.peek().is_some() {
-            self.cell_editing.set(true);
+        if self.grid.cells.peek().is_some() {
+            self.grid.editing.set(true);
         }
         let proj = self.projection(field);
         let raw_decoded = table::decoded(&self.contents.read()[self.tables.read()[t].cell(r, c)]);
@@ -604,7 +620,7 @@ pub fn Heading(writing: Writing, field: Field) -> Element {
     drop(logical_blocks);
     let dragging_this = block_idx.is_some_and(|b| {
         writing
-            .block_drag
+            .handles.drag
             .read()
             .is_some_and(|d| d.dragging && d.from == b)
     });
@@ -735,9 +751,9 @@ pub fn Prose(writing: Writing, index: usize, segmented: bool) -> Element {
 
 #[component]
 pub fn BlockHandle(writing: Writing, block_idx: usize, total: usize, top: i32) -> Element {
-    let open = *writing.block_menu.read() == Some(block_idx);
+    let open = *writing.handles.menu.read() == Some(block_idx);
     let is_dragging = writing
-        .block_drag
+        .handles.drag
         .read()
         .is_some_and(|d| d.dragging && d.from == block_idx);
     rsx! {
@@ -765,7 +781,7 @@ pub fn BlockHandle(writing: Writing, block_idx: usize, total: usize, top: i32) -
                     {
                         e.prevent_default();
                         e.stop_propagation();
-                        let next = (*writing.block_menu.peek() != Some(block_idx)).then_some(block_idx);
+                        let next = (*writing.handles.menu.peek() != Some(block_idx)).then_some(block_idx);
                         writing.show_block_menu(next);
                     }
                 },
@@ -939,7 +955,7 @@ fn ColStrip(
                                 icon: crate::Icon::DotsHorizontal,
                                 onclick: move |_| {
                                     let target = super::writing::TableMenu::Column(index, c);
-                                    let next = (*writing.table_menu.peek() != Some(target)).then_some(target);
+                                    let next = (*writing.grid.menu.peek() != Some(target)).then_some(target);
                                     writing.show_table_menu(next);
                                 },
                             }
@@ -997,7 +1013,7 @@ fn RowStrip(
         open_row.or(hover_r)
     };
     // Rows grow with wrapped text; until they are measured the stylesheet's fixed heights apply.
-    let heights = writing.row_heights.read().get(index).cloned().unwrap_or_default();
+    let heights = writing.grid.row_heights.read().get(index).cloned().unwrap_or_default();
     let px = |r: usize, property: &str| {
         heights.get(r).filter(|h| **h > 0.0).map(|h| format!("{property}: {h}px;"))
     };
@@ -1039,7 +1055,7 @@ fn RowStrip(
                                         icon: crate::Icon::DotsVertical,
                                         onclick: move |_| {
                                             let target = super::writing::TableMenu::Row(index, r);
-                                            let next = (*writing.table_menu.peek() != Some(target)).then_some(target);
+                                            let next = (*writing.grid.menu.peek() != Some(target)).then_some(target);
                                             writing.show_table_menu(next);
                                         },
                                     }
@@ -1090,10 +1106,10 @@ fn GridRow(
             for (col, (value, alignment, weight)) in values.into_iter().enumerate() {
                 {
                     let field = Field::Cell(index, row, col);
-                    let selected_rect = writing.cells.read().as_ref().filter(|(i,s)| *i==index && s.rows().contains(&row) && s.cols().contains(&col)).map(|(_,s)|*s);
+                    let selected_rect = writing.grid.cells.read().as_ref().filter(|(i,s)| *i==index && s.rows().contains(&row) && s.cols().contains(&col)).map(|(_,s)|*s);
                     let selected = selected_rect.is_some();
                     let active = *writing.active.read() == Some(field) && writing.span.read().is_none();
-                    let whole_cell = selected && active && !*writing.cell_editing.read();
+                    let whole_cell = selected && active && !*writing.grid.editing.read();
                     let col_targeted = open_col == Some(col);
                     let next_row = (row > 0).then_some(row);
                     let mut mark_hovered = move || {
@@ -1134,7 +1150,7 @@ fn GridRow(
                                     if value.is_empty() { "\u{a0}" } else { "{value}" }
                                 }
                                 textarea {
-                                    id: field.id(), "data-range-keys": if selected && !*writing.cell_editing.read() { "true" }, class: "grid-cell",
+                                    id: field.id(), "data-range-keys": if selected && !*writing.grid.editing.read() { "true" }, class: "grid-cell",
                                     aria_label: format!("Row {}, column {}", row + 1, col + 1), value: "{value}",
                                     onmounted: move |e| {
                                         mounted_field(e, field, writing.focus);
@@ -1247,7 +1263,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
     };
     let rect = selected.map(|(r, c)| {
         writing
-            .cells
+            .grid.cells
             .read()
             .as_ref()
             .filter(|(i, _)| *i == index)
@@ -1257,7 +1273,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
                 head: [r, c],
             })
     });
-    let active_menu = *writing.table_menu.read();
+    let active_menu = *writing.grid.menu.read();
     let menu_in_table = matches!(
         active_menu,
         Some(super::writing::TableMenu::Column(t, _) | super::writing::TableMenu::Row(t, _))
@@ -1294,7 +1310,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
     };
     let dragging_this = table_block_idx.is_some_and(|b| {
         writing
-            .block_drag
+            .handles.drag
             .read()
             .is_some_and(|d| d.dragging && d.from == b)
     });
@@ -1302,7 +1318,7 @@ pub fn Grid(writing: Writing, index: usize) -> Element {
         div { id: "grid-{index}", class: "grid-block ledger block-wrap", class: if rect.is_some() || hovered() || within() || menu_in_table { "engaged is-active-block" }, class: if dragging_this { "is-dragging-source" },
             onkeydown:move |e| {
                 if menu_in_table && e.key()==Key::Named(NamedKey::Escape) {
-                    e.prevent_default(); e.stop_propagation(); writing.table_menu.set(None);
+                    e.prevent_default(); e.stop_propagation(); writing.grid.menu.set(None);
                     if let Some((r,c))=selected && let Some(root)=writing.root.peek().clone() {
                         let mut doc = root.doc_mut();
                         if let Some(id) = doc.get_element_by_id(&Field::Cell(index,r,c).id()) { doc.set_focus_to(id); }

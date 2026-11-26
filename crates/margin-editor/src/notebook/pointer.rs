@@ -219,7 +219,7 @@ impl Writing {
             {
                 e.prevent_default();
                 e.stop_propagation();
-                let inside_rect = self.cells.peek().is_some_and(|(idx, rect)| {
+                let inside_rect = self.grid.cells.peek().is_some_and(|(idx, rect)| {
                     idx == t && rect.rows().contains(&r) && rect.cols().contains(&c)
                 });
                 if !inside_rect {
@@ -242,13 +242,13 @@ impl Writing {
         let Some(hit) = self.hit(p.x, p.y) else {
             return;
         };
-        if self.link_dismissed.peek().is_some() && self.link_at_pos(hit.field, hit.pos).is_some() {
-            self.link_dismissed.set(None);
+        if self.links.dismissed.peek().is_some() && self.link_at_pos(hit.field, hit.pos).is_some() {
+            self.links.dismissed.set(None);
         }
-        self.table_menu.set(None);
-        self.quiet_cell.set(None);
+        self.grid.menu.set(None);
+        self.grid.quiet.set(None);
         let previous = *self.active.peek();
-        let prior_rect = *self.cells.peek();
+        let prior_rect = *self.grid.cells.peek();
         if e.modifiers().shift()
             && let (Some(Field::Cell(t, r, c)), Field::Cell(other, row, col)) =
                 (previous, hit.field)
@@ -355,7 +355,7 @@ impl Writing {
     }
 
     pub(super) fn pointer_move(mut self, e: PointerEvent) {
-        let active_bd = *self.block_drag.peek();
+        let active_bd = *self.handles.drag.peek();
         if let Some(mut bd) = active_bd {
             e.prevent_default();
             e.stop_propagation();
@@ -371,7 +371,7 @@ impl Writing {
                 return;
             }
             if !bd.dragging {
-                self.block_menu.set(None);
+                self.handles.menu.set(None);
                 bd.dragging = true;
             }
             if let Some((target, indicator_y)) = self.block_drop_target(y) {
@@ -379,7 +379,7 @@ impl Writing {
                 bd.indicator_y = (target != bd.from && target != bd.from + 1).then_some(indicator_y);
             }
             if active_bd != Some(bd) {
-                self.block_drag.set(Some(bd));
+                self.handles.drag.set(Some(bd));
             }
             return;
         }
@@ -420,14 +420,14 @@ impl Writing {
         };
         if let (Field::Cell(t, r, c), Field::Cell(other, row, col)) = (drag.field, hit.field)
             && t == other
-            && (r != row || c != col || self.cells.peek().is_some())
+            && (r != row || c != col || self.grid.cells.peek().is_some())
         {
             e.prevent_default();
             let rect = crate::table::CellRect {
                 anchor: [r, c],
                 head: [row, col],
             };
-            if *self.cells.peek() != Some((t, rect)) {
+            if *self.grid.cells.peek() != Some((t, rect)) {
                 self.select_cells(t, rect);
             }
             if !drag.across {
@@ -530,13 +530,13 @@ impl Writing {
     }
 
     pub(super) fn finish_block_drag(mut self) {
-        let Some(bd) = self.block_drag.take() else {
+        let Some(bd) = self.handles.drag.take() else {
             return;
         };
         if bd.dragging {
             self.move_block_to_slot(bd.from, bd.target);
         } else {
-            let next = (*self.block_menu.peek() != Some(bd.from)).then_some(bd.from);
+            let next = (*self.handles.menu.peek() != Some(bd.from)).then_some(bd.from);
             self.show_block_menu(next);
         }
     }
@@ -556,7 +556,7 @@ impl Writing {
     }
 
     pub(super) fn end_drag(mut self) {
-        if self.block_drag.peek().is_some() {
+        if self.handles.drag.peek().is_some() {
             self.finish_block_drag();
         }
         if self.drag.peek().is_some() {
