@@ -28,6 +28,7 @@ use margin_editor_core::topics as model;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::watch;
 
 /// The window's layout; components bring their own styles (`ui::CSS`).
 const CSS: &str = include_str!("topics.css");
@@ -138,7 +139,7 @@ struct Ui {
     filter: Signal<Option<Source>>,
     filed: Signal<HashMap<String, String>>,
     error: Signal<Option<String>>,
-    generation: Signal<u32>,
+    refresh: Callback<()>,
     chat: Signal<ChatState>,
     /// The agent's reply while it streams in.
     pending: Signal<Option<ChatLine>>,
@@ -168,13 +169,22 @@ impl Ui {
     }
 
     fn go(mut self, place: Place) {
+        if place == Place::Today
+            && *self.place.peek() == Place::Today
+            && *self.pane.peek() == Pane::Tab
+        {
+            return;
+        }
         self.place.set(place);
         self.tab.set(Tab::Overview);
-        self.pane.set(Pane::Tab);
+        self.open(Pane::Tab);
         self.filter.set(None);
     }
 
     fn open(mut self, pane: Pane) {
+        if pane == Pane::Tab && *self.place.peek() == Place::Today {
+            self.refresh.call(());
+        }
         self.pane.set(pane);
     }
 
@@ -191,8 +201,25 @@ impl Ui {
         }
     }
 
-    fn refresh(mut self) {
-        *self.generation.write() += 1;
+    async fn load_workspaces(mut self, mut requests: watch::Receiver<()>) {
+        requests.mark_changed(); // Load once when the window opens.
+        while requests.changed().await.is_ok() {
+            let Some(live) = self.live() else { continue };
+            let result = work(move || load(&live)).await;
+            // Requests received during the read become one follow-up load.
+            if requests.has_changed().unwrap_or(true) {
+                continue;
+            }
+            match result {
+                Ok(loaded) => {
+                    self.ws.set(Some(loaded.ws));
+                    self.turns.set(loaded.turns);
+                    self.pages.set(loaded.pages);
+                    self.error.set(loaded.warning);
+                }
+                Err(e) => self.error.set(Some(e)),
+            }
+        }
     }
 }
 
@@ -225,6 +252,7 @@ pub fn Shell(start: Start) -> Element {
         }
         Endpoints::load().map(|e| Backend::Live(Live::new(e)))
     });
+    let (request, refreshes) = use_hook(|| watch::channel(()));
     let ui = Ui {
         ws: use_signal(|| boot.as_ref().ok().and_then(Backend::initial)),
         error: use_signal(|| boot.clone().err()),
@@ -234,31 +262,14 @@ pub fn Shell(start: Start) -> Element {
         pane: use_signal(|| start.doc.clone().map_or(Pane::Tab, Pane::Doc)),
         filter: use_signal(|| None),
         filed: use_signal(HashMap::new),
-        generation: use_signal(|| 0),
+        refresh: use_callback(move |()| request.send_replace(())),
         chat: use_signal(ChatState::default),
         pending: use_signal(|| None),
         turns: use_signal(HashMap::new),
         pages: use_signal(HashMap::new),
     };
     use_context_provider(|| ui);
-    use_effect(move || {
-        let _ = (ui.generation)();
-        let Some(live) = ui.live() else {
-            return;
-        };
-        spawn(async move {
-            let mut ui = ui;
-            match work(move || load(&live)).await {
-                Ok(loaded) => {
-                    ui.ws.set(Some(loaded.ws));
-                    ui.turns.set(loaded.turns);
-                    ui.pages.set(loaded.pages);
-                    ui.error.set(loaded.warning);
-                }
-                Err(e) => ui.error.set(Some(e)),
-            }
-        });
-    });
+    use_future(move || ui.load_workspaces(refreshes.clone()));
     // The chat panel follows the current place.
     use_effect(move || {
         let session = ui.session();
@@ -332,7 +343,11 @@ fn date_box(iso: &str, today: &str) -> Element {
 fn Sidebar() -> Element {
     let ui = use_context::<Ui>();
     let query = use_signal(String::new);
-    let today_count = use_memo(move || ui.ws.read().as_ref().map_or(0, |w| upcoming(w, 7).len()));
+    let today_count = use_memo(move || {
+        ui.ws.read().as_ref().map_or(0, |w| {
+            upcoming_reminders(w, 7).count() + upcoming_key_dates(w, 7).count()
+        })
+    });
     let q = query.read().trim().to_lowercase();
     let ws = ui.ws.read();
     let place = (ui.place)();
@@ -395,29 +410,38 @@ fn Sidebar() -> Element {
             }
             div { class: "sfoot",
                 {footer}
-                Button { label: "Refresh", variant: Variant::Ghost, class: "refresh", onclick: move |_| ui.refresh() }
+                Button { label: "Refresh", variant: Variant::Ghost, class: "refresh", onclick: ui.refresh }
             }
         }
     }
 }
 
-/// Today's agenda: entries within `days` of today, each under the topic it
-/// belongs to.
-fn upcoming(w: &Workspace, days: i64) -> Vec<(Agenda, TopicTag)> {
-    let Some(today) = dates::parse_date(&w.today) else {
-        return Vec::new();
-    };
-    let mut out: Vec<(Agenda, TopicTag)> = w
-        .all()
-        .flat_map(|t| {
-            t.agenda
-                .iter()
-                .filter(|a| a.primary && dates::parse_date(&a.sort).is_some_and(|d| (today..today + days).contains(&d)))
-                .map(move |a| (a.clone(), TopicTag::from(t)))
+fn coming_days(w: &Workspace, days: i64) -> std::ops::Range<i64> {
+    dates::parse_date(&w.today).map(|today| today..today + days).unwrap_or_default()
+}
+
+fn upcoming_key_dates(w: &Workspace, days: i64) -> impl Iterator<Item = &KeyDate> {
+    let window = coming_days(w, days);
+    w.key_dates.iter().filter(move |entry| window.contains(&entry.day))
+}
+
+/// Reminders due in the window, each paired with its owning topic.
+fn upcoming_reminders(w: &Workspace, days: i64) -> impl Iterator<Item = (&Agenda, &TopicView)> {
+    let window = coming_days(w, days);
+    w.all()
+        .flat_map(|topic| topic.agenda.iter().map(move |reminder| (reminder, topic)))
+        .filter(move |(reminder, _)| {
+            reminder.primary
+                && dates::parse_date(&reminder.sort).is_some_and(|day| window.contains(&day))
         })
+}
+
+fn upcoming(w: &Workspace, days: i64) -> Vec<(Agenda, TopicTag)> {
+    let mut rows: Vec<_> = upcoming_reminders(w, days)
+        .map(|(reminder, topic)| (reminder.clone(), TopicTag::from(topic)))
         .collect();
-    out.sort_by(|a, b| a.0.sort.cmp(&b.0.sort));
-    out
+    rows.sort_by(|a, b| a.0.sort.cmp(&b.0.sort));
+    rows
 }
 
 // ── Center ──────────────────────────────────────────────────────────────────
@@ -796,7 +820,9 @@ struct ShoppingItem {
 /// What Today shows, derived from the workspace.
 #[derive(Clone, Debug, PartialEq)]
 struct TodayData {
+    key_dates: Vec<KeyDate>,
     agenda: Vec<(Agenda, TopicTag)>,
+    reminders_unavailable: bool,
     /// Unread threads when there are some, else the most recent ones.
     threads: Vec<(ThreadRow, String)>,
     unread: bool,
@@ -836,7 +862,9 @@ fn today_data(w: &Workspace) -> TodayData {
         })
         .collect();
     TodayData {
+        key_dates: upcoming_key_dates(w, 21).cloned().collect(),
         agenda: upcoming(w, 21),
+        reminders_unavailable: w.reminders_unavailable,
         threads,
         unread,
         shopping,
@@ -855,13 +883,28 @@ fn Today() -> Element {
         div { class: "crumb", "{d.label}" }
         div { class: "head", div { class: "grow",
             h1 { "Today" }
-            div { class: "meta", "{d.agenda.len()} reminders in the next three weeks · {d.threads.len()} recent discussions · across {d.topics} topics" }
+            div { class: "meta",
+                if !d.reminders_unavailable { "{d.agenda.len()} reminders in the next three weeks · " }
+                "{d.threads.len()} recent discussions · across {d.topics} topics"
+            }
         } }
         div { class: "ov spaced",
             div { class: "ov-col l",
+                if !d.key_dates.is_empty() {
+                    Card {
+                        CardTitle { text: "Key dates", icon: Icon::Pin, action: "Open Planning →",
+                            onaction: move |_| ui.open(Pane::Doc(model::PLANNING_PAGE.into())) }
+                        Rows {
+                            for entry in &d.key_dates {
+                                div { class: "ui-row", MarkdownView { text: entry.markdown.clone(), compact: true } }
+                            }
+                        }
+                    }
+                }
                 Card {
                     CardTitle { text: "Coming up", icon: Icon::Calendar }
-                    if d.agenda.is_empty() { div { class: "empty small", "Nothing due in the next three weeks." } }
+                    if d.reminders_unavailable { div { class: "empty small", "Reminders are unavailable." } }
+                    else if d.agenda.is_empty() { div { class: "empty small", "Nothing due in the next three weeks." } }
                     Rows {
                         for (a, t) in d.agenda.iter() {
                             AgendaRow { today: d.today.clone(), agenda: a.clone(), topic: Some(t.clone()) }
@@ -1258,7 +1301,7 @@ fn Pairing() -> Element {
                     }
                     chat.set(ChatState::default());
                     code.set(String::new());
-                    ui.refresh();
+                    ui.refresh.call(());
                 }
                 Err(e) => chat.write().error = Some(e),
             }
@@ -1347,6 +1390,46 @@ mod tests {
         assert_eq!((s.place, s.tab, s.doc), (Place::Topic("house".into()), Tab::Overview, None));
         let s = Start::new(false, Some("inbox"), Some("questions"), Some("car/log.md"));
         assert_eq!((s.place, s.tab, s.doc.as_deref()), (Place::Inbox, Tab::Questions, Some("car/log.md")));
+    }
+
+    #[test]
+    fn returning_to_today_requests_a_refresh_once_per_navigation() {
+        use dioxus_native::DioxusDocument;
+
+        let start = Start::new(true, Some("today"), None, None);
+        let dom = VirtualDom::new_with_props(Shell, ShellProps { start });
+        let mut doc = DioxusDocument::new(dom, Default::default());
+        doc.initial_build();
+        doc.vdom.in_scope(ScopeId::APP, || {
+            let mut ui = consume_context::<Ui>();
+            let mut requests = Signal::new(0);
+            ui.refresh = Callback::new(move |()| *requests.write() += 1);
+
+            ui.go(Place::Today);
+            ui.go(Place::Inbox);
+            assert_eq!(*requests.peek(), 0);
+            ui.go(Place::Today);
+            ui.go(Place::Today);
+            assert_eq!(*requests.peek(), 1);
+            ui.open(Pane::Doc(model::PLANNING_PAGE.into()));
+            ui.open(Pane::Tab);
+            assert_eq!(*requests.peek(), 2);
+        });
+    }
+
+    #[test]
+    fn today_shows_planning_dates_even_without_a_deadline_reminder() {
+        let md = "## Key dates\n- 2031-04-07 Old\n- 2031-04-08 Appointment\n- 2031-04-14 Visit\n- 2031-04-28 Concert\n- 2031-04-29 Later";
+        let w = Workspace {
+            today: "2031-04-08".into(),
+            key_dates: model::key_dates(md),
+            ..Default::default()
+        };
+        let today = today_data(&w);
+        assert!(today.agenda.is_empty());
+        assert_eq!(today.key_dates.iter().map(|d| d.markdown.as_str()).collect::<Vec<_>>(),
+            ["2031-04-08 Appointment", "2031-04-14 Visit", "2031-04-28 Concert"]);
+        assert_eq!(upcoming_key_dates(&w, 7).count(), 2);
     }
 
     #[test]

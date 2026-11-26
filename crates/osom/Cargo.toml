@@ -20,6 +20,7 @@ margin-hub = { path = "../margin-hub" }
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
 webbrowser = "1.2"
 clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["sync"] }
 
 [dev-dependencies]
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false }

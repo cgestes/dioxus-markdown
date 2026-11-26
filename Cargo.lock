@@ -4534,6 +4534,7 @@ dependencies = [
  "margin-hub",
  "margin-ui",
  "png 0.18.1",
+ "tokio",
  "webbrowser",
 ]
 

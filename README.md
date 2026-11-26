@@ -52,6 +52,8 @@ Use `margin-vault compact NOTE_ID` to request compaction immediately. `revoke --
 
 `osom topics` (the Osom app) opens a three-pane window over a [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) agent and the [SilverBullet](https://silverbullet.md) space it keeps, both reached over Tailscale. Topics are the space's folders (`car/`, `wedding/`) and person pages (`people/<name>`). Each topic page has an Overview (its README rendered), Discussions (the Telegram groups, Slack threads and Margin chats the space README routes to it), Calendar (its rows of `reminders.md`), Questions (`questions.md`), Docs and Lists. The right pane chats with the agent in the session `topic-<id>`. Docs open in the Live editor and save back with SilverBullet's `If-Match`, so an edit never overwrites a newer change by the agent. Comments on those pages are answered by a read-only agent that proposes replacements. Margin applies them, and threads are saved next to the page in `_margin/comments/`. [Comments backend](docs/comments-backend.md) [Design](docs/topics-design.md) · [Native window](mockup/topics-native.png) · [Browser mockup](mockup/topics.html)
 
+On **Today**, **Key dates** shows the next three weeks of entries from the `Key dates` section of `planning/README.md`. Give each list entry an ISO date such as `2031-04-08`. **Open Planning** opens the source for editing. **Coming up** shows open items from `reminders.md` by their next ping, or their deadline when no ping is set. Returning to Today or clicking **Refresh** rereads the space. ZeroClaw runs the notification jobs.
+
 | Command | What it does |
 | --- | --- |
 | `cargo run --locked -p osom -- topics --demo` | The designed window with sample data. No network. |

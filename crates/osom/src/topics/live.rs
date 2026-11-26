@@ -9,6 +9,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(test)]
+mod tests;
+
 /// The space and the agent, once configured.
 #[derive(Clone)]
 pub(super) struct Live {
@@ -99,6 +102,7 @@ fn parallel<T: Sync, R: Send>(items: &[T], workers: usize, f: impl Fn(&T) -> Opt
 
 /// Connections the loader keeps busy at once (see `hub`'s idle pool).
 const WORKERS: usize = 8;
+const REMINDERS_PAGE: &str = "reminders.md";
 
 /// Everything read from the space.
 #[derive(Default)]
@@ -106,6 +110,8 @@ struct SpaceData {
     topics: Vec<Topic>,
     routes: Vec<model::Route>,
     reminders: Vec<Reminder>,
+    /// Listed agenda pages still unreadable after a retry.
+    agenda_errors: Vec<(&'static str, String)>,
     /// Registry pages → relationship (`people/alex-sample.md` → `Partner`).
     relations: HashMap<String, String>,
     pages: HashMap<String, Page>,
@@ -123,15 +129,11 @@ fn read_all(space: &Space, paths: &[&str]) -> HashMap<String, Page> {
 fn load_space(space: &Space) -> Result<SpaceData, String> {
     // The listing, the routes and the reminders at once, then every page.
     let (files, mut pages) = std::thread::scope(|s| {
-        let roots = s.spawn(|| read_all(space, &["README.md", "reminders.md"]));
+        let roots = s.spawn(|| read_all(space, &["README.md", REMINDERS_PAGE]));
         (space.list(), roots.join().unwrap_or_default())
     });
     let files = files?;
     let readme = pages.remove("README.md").map(|p| p.text).unwrap_or_default();
-    let reminders = pages
-        .remove("reminders.md")
-        .map(|p| model::reminders(&p.text))
-        .unwrap_or_default();
     let mut topics = model::topics(&files);
     let routes = model::routes(&readme);
     model::promote_routed_pages(&mut topics, &routes);
@@ -140,7 +142,24 @@ fn load_space(space: &Space) -> Result<SpaceData, String> {
         .flat_map(|t| t.files.iter().map(String::as_str))
         .filter(|f| f.ends_with(".md"))
         .collect();
-    let pages = read_all(space, &wanted);
+    pages.extend(read_all(space, &wanted));
+    let mut agenda_errors = Vec::new();
+    for path in [REMINDERS_PAGE, model::PLANNING_PAGE] {
+        if pages.contains_key(path) || !files.iter().any(|f| f.name == path) {
+            continue;
+        }
+        match space.read_optional(path) {
+            Ok(Some(page)) => {
+                pages.insert(page.path.clone(), page);
+            }
+            Ok(None) => {} // Deleted between the listing and the read.
+            Err(error) => agenda_errors.push((path, error)),
+        }
+    }
+    let reminders = pages
+        .remove(REMINDERS_PAGE)
+        .map(|p| model::reminders(&p.text))
+        .unwrap_or_default();
     model::retitle_all(&mut topics, &|p| pages.get(p).map(|page| page.text.as_str()));
     let relations = model::REGISTRIES
         .iter()
@@ -151,6 +170,7 @@ fn load_space(space: &Space) -> Result<SpaceData, String> {
         topics,
         routes,
         reminders,
+        agenda_errors,
         relations,
         pages,
         sizes: files.into_iter().map(|f| (f.name, f.size)).collect(),
@@ -200,11 +220,17 @@ pub(super) fn load(live: &Live) -> Result<Loaded, String> {
         None => (Chats::default(), None),
     };
     let ws = live_workspace(&data, &chats, live, dates::now());
+    let warnings: Vec<_> = data
+        .agenda_errors
+        .into_iter()
+        .map(|(path, error)| format!("Could not read {path} ({error})"))
+        .chain(warning)
+        .collect();
     Ok(Loaded {
         ws,
         pages: data.pages,
         turns: chats.turns,
-        warning,
+        warning: (!warnings.is_empty()).then(|| warnings.join("\n")),
     })
 }
 
@@ -422,6 +448,8 @@ fn live_workspace(d: &SpaceData, chats: &Chats, live: &Live, now: i64) -> Worksp
         .collect();
     Workspace {
         topics: d.topics.iter().map(|t| live_topic(t, &cx)).collect(),
+        key_dates: d.pages.get(model::PLANNING_PAGE).map(|p| model::key_dates(&p.text)).unwrap_or_default(),
+        reminders_unavailable: d.agenda_errors.iter().any(|(path, _)| *path == REMINDERS_PAGE),
         inbox,
         inbox_title: "Unfiled".into(),
         inbox_note: "Chats no README route files under a topic. Add their chat id to the channel map to file them.".into(),

@@ -1,6 +1,6 @@
 //! What the Topics window shows, whatever it came from: the live space
 //! (SilverBullet + ZeroClaw) or the demo data in `topics_demo`.
-pub use margin_editor_core::topics::{Question as QuestionRow, Source, Turn as ChatLine};
+pub use margin_editor_core::topics::{KeyDate, Question as QuestionRow, Source, Turn as ChatLine};
 
 pub use margin_ui::{Hue, Icon};
 
@@ -153,6 +153,8 @@ pub struct InboxItem {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Workspace {
     pub topics: Vec<TopicView>,
+    pub key_dates: Vec<KeyDate>,
+    pub reminders_unavailable: bool,
     pub inbox: Vec<InboxItem>,
     /// `Inbox` for turns a classifier would file, `Unfiled` for chats no
     /// route files.

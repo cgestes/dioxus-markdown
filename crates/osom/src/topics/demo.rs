@@ -915,6 +915,8 @@ pub fn workspace() -> Workspace {
     topics.iter_mut().for_each(link_pages);
     Workspace {
         topics,
+        key_dates: Vec::new(),
+        reminders_unavailable: false,
         inbox: vec![
             inbox_item(
                 1,
