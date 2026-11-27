@@ -62,6 +62,9 @@ On **Today**, **Key dates** shows the next three weeks of entries from the `Key 
 | `osom comment-test <page> "<quote>" "<request>"` | Asks the comment agent about a passage of a page, as a new comment thread would, and prints its reply and proposed edit. Uses a throwaway session. |
 | `osom topics --print` | Lists topics with their reminder, discussion, question and doc counts. |
 | `scripts/bundle-osom.sh` | Builds `target/Osom.app`, the Topics window as a double-clickable macOS app. Its icon is drawn at build time by `scripts/osom-icon.swift`. |
+| `scripts/build-osom-web.sh` | Builds `target/osom-web/`, the Dioxus Web build of Osom (same UI, live only — no Margin or demos) ready for Tailscale hosting. |
+| `scripts/serve-osom-web.sh <dir>` | Configures `tailscale serve` on the ZeroClaw host to serve `osom-web` on one HTTPS origin (`/_space` → SilverBullet, `/_zeroclaw` → ZeroClaw, `/` → static bundle) with zero CORS setup. |
+| `scripts/release-osom.sh <tag>` | Builds `Osom.app` and `osom-web` and publishes them to a GitHub Release via `gh` (also automated on `osom-v*` tags in `.github/workflows/release-osom.yml`). |
 | `margin ui` | The design system's gallery: every component in every state, and Markdown as the editor crate draws it. `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints the components to `target/ui-gallery.png`. [Design system](docs/design-system.md) |
 | `cargo test -p osom topics_shots -- --ignored` | Paints each view to `target/topics-shots`. Add `MARGIN_TOPICS_LIVE=1` for the live space. |
 
@@ -168,7 +171,8 @@ A crate depends only on crates listed above it, and each heavy dependency enters
 | `crates/margin-editor` | The Markdown editor: Rich, Live and Source views, tables, comments, undo, on Blitz (native) or Dioxus Web (browser). The app that opens it decides where the note lives (`NoteStore`: a vault, a sync file, a page on a server) and who answers comments (`AgentChat`). Also Markdown to read (`MarkdownView`). | Dioxus Native, Blitz |
 | `crates/margin` | `margin`, the notebook app: your personal vault (`--features vault`), a sync file or the Field notes sample, and the gallery (`margin ui`) | clap |
 | `crates/margin-web` | `margin-web`, the notebook in a browser page, installable as a web app (`dx serve --web --package margin-web`) | Dioxus Web |
-| `crates/osom` | The Topics window (`osom`) | |
+| `crates/osom` | The Topics window (`osom`), shared between native macOS and `osom-web` | |
+| `crates/osom-web` | `osom-web`, the live Osom browser app (`scripts/build-osom-web.sh`), built for tailnet hosting alongside ZeroClaw | Dioxus Web |
 | `crates/margin-vault-cli` | `margin-vault`, the vault from the terminal | |
 
 Loro is the document model in every build: it merges your edits with an agent's and gives undo that restores the selection. [Why Loro stays](docs/decisions/0001-loro-is-the-document-model.md)

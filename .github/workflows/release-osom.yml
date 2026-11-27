@@ -1,0 +1,119 @@
+name: Release Osom
+
+on:
+  push:
+    tags:
+      - "osom-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. osom-v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: Build Osom.app (macOS arm64)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Resolve release tag
+        id: meta
+        shell: bash
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Bundle Osom.app
+        run: ./scripts/bundle-osom.sh
+
+      - name: Archive Osom.app
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent target/Osom.app "dist/Osom-${{ steps.meta.outputs.tag }}-macos-arm64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osom-macos
+          path: dist/*.zip
+
+  web:
+    name: Build osom-web (static Tailscale bundle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Resolve release tag
+        id: meta
+        shell: bash
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Cache dioxus-cli
+        id: dx-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/dx
+          key: dx-0a7242a2a72b08975584bf8ecb05076a5ee0b9c7-${{ runner.os }}
+
+      - name: Install dioxus-cli
+        if: steps.dx-cache.outputs.cache-hit != 'true'
+        run: cargo install --git https://github.com/DioxusLabs/dioxus --rev 0a7242a2a72b08975584bf8ecb05076a5ee0b9c7 dioxus-cli --locked
+
+      - name: Bundle osom-web
+        run: ./scripts/build-osom-web.sh
+
+      - name: Archive osom-web
+        run: |
+          mkdir -p dist
+          tar -C target/osom-web -czf "dist/osom-web-${{ steps.meta.outputs.tag }}.tar.gz" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osom-web
+          path: dist/*.tar.gz
+
+  release:
+    name: Publish GitHub Release
+    needs: [macos, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          gh release create "$tag" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "Osom $tag" \
+            --notes "### macOS app
+          Download \`Osom-${tag}-macos-arm64.zip\`, unzip, and move **Osom.app** to \`/Applications\`.
+
+          ### Web app (self-hosted on your ZeroClaw machine via Tailscale)
+          Unpack \`osom-web-${tag}.tar.gz\` on your ZeroClaw host and expose it over Tailscale Serve:
+          \`\`\`sh
+          mkdir -p ~/osom-web && tar -xzf osom-web-${tag}.tar.gz -C ~/osom-web
+          tailscale serve --bg --https=8444 --set-path=/_space    http://127.0.0.1:3000
+          tailscale serve --bg --https=8444 --set-path=/_zeroclaw http://127.0.0.1:42617
+          tailscale serve --bg --https=8444 --set-path=/          ~/osom-web
+          \`\`\`"
