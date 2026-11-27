@@ -1,0 +1,20 @@
+[package]
+name = "osom-web"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# `osom-web`: Osom in a browser page (Dioxus Web), sharing `osom::Shell` with
+# the native app. Built for tailnet hosting alongside ZeroClaw & SilverBullet
+# (no Margin notebook, no demo data).
+[[bin]]
+name = "osom-web"
+path = "src/main.rs"
+
+[dependencies]
+osom = { path = "../osom" }
+margin-runtime = { path = "../margin-runtime" }
+margin-ui = { path = "../margin-ui" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Window", "Location"] }

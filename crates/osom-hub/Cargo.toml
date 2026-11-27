@@ -5,17 +5,35 @@ edition = "2024"
 publish = false
 
 # Osom's network access: SilverBullet (the space) and ZeroClaw (the agent)
-# over the tailnet (native-tls uses the system trust store), and the device
-# token. It implements the core's agent and page-file interfaces.
+# over the tailnet, using one shared async transport (`reqwest` + shared
+# `/ws/chat` protocol) on both native and wasm32.
 [dependencies]
+futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
 margin-core = { path = "../margin-core" }
 osom-topics = { path = "../osom-topics" }
 percent-encoding = "2.3"
+reqwest = { version = "0.13", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# The transports: blocking HTTP and WebSocket.
-tungstenite = { version = "0.29", features = ["native-tls"] }
-ureq = { version = "3.5", default-features = false, features = ["native-tls-no-default"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "sync", "time"] }
+tokio-tungstenite = { version = "0.29", features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+futures-channel = "0.3"
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = [
+    "CloseEvent",
+    "ErrorEvent",
+    "Location",
+    "MessageEvent",
+    "Storage",
+    "WebSocket",
+    "Window",
+] }

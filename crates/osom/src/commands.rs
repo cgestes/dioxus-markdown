@@ -32,7 +32,7 @@ fn setup(space: &str, zeroclaw: &str, agent: &str) -> Result<(), String> {
 
 fn pair(code: &str) -> Result<(), String> {
     let e = Endpoints::load()?;
-    let sessions = hub::pair(&e, code)?.sessions()?;
+    let sessions = hub::block_on(async { hub::pair(&e, code).await?.sessions().await })?;
     println!(
         "Paired with {}. The token is in {}; {} sessions are visible.",
         e.zeroclaw,
@@ -46,8 +46,8 @@ fn pair(code: &str) -> Result<(), String> {
 /// on a new thread, on a throwaway session; print what the editor would show.
 fn comment_test(page: &str, quote: &str, request: &str) -> Result<(), String> {
     let e = Endpoints::load()?;
-    let zc = e.zeroclaw();
-    let md = Space::new(&e.space).read(page)?.text;
+    let zc = std::sync::Arc::new(e.zeroclaw());
+    let md = hub::block_on(Space::new(&e.space).read(page))?.text;
     let at = md.find(quote).ok_or_else(|| format!("`{quote}` is not in {page}"))?;
     let t = file::request::turn("connection-test", page, &md, at..at + quote.len(), request, None);
     let ask = Ask {
@@ -57,8 +57,8 @@ fn comment_test(page: &str, quote: &str, request: &str) -> Result<(), String> {
         content: t.content,
         preamble: Some(t.preamble),
     };
-    let answer = worker::answer(&zc, &ask);
-    let cleanup = zc.delete_session(&t.session);
+    let answer = hub::block_on(worker::answer(zc.clone(), ask));
+    let cleanup = hub::block_on(zc.delete_session(&t.session));
     for tool in &answer.tools {
         println!("[{} used {tool}]", e.comment_agent);
     }
@@ -76,7 +76,7 @@ fn comment_test(page: &str, quote: &str, request: &str) -> Result<(), String> {
 
 fn print() -> Result<(), String> {
     let live = Live::new(Endpoints::load()?);
-    let loaded = load(&live)?;
+    let loaded = hub::block_on(load(&live))?;
     for t in loaded.ws.all() {
         println!(
             "{}{} ({})  reminders {} · discussions {} · questions {} · docs {} · lists {}",

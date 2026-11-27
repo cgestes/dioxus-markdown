@@ -6,7 +6,9 @@
 //! its state and the sidebar are here; `today` has Today and the Inbox, `topic`
 //! a topic's page, `pages` a document or transcript in its own pane, and `chat`
 //! the agent's chat and pairing.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod commands;
 mod live;
 mod view;
@@ -26,7 +28,7 @@ use margin_ui::{
     self, Badge, Banner, Button, Card, CardTitle, CheckItem, Chip, Composer, DateBox, Message,
     MessageStyle, NavItem, Row, Rows, ChannelGlyph, SubItem, TabItem, Tabs, TextField, Tile, TileSize, Tone, Variant,
 };
-use margin_runtime::worker::{batch, turn, work};
+use margin_runtime::worker::{ApprovalReply, batch, turn_with_approval};
 use margin_editor::{Comments, Host, HostAction, HostBar, MarkdownView, NotebookOptions, View};
 use margin_ui::prelude::*;
 use margin_core::dates;
@@ -35,6 +37,7 @@ use osom_topics as model;
 use osom_topics::calendar;
 use std::collections::HashMap;
 use std::sync::Arc;
+#[cfg(all(test, not(target_arch = "wasm32")))]
 use std::time::Duration;
 use tokio::sync::watch;
 
@@ -61,8 +64,15 @@ pub struct Start {
 
 impl Start {
     /// The window's start, from the parsed `osom` command line.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_cli(args: &crate::cli::TopicsArgs) -> Self {
         Self::build(args.open.as_deref(), args.tab.unwrap_or(Tab::Overview), args.doc.as_deref())
+    }
+
+    /// The browser app's start, from URL query parameters (`?open=…&tab=…&doc=…`).
+    pub fn for_web(open: Option<&str>, tab: Option<&str>, doc: Option<&str>) -> Self {
+        let tab = tab.and_then(Tab::parse).unwrap_or(Tab::Overview);
+        Self::build(open, tab, doc)
     }
 
     fn build(open: Option<&str>, tab: Tab, doc: Option<&str>) -> Self {
@@ -79,22 +89,28 @@ impl Start {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     fn new(open: Option<&str>, tab: Option<&str>, doc: Option<&str>) -> Self {
-        use clap::ValueEnum;
-        let tab = tab
-            .and_then(|s| Tab::from_str(s, true).ok())
-            .unwrap_or(Tab::Overview);
+        let tab = tab.and_then(Tab::parse).unwrap_or(Tab::Overview);
         Self::build(open, tab, doc)
     }
 }
 
-/// Open `url` in the browser on a thread of its own, so the click returns at once.
+/// Open `url` in a browser tab/window without blocking the UI.
 fn open_url(url: &str) {
-    let url = url.to_owned();
-    std::thread::spawn(move || {
-        let _ = webbrowser::open(&url);
-    });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let url = url.to_owned();
+        std::thread::spawn(move || {
+            let _ = webbrowser::open(&url);
+        });
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(w) = web_sys::window() {
+            let _ = w.open_with_url_and_target(url, "_blank");
+        }
+    }
 }
 
 // ── Window state ────────────────────────────────────────────────────────────
@@ -106,7 +122,8 @@ enum Place {
     Topic(String),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(clap::ValueEnum))]
 pub enum Tab {
     Overview,
     Discussions,
@@ -116,6 +133,22 @@ pub enum Tab {
     Procedures,
     Lists,
     Code,
+}
+
+impl Tab {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "overview" => Some(Self::Overview),
+            "discussions" => Some(Self::Discussions),
+            "calendar" => Some(Self::Calendar),
+            "questions" => Some(Self::Questions),
+            "docs" => Some(Self::Docs),
+            "procedures" => Some(Self::Procedures),
+            "lists" => Some(Self::Lists),
+            "code" => Some(Self::Code),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -136,7 +169,7 @@ struct ChatState {
     /// A tool the agent asks to run: (tool, summary).
     approval: Option<(String, String)>,
     /// Answers the agent's approval request for the turn in flight.
-    reply: Option<std::sync::mpsc::Sender<bool>>,
+    reply: Option<ApprovalReply>,
     error: Option<String>,
 }
 
@@ -213,7 +246,7 @@ impl Ui {
         requests.mark_changed(); // Load once when the window opens.
         while requests.changed().await.is_ok() {
             let Some(live) = self.live() else { continue };
-            let result = work(move || load(&live)).await;
+            let result = load(&live).await;
             // Requests received during the read become one follow-up load.
             if requests.has_changed().unwrap_or(true) {
                 continue;
@@ -253,7 +286,12 @@ impl From<&TopicView> for TopicTag {
 
 #[component]
 pub fn Shell(start: Start) -> Element {
+    #[cfg(not(target_arch = "wasm32"))]
     let boot = use_hook(|| Endpoints::load().map(Live::new));
+    #[cfg(target_arch = "wasm32")]
+    let boot: Result<Live, String> = Ok(Live::new(
+        Endpoints::load_saved().unwrap_or_else(Endpoints::web_defaults),
+    ));
     let (request, refreshes) = use_hook(|| watch::channel(()));
     let ui = Ui {
         ws: use_signal(|| None),
@@ -271,6 +309,22 @@ pub fn Shell(start: Start) -> Element {
         pages: use_signal(HashMap::new),
     };
     use_context_provider(|| ui);
+    #[cfg(target_arch = "wasm32")]
+    use_hook(move || {
+        // If the browser has no saved override, check `config.json` next to the page.
+        if Endpoints::load_saved().is_none() {
+            spawn(async move {
+                if let Ok(endpoints) = Endpoints::load_web().await {
+                    let current = ui.live().map(|l| l.endpoints);
+                    if current.as_ref() != Some(&endpoints) {
+                        let mut live_sig = ui.live;
+                        live_sig.set(Some(Live::new(endpoints)));
+                        ui.refresh.call(());
+                    }
+                }
+            });
+        }
+    });
     use_future(move || ui.load_workspaces(refreshes.clone()));
     // The chat panel follows the current place.
     use_effect(move || {
@@ -292,7 +346,7 @@ pub fn Shell(start: Start) -> Element {
         };
         chat.write().loading = true;
         spawn(async move {
-            let result = work(move || live.zc.messages(&key)).await;
+            let result = live.zc.messages(&key).await;
             if chat.peek().session != session {
                 return;
             }
@@ -422,7 +476,101 @@ fn Sidebar() -> Element {
             }
             div { class: "flex-none mt-1 pt-2.5 px-2 pb-0.5 border-0 border-t border-solid border-line text-faint font-mono text-[10.5px]/[1.6] font-normal [&_strong]:text-ink [&_strong]:font-semibold",
                 {footer}
-                Button { label: "Refresh", variant: Variant::Ghost, class: "mt-1", onclick: ui.refresh }
+                div { class: "flex items-center gap-1 mt-1",
+                    Button { label: "Refresh", variant: Variant::Ghost, onclick: ui.refresh }
+                    {web_settings_control()}
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn web_settings_control() -> Element {
+    rsx! {}
+}
+
+#[cfg(target_arch = "wasm32")]
+fn web_settings_control() -> Element {
+    rsx! { WebSettings {} }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn WebSettings() -> Element {
+    let ui = use_context::<Ui>();
+    let mut open = use_signal(|| false);
+    let current = ui.live().map(|l| l.endpoints).unwrap_or_else(Endpoints::web_defaults);
+    let mut space = use_signal(|| current.space.clone());
+    let mut zeroclaw = use_signal(|| current.zeroclaw.clone());
+    let mut agent = use_signal(|| current.agent.clone());
+    let mut comment_agent = use_signal(|| current.comment_agent.clone());
+    let save = move |_| {
+        let mut next = Endpoints::new(space.peek().trim(), zeroclaw.peek().trim(), agent.peek().trim());
+        let ca = comment_agent.peek().trim().to_string();
+        if !ca.is_empty() {
+            next.comment_agent = ca;
+        }
+        next.space_web = ui.live().map(|l| l.endpoints.space_web).unwrap_or_default();
+        if next.space.is_empty() || next.zeroclaw.is_empty() {
+            return;
+        }
+        let _ = next.save();
+        let mut live_sig = ui.live;
+        live_sig.set(Some(Live::new(next)));
+        open.set(false);
+        ui.refresh.call(());
+    };
+    let reset = move |_| {
+        Endpoints::clear_saved();
+        let mut live_sig = ui.live;
+        open.set(false);
+        spawn(async move {
+            if let Ok(e) = Endpoints::load_web().await {
+                space.set(e.space.clone());
+                zeroclaw.set(e.zeroclaw.clone());
+                agent.set(e.agent.clone());
+                comment_agent.set(e.comment_agent.clone());
+                live_sig.set(Some(Live::new(e)));
+                ui.refresh.call(());
+            }
+        });
+    };
+    rsx! {
+        Button {
+            label: if open() { "Close" } else { "Settings" },
+            variant: Variant::Ghost,
+            onclick: move |_| {
+                if !open() {
+                    if let Some(l) = ui.live() {
+                        space.set(l.endpoints.space);
+                        zeroclaw.set(l.endpoints.zeroclaw);
+                        agent.set(l.endpoints.agent);
+                        comment_agent.set(l.endpoints.comment_agent);
+                    }
+                }
+                open.toggle();
+            }
+        }
+        if open() {
+            div { class: "fixed bottom-12 left-3 z-[20] flex flex-col gap-2 w-[260px] p-3 border border-solid border-line rounded-lg bg-surface text-ink font-sans text-[12px] shadow-pop",
+                div { class: "font-semibold", "Connection" }
+                div { class: "flex h-[30px] px-[9px] border border-solid border-line-strong rounded-md bg-surface font-mono text-[12px]/[30px]",
+                    TextField { value: space, placeholder: "Space URL (/_space)" }
+                }
+                div { class: "flex h-[30px] px-[9px] border border-solid border-line-strong rounded-md bg-surface font-mono text-[12px]/[30px]",
+                    TextField { value: zeroclaw, placeholder: "ZeroClaw URL (/_zeroclaw)" }
+                }
+                div { class: "flex h-[30px] px-[9px] border border-solid border-line-strong rounded-md bg-surface font-mono text-[12px]/[30px]",
+                    TextField { value: agent, placeholder: "Agent alias (home)" }
+                }
+                div { class: "flex h-[30px] px-[9px] border border-solid border-line-strong rounded-md bg-surface font-mono text-[12px]/[30px]",
+                    TextField { value: comment_agent, placeholder: "Comment agent (scribe)" }
+                }
+                div { class: "flex gap-1.5 pt-0.5",
+                    Button { label: "Save", variant: Variant::Primary, onclick: save }
+                    Button { label: "Reset", variant: Variant::Ghost, onclick: reset }
+                }
             }
         }
     }
@@ -449,7 +597,7 @@ fn Center() -> Element {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
 

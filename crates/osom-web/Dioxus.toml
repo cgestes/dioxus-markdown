@@ -1,0 +1,7 @@
+# Dioxus CLI settings for the Osom browser app (`osom-web`).
+# Build with `scripts/build-osom-web.sh` or `dx bundle --web --release --package osom-web`.
+[application]
+name = "Osom"
+
+[web.app]
+title = "Osom"

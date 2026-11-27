@@ -1,13 +1,14 @@
 //! Where the Topics window's data comes from: the live space and agent,
 //! built into a `view::Workspace`.
 use crate::view::*;
+use futures_util::stream::{self, StreamExt};
 use margin_core::{dates, heading};
 use osom_hub::{AgentChat, Endpoints, Page, Space, ZeroClaw};
 use osom_topics::{self as model, Kind, Origin, Reminder, Session, Topic, calendar};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests;
 
 /// The space and the agent, once configured.
@@ -21,7 +22,7 @@ pub(super) struct Live {
 impl Live {
     pub fn new(endpoints: Endpoints) -> Self {
         Self {
-            space: Space::new(&endpoints.space),
+            space: Space::with_web_base(&endpoints.space, &endpoints.space_web),
             zc: endpoints.zeroclaw(),
             endpoints,
         }
@@ -43,26 +44,7 @@ impl Live {
     }
 }
 
-/// Run `f` over `items` on at most `workers` threads, keeping successes.
-fn parallel<T: Sync, R: Send>(items: &[T], workers: usize, f: impl Fn(&T) -> Option<R> + Sync) -> Vec<R> {
-    let next = Mutex::new(items.iter());
-    let out = Mutex::new(Vec::new());
-    std::thread::scope(|s| {
-        for _ in 0..workers.min(items.len()) {
-            s.spawn(|| {
-                loop {
-                    let Some(item) = next.lock().unwrap().next() else { break };
-                    if let Some(r) = f(item) {
-                        out.lock().unwrap().push(r);
-                    }
-                }
-            });
-        }
-    });
-    out.into_inner().unwrap()
-}
-
-/// Connections the loader keeps busy at once (see `hub`'s idle pool).
+/// Concurrent requests the loader keeps in flight at once (matches `osom-hub`'s pool).
 const WORKERS: usize = 8;
 const REMINDERS_PAGE: &str = "reminders.md";
 
@@ -80,37 +62,40 @@ struct SpaceData {
     sizes: HashMap<String, u64>,
 }
 
-/// Read pages, skipping those that fail.
-fn read_all(space: &Space, paths: &[&str]) -> HashMap<String, Page> {
-    parallel(paths, WORKERS, |p| space.read(p).ok())
-        .into_iter()
-        .map(|p| (p.path.clone(), p))
+/// Read pages concurrently, skipping those that fail.
+async fn read_all(space: &Space, paths: Vec<String>) -> HashMap<String, Page> {
+    stream::iter(paths)
+        .map(|p| async move { space.read(&p).await.ok() })
+        .buffer_unordered(WORKERS)
+        .filter_map(|p| async move { p.map(|page| (page.path.clone(), page)) })
         .collect()
+        .await
 }
 
-fn load_space(space: &Space) -> Result<SpaceData, String> {
+async fn load_space(space: &Space) -> Result<SpaceData, String> {
     // The listing, the routes and the reminders at once, then every page.
-    let (files, mut pages) = std::thread::scope(|s| {
-        let roots = s.spawn(|| read_all(space, &["README.md", REMINDERS_PAGE]));
-        (space.list(), roots.join().unwrap_or_default())
-    });
+    let (files, mut pages) = futures_util::future::join(
+        space.list(),
+        read_all(space, vec!["README.md".into(), REMINDERS_PAGE.into()]),
+    )
+    .await;
     let files = files?;
     let readme = pages.remove("README.md").map(|p| p.text).unwrap_or_default();
     let mut topics = model::topics(&files);
     let routes = model::routes(&readme);
     model::promote_routed_pages(&mut topics, &routes);
-    let wanted: Vec<&str> = model::all(&topics)
+    let wanted: Vec<String> = model::all(&topics)
         .into_iter()
-        .flat_map(|t| t.files.iter().map(String::as_str))
+        .flat_map(|t| t.files.iter().cloned())
         .filter(|f| f.ends_with(".md"))
         .collect();
-    pages.extend(read_all(space, &wanted));
+    pages.extend(read_all(space, wanted).await);
     let mut agenda_errors = Vec::new();
     for path in [REMINDERS_PAGE, model::PLANNING_PAGE] {
         if pages.contains_key(path) || !files.iter().any(|f| f.name == path) {
             continue;
         }
-        match space.read_optional(path) {
+        match space.read_optional(path).await {
             Ok(Some(page)) => {
                 pages.insert(page.path.clone(), page);
             }
@@ -146,15 +131,19 @@ struct Chats {
     turns: HashMap<String, Vec<ChatLine>>,
 }
 
-fn load_chats(zc: &ZeroClaw) -> Result<Chats, String> {
-    let sessions = zc.sessions()?;
-    let talked: Vec<&Session> = sessions.iter().filter(|x| x.message_count > 0).collect();
-    let turns = parallel(&talked, WORKERS, |s| {
-        let key = s.key().to_string();
-        zc.messages(&key).ok().map(|m| (key, model::transcript(&m)))
-    })
-    .into_iter()
-    .collect();
+async fn load_chats(zc: &ZeroClaw) -> Result<Chats, String> {
+    let sessions = zc.sessions().await?;
+    let keys: Vec<String> = sessions
+        .iter()
+        .filter(|x| x.message_count > 0)
+        .map(|s| s.key().to_string())
+        .collect();
+    let turns = stream::iter(keys)
+        .map(|key| async move { zc.messages(&key).await.ok().map(|m| (key, model::transcript(&m))) })
+        .buffer_unordered(WORKERS)
+        .filter_map(|item| async move { item })
+        .collect()
+        .await;
     Ok(Chats { sessions, turns })
 }
 
@@ -168,13 +157,17 @@ pub(super) struct Loaded {
     pub warning: Option<String>,
 }
 
-/// Read the space and the agent's conversations at once, and build the
-/// workspace, all off the UI thread.
-pub(super) fn load(live: &Live) -> Result<Loaded, String> {
-    let (space, chats) = std::thread::scope(|s| {
-        let chats = s.spawn(|| live.zc.paired().then(|| load_chats(&live.zc)));
-        (load_space(&live.space), chats.join().ok().flatten())
-    });
+/// Read the space and the agent's conversations concurrently, and build the
+/// workspace (one shared async loader for both native and wasm32).
+pub(super) async fn load(live: &Live) -> Result<Loaded, String> {
+    let chats_fut = async {
+        if live.zc.paired() {
+            Some(load_chats(&live.zc).await)
+        } else {
+            None
+        }
+    };
+    let (space, chats) = futures_util::future::join(load_space(&live.space), chats_fut).await;
     let data = space.map_err(|e| format!("SilverBullet: {e}"))?;
     let (chats, warning) = match chats {
         Some(Ok(c)) => (c, None),

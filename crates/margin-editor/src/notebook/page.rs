@@ -5,7 +5,6 @@
 //! server through `PageFiles` (Osom: the agent's space).
 use super::Writing;
 use crate::ui::{Button, Variant};
-use margin_runtime::worker::work;
 use crate::prelude::*;
 pub use margin_core::files::{PageFiles, WriteError};
 use std::sync::Arc;
@@ -63,7 +62,7 @@ impl Writing {
         }
         spawn(async move {
             let (files, path) = (page.files.clone(), page.path.clone());
-            let result = work(move || files.write(&path, &text, etag.as_deref())).await;
+            let result = files.write(path, text, etag).await;
             let saved = result.is_ok();
             {
                 let mut s = state.write();

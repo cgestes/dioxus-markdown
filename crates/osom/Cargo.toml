@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# Osom: the agent's topics, as a macOS app of its own.
+# Osom: the agent's topics, as a macOS app of its own (and shared UI for osom-web).
 [lib]
 path = "src/lib.rs"
 
@@ -13,18 +13,25 @@ name = "osom"
 path = "src/main.rs"
 
 [dependencies]
+futures-util = { version = "0.3", default-features = false, features = ["std", "alloc"] }
 margin-editor = { path = "../margin-editor" }
 margin-runtime = { path = "../margin-runtime" }
 margin-ui = { path = "../margin-ui" }
 margin-core = { path = "../margin-core" }
 osom-topics = { path = "../osom-topics" }
 osom-hub = { path = "../osom-hub" }
+tokio = { version = "1", default-features = false, features = ["sync"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-native = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", default-features = false, features = ["prelude", "system-fonts", "woff", "svg", "accessibility", "clipboard", "hot-reload", "vello-hybrid"] }
 webbrowser = "1.2"
 clap = { version = "4", features = ["derive"] }
-tokio = { version = "1", features = ["sync"] }
 
-[dev-dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dioxus = { git = "https://github.com/DioxusLabs/dioxus.git", rev = "0a7242a2a72b08975584bf8ecb05076a5ee0b9c7", features = ["web"] }
+web-sys = { version = "0.3", features = ["Window"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
 blitz-traits = "=0.3.0-beta.4"
 blitz-paint = { version = "=0.3.0-beta.4", default-features = false }

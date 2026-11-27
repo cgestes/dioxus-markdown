@@ -1,16 +1,22 @@
 //! Files kept on a server that versions each one: the interface the editor
 //! saves a page and its comment file through. osom-hub implements it for
 //! the agent's space.
+use std::future::Future;
+use std::pin::Pin;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub type FileFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+#[cfg(target_arch = "wasm32")]
+pub type FileFuture<T> = Pin<Box<dyn Future<Output = T> + 'static>>;
 
 /// Files on a server that versions each one (an etag) and refuses a write
-/// over a version it no longer has. Calls block; the editor makes them off
-/// the UI thread.
+/// over a version it no longer has. Asynchronous on both native and wasm32.
 pub trait PageFiles: Send + Sync {
     /// The file and its version, or `None` when there is no such file.
-    fn read(&self, path: &str) -> Result<Option<Versioned>, String>;
+    fn read(&self, path: String) -> FileFuture<Result<Option<Versioned>, String>>;
 
     /// Write over version `etag` (`None`: whatever is there); the new version.
-    fn write(&self, path: &str, text: &str, etag: Option<&str>) -> Result<Option<String>, WriteError>;
+    fn write(&self, path: String, text: String, etag: Option<String>) -> FileFuture<Result<Option<String>, WriteError>>;
 
     /// Where `path` opens in a browser: the server's own web app. A link's
     /// card opens linked pages there.

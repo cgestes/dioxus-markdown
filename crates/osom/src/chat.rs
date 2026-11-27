@@ -14,29 +14,26 @@ pub(super) fn send(ui: Ui, text: String) {
     };
     let session = ui.session();
     let (name, context) = ui.topic_brief().unwrap_or_else(|| ("General".into(), String::new()));
-    let (reply, decisions) = std::sync::mpsc::channel::<bool>();
+    let ask = Ask {
+        agent: live.alias(),
+        session: session.clone(),
+        name: format!("Osom · {name}"),
+        content: text.clone(),
+        // The agent learns what a fresh topic chat is about before its first message.
+        preamble: (!context.is_empty()).then(|| model::preamble(&context)),
+    };
+    let (mut events, reply) = turn_with_approval(live.agent(), ask);
     {
         let mut c = chat.write();
         c.lines.push(ChatLine {
             from_user: true,
-            text: text.clone(),
+            text,
             ..Default::default()
         });
         c.reply = Some(reply);
         c.error = None;
     }
     pending.set(Some(ChatLine::default()));
-    let ask = Ask {
-        agent: live.alias(),
-        session: session.clone(),
-        name: format!("Osom · {name}"),
-        content: text,
-        // The agent learns what a fresh topic chat is about before its first message.
-        preamble: (!context.is_empty()).then(|| model::preamble(&context)),
-    };
-    let mut events = turn(live.agent(), ask, move || {
-        decisions.recv_timeout(Duration::from_secs(300)).unwrap_or(false)
-    });
     spawn(async move {
         while let Some(events) = batch(&mut events).await {
             for e in events {
@@ -113,7 +110,7 @@ pub(super) fn ChatPanel() -> Element {
         move |_| {
             let mut chat = ui.chat;
             if let Some(reply) = chat.peek().reply.as_ref() {
-                let _ = reply.send(yes);
+                reply.send(yes);
             }
             chat.write().approval = None;
         }
@@ -175,7 +172,7 @@ pub(super) fn Pairing() -> Element {
         chat.write().error = Some("Pairing…".into());
         spawn(async move {
             let endpoints = l.endpoints.clone();
-            match work(move || hub::pair(&endpoints, &c)).await {
+            match hub::pair(&endpoints, &c).await {
                 Ok(zc) => {
                     let mut live_sig = ui.live;
                     if let Some(l) = live_sig.write().as_mut() {
@@ -189,9 +186,10 @@ pub(super) fn Pairing() -> Element {
             }
         });
     });
+    let device = if cfg!(target_arch = "wasm32") { "this browser" } else { "this Mac" };
     rsx! {
         div { class: "flex flex-col gap-2 m-3 p-3 border border-solid border-line rounded-lg bg-wash text-[12.5px]",
-            p { class: "m-0 text-muted", "Pair this Mac with ZeroClaw to read the agent’s conversations and chat. On the server run " code { "zeroclaw gateway get-paircode --new" } "." }
+            p { class: "m-0 text-muted", "Pair {device} with ZeroClaw to read the agent’s conversations and chat. On the server run " code { "zeroclaw gateway get-paircode --new" } "." }
             div { class: "flex h-[30px] px-[9px] border border-solid border-line-strong rounded-md bg-surface font-mono text-[13px]/[30px] font-normal", TextField { value: code, placeholder: "Pairing code", onenter: pair } }
             Button { label: "Pair", variant: Variant::Primary, onclick: move |_| pair(()) }
         }

@@ -1,24 +1,43 @@
-//! Blocking work off the UI thread: network calls, and agent turns whose
-//! events stream back to the UI.
+//! Agent turns whose events stream back to the UI. Identical async turn
+//! and tool-approval flow on both native and wasm32.
 use futures_channel::mpsc::{UnboundedReceiver, unbounded};
+use futures_channel::oneshot;
 use futures_util::StreamExt;
-use margin_core::agent::{AgentChat, Ask, ChatEvent};
-use std::sync::Arc;
+use margin_core::agent::{AgentChat, Ask, ChatEvent, ChatFuture};
+use std::sync::{Arc, Mutex};
 
-/// Run blocking work on a thread and await it from the UI.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn work<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl Future<Output = T> {
-    let (tx, rx) = futures_channel::oneshot::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(f());
-    });
-    async move { rx.await.expect("worker thread") }
+/// Answers a tool-approval prompt for an in-flight agent turn on both native and wasm32.
+#[derive(Clone, Debug, Default)]
+pub struct ApprovalReply {
+    pending: Arc<Mutex<Option<oneshot::Sender<bool>>>>,
 }
 
-/// A browser tab has one thread: the work runs when the future is first polled.
-#[cfg(target_arch = "wasm32")]
-pub fn work<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl Future<Output = T> {
-    async move { f() }
+impl ApprovalReply {
+    pub fn send(&self, approve: bool) {
+        if let Some(tx) = self.pending.lock().unwrap().take() {
+            let _ = tx.send(approve);
+        }
+    }
+}
+
+/// Start one agent turn whose tool approvals can be answered asynchronously via
+/// the returned `ApprovalReply`.
+pub fn turn_with_approval(agent: Arc<dyn AgentChat>, ask: Ask) -> (UnboundedReceiver<ChatEvent>, ApprovalReply) {
+    let (tx, rx) = unbounded();
+    let reply = ApprovalReply::default();
+    let slot = reply.pending.clone();
+    let inline = agent.inline();
+    let on = Box::new(move |e: ChatEvent| tx.unbounded_send(e).is_ok());
+    let decide = Box::new(move || -> ChatFuture<bool> {
+        let (dtx, drx) = oneshot::channel();
+        *slot.lock().unwrap() = Some(dtx);
+        Box::pin(async move { drx.await.unwrap_or(false) })
+    });
+    let fut = agent.chat(ask, on, decide);
+    if !inline {
+        margin_ui::prelude::spawn(fut);
+    }
+    (rx, reply)
 }
 
 /// Start one agent turn; its events arrive on the receiver. Dropping the
@@ -31,12 +50,14 @@ pub fn turn(
 ) -> UnboundedReceiver<ChatEvent> {
     let (tx, rx) = unbounded();
     let inline = agent.inline();
-    let mut run = move || agent.chat(&ask, &mut |e| tx.unbounded_send(e).is_ok(), &mut decide);
-    // No threads in a browser tab: every turn runs here.
-    if inline || cfg!(target_arch = "wasm32") {
-        run();
-    } else {
-        std::thread::spawn(run);
+    let on = Box::new(move |e: ChatEvent| tx.unbounded_send(e).is_ok());
+    let decide = Box::new(move || -> ChatFuture<bool> {
+        let yes = decide();
+        Box::pin(async move { yes })
+    });
+    let fut = agent.chat(ask, on, decide);
+    if !inline {
+        margin_ui::prelude::spawn(fut);
     }
     rx
 }
@@ -60,21 +81,30 @@ pub struct Answer {
     pub error: Option<String>,
 }
 
-/// Run one turn on this thread and collect its answer.
-pub fn answer(agent: &dyn AgentChat, ask: &Ask) -> Answer {
-    let mut out = Answer::default();
-    agent.chat(
-        ask,
-        &mut |e| {
-            match e {
-                ChatEvent::Done(full) => out.text = full,
-                ChatEvent::Tool(t) => out.tools.push(t),
-                ChatEvent::Error(err) => out.error = Some(err),
-                _ => {}
+/// Run one turn asynchronously and collect its answer.
+pub async fn answer(agent: Arc<dyn AgentChat>, ask: Ask) -> Answer {
+    let out = Arc::new(Mutex::new(Answer::default()));
+    let collector = out.clone();
+    let on = Box::new(move |e: ChatEvent| {
+        let mut a = collector.lock().unwrap();
+        match e {
+            ChatEvent::Done(full) => a.text = full,
+            ChatEvent::Tool(t) => a.tools.push(t),
+            ChatEvent::Error(err) => a.error = Some(err),
+            _ => {}
+        }
+        true
+    });
+    let decide = Box::new(|| -> ChatFuture<bool> { Box::pin(async { false }) });
+    agent.chat(ask, on, decide).await;
+    Arc::try_unwrap(out)
+        .map(|m| m.into_inner().unwrap())
+        .unwrap_or_else(|a| {
+            let g = a.lock().unwrap();
+            Answer {
+                text: g.text.clone(),
+                tools: g.tools.clone(),
+                error: g.error.clone(),
             }
-            true
-        },
-        &mut || false,
-    );
-    out
+        })
 }

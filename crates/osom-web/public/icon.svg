@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <!-- Osom T4 (Coastal Lagoon & Brass), full-bleed so browsers and iOS can mask it. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#207f99"/>
+      <stop offset="100%" stop-color="#125066"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fffef9"/>
+      <stop offset="100%" stop-color="#f7efd8"/>
+    </linearGradient>
+    <linearGradient id="pocket" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d99a38"/>
+      <stop offset="100%" stop-color="#b37820"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" fill="url(#bg)"/>
+  <circle cx="60" cy="51" r="44" fill="url(#sun)"/>
+  <path d="M 85,78 L 87,67 C 87.8,64 90,62.5 93,62.5 L 106,62.5 C 109,62.5 111,64.5 111,67.5 L 111,78 Z" fill="#c9684b"/>
+  <g transform="rotate(-20 34 32)">
+    <ellipse cx="34" cy="32" rx="9.8" ry="16.5" fill="#25292e"/>
+    <ellipse cx="35.1" cy="33.5" rx="4.9" ry="10.2" fill="#cf8f7a"/>
+  </g>
+  <g transform="rotate(20 86 32)">
+    <ellipse cx="86" cy="32" rx="9.8" ry="16.5" fill="#25292e"/>
+    <ellipse cx="84.9" cy="33.5" rx="4.9" ry="10.2" fill="#cf8f7a"/>
+  </g>
+  <path d="M 60,25 C 76,25 87,36 87,52 C 87,67 74.5,79 60,79 C 45.5,79 33,67 33,52 C 33,36 44,25 60,25 Z" fill="#25292e"/>
+  <path d="M 46,29 C 51,26.8 69,26.8 74,29 C 70,34 65,36 60,36 C 55,36 50,34 46,29 Z" fill="#4c555e" fill-opacity="0.35"/>
+  <path d="M 35.5,54 C 38.5,45.5 46,44.5 53.5,48.5 C 56.5,50.2 58.2,53.5 58.6,58.5 L 61.4,58.5 C 61.8,53.5 63.5,50.2 66.5,48.5 C 74,44.5 81.5,45.5 84.5,54 C 83,67.5 72.5,78 60,78 C 47.5,78 37,67.5 35.5,54 Z" fill="#fcfbf6"/>
+  <circle cx="47.2" cy="52" r="4.5" fill="#14171a"/>
+  <circle cx="45.8" cy="50.6" r="1.35" fill="#ffffff"/>
+  <circle cx="72.8" cy="52" r="4.5" fill="#14171a"/>
+  <circle cx="71.4" cy="50.6" r="1.35" fill="#ffffff"/>
+  <path d="M 55.2,61.2 C 55.2,58.6 64.8,58.6 64.8,61.2 C 64.8,64 62.1,66.2 60,66.2 C 57.9,66.2 55.2,64 55.2,61.2 Z" fill="#9e5f4d"/>
+  <path d="M 60,66.2 L 60,69.2" stroke="#25292e" stroke-opacity="0.45" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M 56.8,69.6 C 58.8,70.6 61.2,70.6 63.2,69.6" fill="none" stroke="#25292e" stroke-opacity="0.4" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M 0,76 L 41,76 C 46,76 48,82.5 60,82.5 C 72,82.5 74,76 79,76 L 120,76 L 120,120 L 0,120 Z" fill="url(#pocket)"/>
+  <path d="M 0,76 L 41,76 C 46,76 48,82.5 60,82.5 C 72,82.5 74,76 79,76 L 120,76" fill="none" stroke="#fff9eb" stroke-opacity="0.38" stroke-width="1.6"/>
+  <path d="M 60,90 C 60,96.2 61.6,97.8 67.8,97.8 C 61.6,97.8 60,99.4 60,105.6 C 60,99.4 58.4,97.8 52.2,97.8 C 58.4,97.8 60,96.2 60,90 Z" fill="#fffdf5"/>
+  <rect x="21" y="71.5" width="15.5" height="8.5" rx="4.25" fill="#fcfbf6" stroke="#25292e" stroke-opacity="0.18" stroke-width="1"/>
+  <rect x="83.5" y="71.5" width="15.5" height="8.5" rx="4.25" fill="#fcfbf6" stroke="#25292e" stroke-opacity="0.18" stroke-width="1"/>
+</svg>

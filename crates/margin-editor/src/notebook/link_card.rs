@@ -7,7 +7,6 @@ use super::link_preview::{
 use super::projection::ParsedLink;
 use crate::platform::text;
 use crate::ui::{Button, Icon, Popover, TextField, Variant, icon};
-use margin_runtime::worker::work;
 use super::{Field, Writing, report};
 use crate::prelude::*;
 use std::collections::HashMap;
@@ -397,7 +396,7 @@ fn maybe_fetch_page(
     spawn(async move {
         let files = page_src.files.clone();
         let lookup = path.clone();
-        let fetched = work(move || files.read(&lookup)).await;
+        let fetched = files.read(lookup).await;
         match fetched {
             Ok(Some(page)) => {
                 let (title, excerpt) = extract_markdown_summary(&page.text);

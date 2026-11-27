@@ -12,6 +12,7 @@ members = [
     "crates/margin",
     "crates/margin-web",
     "crates/osom",
+    "crates/osom-web",
     "crates/osom-topics",
     "crates/workspace-hack",
 ]

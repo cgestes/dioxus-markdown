@@ -52,7 +52,7 @@ fn use_page(path: String) -> Signal<Option<Result<Page, String>>> {
         let Some(live) = ui.live() else { return };
         spawn(async move {
             let space = live.space.clone();
-            let read = work(move || space.read(&path)).await;
+            let read = space.read(&path).await;
             let mut ui = ui;
             match read {
                 Ok(page) => {
@@ -74,9 +74,14 @@ fn use_page(path: String) -> Signal<Option<Result<Page, String>>> {
 /// The editor on an opened page, in Rich view: it saves through the space
 /// (unless `read_only`), and the comment agent answers its comments.
 fn page_editor(ui: &Ui, page: Page, bar: HostBar, read_only: bool) -> Element {
+    let pair_hint = if cfg!(target_arch = "wasm32") {
+        "Osom is not paired with ZeroClaw: enter a pairing code in the chat panel."
+    } else {
+        "Osom is not paired with ZeroClaw: run `osom pair <code>`."
+    };
     let comments = match ui.live() {
         Some(live) if live.zc.paired() => Comments::Agent(CommentAgent { alias: live.endpoints.comment_agent.clone(), chat: Arc::new(live.zc.clone()) }),
-        Some(live) => Comments::Agent(CommentAgent::unavailable(&live.endpoints.comment_agent, "Osom is not paired with ZeroClaw: run `osom pair <code>`.")),
+        Some(live) => Comments::Agent(CommentAgent::unavailable(&live.endpoints.comment_agent, pair_hint)),
         None => Comments::Empty,
     };
     let source = ui.live().map(|live| PageSource { path: page.path.clone(), files: Arc::new(live.space.clone()), etag: page.etag.clone() });
@@ -153,7 +158,7 @@ pub(super) fn TranscriptPane(session_key: String, title: String) -> Element {
                 return;
             };
             spawn(async move {
-                let result = work(move || live.zc.messages(&key).map(|m| model::transcript(&m))).await;
+                let result = live.zc.messages(&key).await.map(|m| model::transcript(&m));
                 fetched.set(Some(result));
             });
         });
@@ -187,7 +192,7 @@ pub(super) fn TranscriptPane(session_key: String, title: String) -> Element {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
     use margin_core::comments as file;
@@ -208,20 +213,28 @@ mod tests {
     }
 
     impl PageFiles for Watched {
-        fn read(&self, path: &str) -> Result<Option<Versioned>, String> {
-            let read = PageFiles::read(&self.space, path);
-            if path.ends_with(".json") {
-                self.reads.lock().unwrap().push(read.as_ref().map(|_| ()).map_err(Clone::clone));
-            }
-            read
+        fn read(&self, path: String) -> margin_core::files::FileFuture<Result<Option<Versioned>, String>> {
+            let space = self.space.clone();
+            let reads = self.reads.clone();
+            Box::pin(async move {
+                let read = PageFiles::read(&space, path.clone()).await;
+                if path.ends_with(".json") {
+                    reads.lock().unwrap().push(read.as_ref().map(|_| ()).map_err(Clone::clone));
+                }
+                read
+            })
         }
 
-        fn write(&self, path: &str, text: &str, etag: Option<&str>) -> Result<Option<String>, WriteError> {
-            let written = PageFiles::write(&self.space, path, text, etag);
-            if written.is_ok() && path.ends_with(".json") {
-                self.writes.lock().unwrap().push(text.to_owned());
-            }
-            written
+        fn write(&self, path: String, text: String, etag: Option<String>) -> margin_core::files::FileFuture<Result<Option<String>, WriteError>> {
+            let space = self.space.clone();
+            let writes = self.writes.clone();
+            Box::pin(async move {
+                let written = PageFiles::write(&space, path.clone(), text.clone(), etag).await;
+                if written.is_ok() && path.ends_with(".json") {
+                    writes.lock().unwrap().push(text);
+                }
+                written
+            })
         }
 
         fn web_url(&self, path: &str) -> String {
@@ -250,7 +263,7 @@ mod tests {
         let e = Endpoints::load().unwrap();
         let page = "car/maintenance.md";
         let space = Space::new(&e.space);
-        let read = space.read(page).unwrap();
+        let read = hub::block_on(space.read(page)).unwrap();
         let watched = Watched { space: space.clone(), reads: Default::default(), writes: Default::default() };
         let source = PageSource { path: page.into(), files: Arc::new(watched.clone()), etag: read.etag };
         let options = NotebookOptions {
@@ -270,11 +283,11 @@ mod tests {
         let answered = |s: &file::Sidecar| s.threads.first().is_some_and(|t| t.messages.len() == 2);
         settle(&mut doc, Duration::from_secs(240), |_| watched.saved().is_some_and(|s| answered(&s)));
         let saved = watched.saved().expect("comment file written");
-        let on_server = space.read(&file::sidecar_path(page));
+        let on_server = hub::block_on(space.read(&file::sidecar_path(page)));
         // Clean up before asserting.
-        let _ = space.delete(&file::sidecar_path(page));
+        let _ = hub::block_on(space.delete(&file::sidecar_path(page)));
         if let Some(thread) = saved.threads.first() {
-            let _ = e.zeroclaw().delete_session(&file::request::session_id(&thread.id));
+            let _ = hub::block_on(e.zeroclaw().delete_session(&file::request::session_id(&thread.id)));
         }
         assert_eq!(saved.threads.len(), 1);
         assert_eq!(saved.threads[0].anchor.exact, quote);

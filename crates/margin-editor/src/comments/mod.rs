@@ -6,7 +6,7 @@
 use crate::notebook::page::{PageSource, WriteError};
 use crate::platform::text;
 use crate::ui::{Badge, Banner, Button, Card, Chip, Composer, Icon, Message, MessageStyle, Segment, Segmented, Tone, Variant};
-use margin_runtime::worker::{batch, turn, work};
+use margin_runtime::worker::{batch, turn};
 use crate::{Field, MarkdownView, Writing, report};
 use crate::prelude::*;
 use loro::cursor::Cursor;
@@ -50,8 +50,14 @@ impl CommentAgent {
 struct Unavailable(String);
 
 impl AgentChat for Unavailable {
-    fn chat(&self, _: &agent::Ask, on: &mut dyn FnMut(ChatEvent) -> bool, _: &mut dyn FnMut() -> bool) {
+    fn chat(
+        self: Arc<Self>,
+        _: agent::Ask,
+        mut on: Box<dyn FnMut(ChatEvent) -> bool + Send>,
+        _: Box<dyn FnMut() -> agent::ChatFuture<bool> + Send>,
+    ) -> agent::ChatFuture<()> {
         on(ChatEvent::Error(self.0.clone()));
+        Box::pin(async {})
     }
 
     fn inline(&self) -> bool {
@@ -675,15 +681,20 @@ impl Writing {
         let etag = state.peek().etag.clone();
         spawn(async move {
             let (files, path) = (page.files.clone(), file::sidecar_path(&page.path));
-            let result = work(move || match files.write(&path, &ours.to_json(), etag.as_deref()) {
-                Err(WriteError::Conflict) => {
-                    let theirs = files.read(&path)?.ok_or("the comment file was deleted while saving")?;
-                    let merged = file::merge(&ours, &file::Sidecar::parse(&theirs.text)?);
-                    files.write(&path, &merged.to_json(), theirs.etag.as_deref()).map_err(|e| e.to_string())
-                }
+            let result = match files.write(path.clone(), ours.to_json(), etag).await {
+                Err(WriteError::Conflict) => match files.read(path.clone()).await {
+                    Ok(Some(theirs)) => match file::Sidecar::parse(&theirs.text) {
+                        Ok(parsed) => {
+                            let merged = file::merge(&ours, &parsed);
+                            files.write(path, merged.to_json(), theirs.etag).await.map_err(|e| e.to_string())
+                        }
+                        Err(e) => Err(e),
+                    },
+                    Ok(None) => Err("the comment file was deleted while saving".into()),
+                    Err(e) => Err(e),
+                },
                 other => other.map_err(|e| e.to_string()),
-            })
-            .await;
+            };
             let again = {
                 let mut f = state.write();
                 f.saving = false;
@@ -743,7 +754,7 @@ pub fn use_comment_file(writing: Writing) {
         let mut state = writing.discussion.file;
         spawn(async move {
             let PageSource { files, path, .. } = page;
-            match work(move || files.read(&file::sidecar_path(&path))).await {
+            match files.read(file::sidecar_path(&path)).await {
                 Ok(Some(found)) => match file::Sidecar::parse(&found.text) {
                     Ok(saved) => {
                         writing.load_comment_file(saved);

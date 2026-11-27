@@ -13,7 +13,7 @@ fn load_with_failed_page(failed: &str, status: &str) -> Loaded {
         zc: ZeroClaw::new(&url, None),
     };
     std::thread::scope(|scope| {
-        let loading = scope.spawn(|| load(&live));
+        let loading = scope.spawn(|| osom_hub::block_on(load(&live)));
         while !loading.is_finished() {
             let mut stream = match listener.accept() {
                 Ok((stream, _)) => stream,
