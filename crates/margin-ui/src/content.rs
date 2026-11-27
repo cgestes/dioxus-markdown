@@ -105,7 +105,10 @@ pub fn Row(
 
 /// An entry of a side navigation: a mark, a label with an optional hint
 /// under it, then a count or an unread dot. `selected` marks where you are;
-/// `indent` nests it under the entry above.
+/// `indent` nests it under the entry above. The hint keeps to one line and
+/// is cut at the entry's edge (the renderer draws no ellipsis, so callers
+/// shorten it), and an entry never shrinks below its text: a long list
+/// scrolls rather than stacking entries on top of each other.
 #[component]
 pub fn NavItem(
     label: String,
@@ -129,14 +132,14 @@ pub fn NavItem(
     };
     rsx! {
         button {
-            class: "ui-nav box-border flex items-center justify-start gap-[9px] w-full h-auto min-h-8 m-0 py-[5px] px-2 border border-solid rounded-md text-ink hover:text-ink font-sans text-[13px] leading-[1.3] font-normal text-left cursor-pointer {state_cls} {indent_cls}",
+            class: "ui-nav box-border flex flex-none items-center justify-start gap-[9px] w-full h-auto min-h-8 m-0 py-[5px] px-2 border border-solid rounded-md text-ink hover:text-ink font-sans text-[13px] leading-[1.3] font-normal text-left cursor-pointer {state_cls} {indent_cls}",
             aria_current: selected.then_some("page"),
             onclick: move |_| onclick.call(()),
             {leading}
             span { class: "flex flex-col flex-auto min-w-0",
                 "{label}"
                 if !hint.is_empty() {
-                    small { class: "text-faint font-mono text-[10.5px] leading-[1.3] font-normal", "{hint}" }
+                    small { class: "overflow-hidden text-faint font-mono text-[10.5px] leading-[1.3] font-normal whitespace-nowrap", "{hint}" }
                 }
             }
             if let Some((n, tone)) = count { if n > 0 { Badge { text: n.to_string(), tone } } }

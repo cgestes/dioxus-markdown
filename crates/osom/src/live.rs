@@ -288,7 +288,7 @@ fn live_topic(t: &Topic, cx: &Cx) -> TopicView {
     reminders.sort_by(|a, b| a.1.due().cmp(b.1.due()));
     let next = reminders
         .first()
-        .map(|(_, r)| format!("{} · {}", short(&r.what, 18), calendar::day_month(r.due())))
+        .map(|(_, r)| format!("{} · {}", r.what, calendar::day_month(r.due())))
         .unwrap_or_default();
     let agenda: Vec<Agenda> = reminders
         .iter()
@@ -466,19 +466,4 @@ fn kb(size: u64) -> String {
     } else {
         format!("{} KB", size.div_ceil(1024).max(1))
     }
-}
-
-fn short(s: &str, n: usize) -> String {
-    let mut out = String::new();
-    for w in s.split_whitespace() {
-        if out.chars().count() + w.chars().count() + 1 > n && !out.is_empty() {
-            out.push('…');
-            return out;
-        }
-        if !out.is_empty() {
-            out.push(' ');
-        }
-        out.push_str(w);
-    }
-    out
 }

@@ -350,6 +350,25 @@ fn host(url: &str) -> String {
     if port.is_empty() { name.into() } else { format!("{name} :{port}") }
 }
 
+/// How many characters of a hint's mono type fit beside a topic's tile in
+/// the rail. A nested topic has 2 fewer and an unread dot takes 3.
+const HINT_CHARS: usize = 23;
+
+/// `hint` in at most `n` characters, ending in "…" when it is cut. A
+/// trailing `· date` stays whole; the text before it gives way.
+fn fit(hint: &str, n: usize) -> String {
+    if hint.chars().count() <= n {
+        return hint.into();
+    }
+    let (text, tail) = match hint.rsplit_once(" · ") {
+        Some((text, when)) if when.chars().count() < n / 2 => (text, format!(" · {when}")),
+        _ => (hint, String::new()),
+    };
+    let cut: String = text.chars().take(n.saturating_sub(tail.chars().count() + 1)).collect();
+    let cut = cut.trim_end_matches(|c: char| c.is_whitespace() || ",;:(-—–+&".contains(c));
+    format!("{cut}…{tail}")
+}
+
 fn date_box(iso: &str, today: &str) -> Element {
     let (top, day) = calendar::chip(iso, today).unwrap_or_default();
     rsx! { DateBox { top, day } }
@@ -376,7 +395,8 @@ fn Sidebar() -> Element {
     let row = |t: &TopicView, child: bool| {
         let id = t.id.clone();
         let on = place == Place::Topic(id.clone());
-        let hint = if child { t.subtitle.clone() } else { t.next.clone() };
+        let room = if child { HINT_CHARS - 2 } else { HINT_CHARS } - if t.unread { 3 } else { 0 };
+        let hint = fit(if child { &t.subtitle } else { &t.next }, room);
         let (icon, hue) = (t.icon, t.hue);
         rsx! {
             NavItem { key: "{t.id}", label: t.title.clone(), hint, dot: t.unread, selected: on, indent: child,
@@ -403,7 +423,7 @@ fn Sidebar() -> Element {
         (None, None) => rsx! {},
     };
     rsx! {
-        aside { class: "flex flex-col gap-0.5 flex-[0_0_220px] w-[220px] h-full pt-4 px-2.5 pb-3 overflow-y-auto bg-rail border-0 border-r border-solid border-line",
+        aside { class: "flex flex-col gap-0.5 flex-[0_0_220px] w-[220px] h-full pt-4 px-2.5 pb-3 overflow-hidden bg-rail border-0 border-r border-solid border-line",
             div { class: "flex items-center gap-2 w-full h-8 mb-2 px-2.5 border border-solid border-line rounded-md bg-surface text-faint leading-[22px] [&_input]:h-[22px]",
                 {ui::icon(Icon::Search)}
                 TextField { value: query, placeholder: "Search topics" }
@@ -413,21 +433,24 @@ fn Sidebar() -> Element {
             NavItem { label: ws.as_ref().map(|w| w.inbox_title.clone()).unwrap_or_default(), selected: place == Place::Inbox,
                 count: (inbox_left, Tone::Alert), leading: ui::icon(Icon::Inbox), onclick: move |_| ui.go(Place::Inbox) }
             div { class: "mt-3.5 mx-2 mb-1 text-faint type-label uppercase", "Topics" }
-            if let Some(w) = ws.as_ref() {
-                if q.is_empty() {
-                    for t in w.topics.iter() {
-                        {row(t, false)}
-                        for c in t.children.iter() { {row(c, true)} }
+            // Only the topics scroll: the search, Today and the footer stay put.
+            div { class: "flex flex-col gap-0.5 flex-auto min-h-0 overflow-y-auto",
+                if let Some(w) = ws.as_ref() {
+                    if q.is_empty() {
+                        for t in w.topics.iter() {
+                            {row(t, false)}
+                            for c in t.children.iter() { {row(c, true)} }
+                        }
+                    } else {
+                        for t in w.all().filter(|t| [&t.title, &t.subtitle, &t.id].iter().any(|s| s.to_lowercase().contains(&q))) {
+                            {row(t, false)}
+                        }
                     }
-                } else {
-                    for t in w.all().filter(|t| [&t.title, &t.subtitle, &t.id].iter().any(|s| s.to_lowercase().contains(&q))) {
-                        {row(t, false)}
-                    }
+                } else if ui.error.read().is_none() {
+                    div { class: "py-6 text-faint", "Loading the space…" }
                 }
-            } else if ui.error.read().is_none() {
-                div { class: "py-6 text-faint", "Loading the space…" }
             }
-            div { class: "mt-auto pt-2.5 px-2 pb-0.5 border-0 border-t border-solid border-line text-faint font-mono text-[10.5px]/[1.6] font-normal [&_strong]:text-ink [&_strong]:font-semibold",
+            div { class: "flex-none mt-1 pt-2.5 px-2 pb-0.5 border-0 border-t border-solid border-line text-faint font-mono text-[10.5px]/[1.6] font-normal [&_strong]:text-ink [&_strong]:font-semibold",
                 {footer}
                 Button { label: "Refresh", variant: Variant::Ghost, class: "mt-1", onclick: ui.refresh }
             }
@@ -459,6 +482,15 @@ fn Center() -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cut_hint_keeps_its_date_and_ends_in_an_ellipsis() {
+        assert_eq!(fit("WOF · 14 Dec", 23), "WOF · 14 Dec");
+        assert_eq!(fit("Upload the SNS CDI form · 27 Nov", 23), "Upload the SN… · 27 Nov");
+        assert_eq!(fit("Antalya trip: book the bungalow · 29 Dec", 23), "Antalya trip… · 29 Dec");
+        assert_eq!(fit("Ex-girlfriend; main co-owner of the Mazda", 21), "Ex-girlfriend; main…");
+        assert_eq!(fit("Sebag-Peyrelevade-Kergozou", 10), "Sebag-Pey…");
+    }
 
     /// Paint the window for each view into `target/topics-shots`.
     /// `cargo test -p osom topics_shots -- --ignored --nocapture`
