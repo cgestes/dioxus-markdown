@@ -43,6 +43,8 @@ pub(super) type TrackedKey = (
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct Writing {
+    /// The notebook only reads its note (`NotebookOptions::read_only`).
+    pub read_only: bool,
     pub store: Signal<Option<super::Store>>,
     pub note: Signal<Note>,
     pub root: Signal<Option<NodeHandle>>,
@@ -1264,7 +1266,32 @@ impl Writing {
         }
     }
 
+    /// Undo, in a field's native buffer, an input the note did not take:
+    /// the `inserted` bytes typed over `removed` give way to `original`
+    /// again, and `removed` is selected as it was.
+    fn restore_field(self, field: Field, original: &str, removed: Range<usize>, inserted: usize) {
+        if let Some(root) = self.root.peek().as_ref() {
+            let mut doc = root.doc_mut();
+            if let Some(id) = doc.get_element_by_id(&field.id()) {
+                doc.with_text_input(id, |mut driver| {
+                    driver.select_byte_range(removed.start, removed.start + inserted);
+                    driver.insert_or_replace_selection(original);
+                    driver.select_byte_range(removed.start, removed.end);
+                });
+            }
+        }
+    }
+
     pub fn input(mut self, field: Field, value: &str) {
+        if self.read_only {
+            // The field took the input natively; the note refuses it, so the
+            // field shows the note again.
+            let shown = self.projection_peek(field).display;
+            let (removed, inserted) = text_change(&shown, value);
+            self.restore_field(field, &shown[removed.clone()], removed, inserted.len());
+            self.message.set(super::READ_ONLY.into());
+            return;
+        }
         if self.replace_span_input(field, value) {
             return;
         }
@@ -1288,16 +1315,7 @@ impl Writing {
         {
             // Non-keyboard input (for example an IME commit) may already have
             // reached the native buffer. Restore just that buffer and caret.
-            if let Some(root) = self.root.peek().as_ref() {
-                let mut doc = root.doc_mut();
-                if let Some(id) = doc.get_element_by_id(&field.id()) {
-                    doc.with_text_input(id, |mut driver| {
-                        driver.select_byte_range(removed.start, removed.start + inserted.len());
-                        driver.insert_or_replace_selection(&proj.display[removed.clone()]);
-                        driver.select_byte_range(removed.start, removed.end);
-                    });
-                }
-            }
+            self.restore_field(field, &proj.display[removed.clone()], removed, inserted.len());
             return;
         }
         if projected_differs && !matches!(field, Field::Title if parts.title.is_none()) {
@@ -1386,16 +1404,7 @@ impl Writing {
         if prefix_input {
             // Non-keyboard input (for example an IME commit) may already have
             // reached the native buffer. Restore just that buffer and caret.
-            if let Some(root) = self.root.peek().as_ref() {
-                let mut doc = root.doc_mut();
-                if let Some(id) = doc.get_element_by_id(&field.id()) {
-                    doc.with_text_input(id, |mut driver| {
-                        driver.select_byte_range(removed.start, removed.start + inserted.len());
-                        driver.insert_or_replace_selection(&before[removed.clone()]);
-                        driver.select_byte_range(removed.start, removed.end);
-                    });
-                }
-            }
+            self.restore_field(field, &before[removed.clone()], removed, inserted.len());
             return;
         }
         let eol = table::eol(&md);

@@ -356,7 +356,6 @@ fn live_topic(t: &Topic, cx: &Cx) -> TopicView {
         icon,
         hue,
         next,
-        overview: home.map(|p| p.text.clone()),
         overview_path: home.map(|p| p.path.clone()),
         chat_context: model::chat_context(
             &t.title,

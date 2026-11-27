@@ -154,6 +154,7 @@ fn mazda() -> TopicView {
     TopicView {
         next: s("WOF · 14 Dec"),
         unread: true,
+        overview_path: Some(s("topics/mazda/README.md")),
         brief: s(
             "WOF is due Monday 14 December; the garage can take it Friday 9am. The last service flagged front brake pads at about 30%. Rego is paid until August 2027.",
         ),
@@ -885,6 +886,7 @@ fn inbox_item(
 
 /// Pages the demo opens in the editor, by space path.
 const PAGES: &[(&str, &str)] = &[
+    ("topics/mazda/README.md", "# Mazda\n\nThe family car: a 2019 Mazda CX-5. Sample content.\n\n- WOF due **14 Dec**; the garage can take it Friday 9am.\n- Rego paid until August 2027.\n- Front brake pads at about 30% at the last service.\n- [ ] Ask for a brake pad quote at the WOF.\n- [x] Pay the rego.\n\n## Who to call\n\n| What | Who |\n| :--- | :--- |\n| Service and WOF | Main Street Motors |\n| Tyres | the tyre shop by the station |\n"),
     ("topics/house/house-systems.md", "# House systems\n\nWhere things are and how to reset them. Sample content.\n\n## Electrical board\n\n| Row | Breaker | Circuit |\n| :--- | :--- | ---: |\n| 1 | Kitchen | 20 A |\n| 2 | HWC (hot water cylinder) | 16 A |\n| 3 | Lounge + office | 10 A |\n\n## Hot water cylinder\n\n- 180 L, 3 kW element, thermostat at **60 °C**.\n- Tempering valve under the laundry sink keeps the taps at 55 °C.\n- [ ] Ask the plumber about the element on Thursday.\n- [x] Log the last trip time.\n\n> If it trips twice in a week, leave the breaker off and message the plumber.\n\n## Gutters\n\nThe south side overflows in heavy rain; mesh guards go on before winter.\n"),
     ("topics/mazda/car-details.md", "# Car details\n\nThe facts the agent keeps about the car. Sample content.\n\n| Field | Value |\n| :--- | :--- |\n| Rego | paid to Aug 2027 |\n| Odometer | ≈ 57,800 km |\n| Tyres | 225/55 R19 |\n\n## Service\n\n- Oct 2026: service; front pads at about 30%.\n- [ ] Book the WOF before **14 Dec**.\n- [ ] Ask for a brake pad quote at the same visit.\n"),
     ("topics/wedding/guest-list.md", "# Guest list\n\n64 of 90 replies are in. Sample content.\n\n| Household | Guests | RSVP |\n| :--- | ---: | :--- |\n| Cousins | 7 | waiting |\n| Work friends | 5 | waiting |\n| Neighbours | 4 | yes |\n\n- [ ] Chase the remaining replies by **15 Jan**.\n"),

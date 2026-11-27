@@ -1014,7 +1014,11 @@ fn ProposalView(writing: Writing, thread: usize, message: usize, proposal: file:
                 div { class: "py-0.5 px-[5px] rounded-sm bg-pale text-accent-deep", "+ {proposal.new}" }
             }
             div { class: "flex flex-wrap items-center gap-[5px] py-1.5 px-2 border-0 border-t border-solid border-line bg-surface",
-                if !fits {
+                if writing.read_only && proposal.state != ProposalState::Dismissed {
+                    // Applying changes the page: that is the editor's job.
+                    span { class: "flex-[1_1_100%] text-faint type-hint",
+                        if applied { "Applied." } else { "Open the page in the editor to apply it." } }
+                } else if !fits {
                     span { class: "flex-[1_1_100%] text-alert type-hint", "The text changed since this suggestion." }
                     Button { id: format!("comment-ask-again-{tid}-{mi}"), label: "Ask again", stop: true,
                         onclick: move |_| writing.reply_to_comment(tid, "The selected text changed. Propose the edit again for the current text.") }

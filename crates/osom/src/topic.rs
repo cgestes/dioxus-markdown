@@ -114,11 +114,8 @@ pub(super) fn Overview(topic: TopicView) -> Element {
                         div { class: "flex items-center gap-1.5 mt-2.5 text-faint text-[11.5px] [&_.i]:w-[13px] [&_.i]:h-[13px]", {ui::icon(Icon::Spark)} "Kept up to date by the agent · {t.brief_by}" }
                     }
                 }
-                if let (Some(md), Some(path)) = (t.overview.clone(), t.overview_path.clone()) {
-                    Card {
-                        CardTitle { text: path.clone(), icon: Icon::File, action: "Edit →", onaction: move |_| ui.open(Pane::Doc(path.clone())) }
-                        MarkdownView { text: md }
-                    }
+                if let Some(path) = t.overview_path.clone() {
+                    Card { key: "{path}", OverviewPage { path } }
                 }
                 if !t.threads.is_empty() {
                     Card {

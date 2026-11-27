@@ -515,6 +515,7 @@ mod tests {
         } else {
             &[
                 ("demo-house", "house", "", ""),
+                ("demo-mazda", "mazda", "", ""),
                 ("demo-today", "today", "", ""),
                 ("demo-inbox", "inbox", "", ""),
                 ("demo-mazda-calendar", "mazda", "calendar", ""),

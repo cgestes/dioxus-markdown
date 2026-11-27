@@ -30,9 +30,15 @@ use margin_runtime::restart;
 use crate::CSS;
 pub use store::{InMemory, NoteStore, Store};
 
+/// What a read-only notebook says when you try to change its note.
+pub(crate) const READ_ONLY: &str = "This page is read-only.";
+
 pub(crate) fn report<T>(result: loro::LoroResult<T>, mut message: Signal<String>) {
-    if let Err(error) = result {
-        message.set(error.to_string());
+    match result {
+        // How a read-only note refuses an edit (`Note::set_read_only`).
+        Err(loro::LoroError::EditWhenDetached) => message.set(READ_ONLY.into()),
+        Err(error) => message.set(error.to_string()),
+        Ok(_) => {}
     }
 }
 
@@ -198,6 +204,10 @@ pub struct NotebookOptions {
     /// without one it is edited in memory and the status bar says nothing
     /// about it.
     pub store: Option<Store>,
+    /// Read the note, select it and comment on it, but change nothing: the
+    /// bar keeps only the comments, and the agent's proposals wait for an
+    /// editor.
+    pub read_only: bool,
 }
 
 /// What the app around a notebook supplies to it.
@@ -219,8 +229,8 @@ pub struct Host {
 /// The app's part of the bar of a notebook it shows as a pane.
 #[derive(Clone, PartialEq)]
 pub struct HostBar {
-    pub back: String,
-    pub onback: EventHandler<()>,
+    /// The app's way back (a pane), or none (a page inside the app's own view).
+    pub back: Option<HostAction>,
     /// Where the page is, after the back button: `house-systems.md`.
     pub crumb: String,
     pub actions: Vec<HostAction>,
@@ -235,7 +245,7 @@ pub struct HostAction {
 
 
 pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
-    let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, host, store } = options;
+    let NotebookOptions { view: initial_view, inspect: inspect_at_start, comments: start_comments, host, store, read_only } = options;
     let Host { title: host_title, menu: host_menu, bar } = host;
     let (initial_pane, initial_mode) = match initial_view {
         View::Rich => (Pane::Fields, projection::EditMode::Rich),
@@ -250,7 +260,11 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         _ => crate::comments::CommentAgent::mock(),
     };
     let store = use_signal(move || store);
-    let note = use_signal(|| store.peek().as_ref().and_then(|s| s.note()).unwrap_or_else(|| Note::new(initial)));
+    let note = use_signal(|| {
+        let mut note = store.peek().as_ref().and_then(|s| s.note()).unwrap_or_else(|| Note::new(initial));
+        note.set_read_only(read_only);
+        note
+    });
     // The store's line for the status bar ("Saved on device", "Not saved").
     let store_status = match store.peek().clone() {
         Some(s) => s.use_persistence(note),
@@ -327,6 +341,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         list
     });
     let writing = Writing {
+        read_only,
         store,
         note,
         root,
@@ -588,7 +603,7 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
         style { "{ui::CSS}" }
         style { "{CSS}" }
         crate::platform::Head {}
-        main { class: "notebook flex flex-col {notebook_min_h}", class: if embedded { "embedded" }, class: if is_rich { "rich-mode" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.handles.drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
+        main { class: "notebook flex flex-col {notebook_min_h}", class: if embedded { "embedded" }, class: if is_rich { "rich-mode" }, class: if read_only { "read-only" }, class: if inspecting() && !source() { "inspecting" }, class: if writing.handles.drag.read().is_some_and(|d| d.dragging) { "dragging-block" },
             onpointerdown: move |event| { writing.clear_goal(); writing.dismiss_menu_at(event.client_coordinates().x,event.client_coordinates().y); },
             onpointermove: move |e| writing.pointer_move(e),
             onpointerup: move |_| writing.end_drag(),
@@ -639,31 +654,35 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                     }
                     if let Some(h) = bar.as_ref() {
                         div { class: "flex items-center gap-2 min-w-0",
-                            ui::Button { id: "doc-back", label: h.back.clone(), text: h.back.clone(), icon: Icon::Back, variant: ui::Variant::Ghost, onclick: { let back = h.onback; move |_| back.call(()) } }
+                            if let Some(back) = h.back.as_ref() {
+                                ui::Button { id: "doc-back", label: back.label.clone(), text: back.label.clone(), icon: back.icon, variant: ui::Variant::Ghost, onclick: { let go = back.onclick; move |_| go.call(()) } }
+                            }
                             span { class: "min-w-0 overflow-hidden text-muted type-mono-ui whitespace-nowrap", "{h.crumb}" }
                         }
                         span { class: "flex-auto" }
                     }
-                    ui::Segmented { label: "Markdown view",
-                        items: vec![
-                            ui::Segment { id: "rich-mode", label: "Rich", tip: Some("Rich editing (delimiters stay hidden)"), selected: is_rich },
-                            ui::Segment { id: "live-mode", label: "Live", tip: Some("Keyboard-first Markdown live editing"), selected: is_md_live },
-                            ui::Segment { id: "source-mode", label: "Source", tip: None, selected: view() == Pane::Source },
-                        ],
-                        onselect: move |i: usize| match i {
-                            0 => set_edit_mode(projection::EditMode::Rich),
-                            1 => set_edit_mode(projection::EditMode::Markdown),
-                            _ => change_view(Pane::Source),
-                        },
-                    }
-                    ui::Button { id: "insert-table", variant: ui::Variant::Icon, label: "Insert table", tip: "Insert Markdown table", icon: Icon::Table, onclick: move |_| writing.insert_table(source()) }
-                    if newer_build() {
-                        ui::Button { id: "restart-app", label: "Restart", tip: "A newer build is ready. Restart Margin to run it",
-                            class: "!text-accent-deep !border-accent-deep", onclick: move |_| restart::restart_app() }
-                    }
-                    div { class: "flex items-center pl-[5px] border-0 border-l border-solid border-line gap-px", role: "group", aria_label: "History",
-                        ui::Button { id: "undo", variant: ui::Variant::Icon, label: "Undo", tip: undo_tip, icon: Icon::Undo, disabled: !note.read().can_undo(), onclick: move |_| writing.history(source(), false) }
-                        ui::Button { id: "redo", variant: ui::Variant::Icon, label: "Redo", tip: redo_tip, icon: Icon::Redo, disabled: !note.read().can_redo(), onclick: move |_| writing.history(source(), true) }
+                    if !read_only {
+                        ui::Segmented { label: "Markdown view",
+                            items: vec![
+                                ui::Segment { id: "rich-mode", label: "Rich", tip: Some("Rich editing (delimiters stay hidden)"), selected: is_rich },
+                                ui::Segment { id: "live-mode", label: "Live", tip: Some("Keyboard-first Markdown live editing"), selected: is_md_live },
+                                ui::Segment { id: "source-mode", label: "Source", tip: None, selected: view() == Pane::Source },
+                            ],
+                            onselect: move |i: usize| match i {
+                                0 => set_edit_mode(projection::EditMode::Rich),
+                                1 => set_edit_mode(projection::EditMode::Markdown),
+                                _ => change_view(Pane::Source),
+                            },
+                        }
+                        ui::Button { id: "insert-table", variant: ui::Variant::Icon, label: "Insert table", tip: "Insert Markdown table", icon: Icon::Table, onclick: move |_| writing.insert_table(source()) }
+                        if newer_build() {
+                            ui::Button { id: "restart-app", label: "Restart", tip: "A newer build is ready. Restart Margin to run it",
+                                class: "!text-accent-deep !border-accent-deep", onclick: move |_| restart::restart_app() }
+                        }
+                        div { class: "flex items-center pl-[5px] border-0 border-l border-solid border-line gap-px", role: "group", aria_label: "History",
+                            ui::Button { id: "undo", variant: ui::Variant::Icon, label: "Undo", tip: undo_tip, icon: Icon::Undo, disabled: !note.read().can_undo(), onclick: move |_| writing.history(source(), false) }
+                            ui::Button { id: "redo", variant: ui::Variant::Icon, label: "Redo", tip: redo_tip, icon: Icon::Redo, disabled: !note.read().can_redo(), onclick: move |_| writing.history(source(), true) }
+                        }
                     }
                     {
                         let open_comments = writing.discussion.threads.read().iter().filter(|t| !t.file.resolved).count();
@@ -689,8 +708,10 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                             }
                         }
                     }
-                    ui::Button { id: "toggle-debug", variant: ui::Variant::Icon, label: "Debug display", tip: "Toggle debug display (F8)", icon: Icon::Bug, selected: inspecting() && !source(), onclick: move |_| toggle_debug() }
-                    page::PageBar { writing }
+                    if !read_only {
+                        ui::Button { id: "toggle-debug", variant: ui::Variant::Icon, label: "Debug display", tip: "Toggle debug display (F8)", icon: Icon::Bug, selected: inspecting() && !source(), onclick: move |_| toggle_debug() }
+                        page::PageBar { writing }
+                    }
                     if let Some(h) = bar.as_ref() {
                         for action in h.actions.iter() {
                             ui::Button { label: action.label.clone(), text: action.label.clone(), icon: action.icon, onclick: { let go = action.onclick; move |_| go.call(()) } }
@@ -795,12 +816,12 @@ pub fn notebook_view(initial: &str, options: NotebookOptions) -> Element {
                     let words = markdown.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count();
                     format!("{words} {}", if words == 1 { "word" } else { "words" })
                 } }
-                if !source() && hint_at.is_some() {
+                if !source() && hint_at.is_some() && !read_only {
                     span { id: "marker-hint", class: "pl-2 border-0 border-l border-solid border-line", "{hint}" }
                     ui::Button { id: action_id.to_owned(), variant: ui::Variant::Link, label: action, onclick: move |_| {
                         if raw { writing.keep_literal(); } else { writing.toggle_literal(); }
                     } }
-                } else if !source() && writing.parked_selection.read().is_some() {
+                } else if !source() && writing.parked_selection.read().is_some() && !read_only {
                     span { class: "pl-2 border-0 border-l border-solid border-line", "Press Enter or type to edit" }
                 }
                 span { class: "ml-auto flex items-center gap-2 type-mono-ui text-muted",

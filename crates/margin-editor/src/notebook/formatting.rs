@@ -93,7 +93,9 @@ impl Writing {
         } else {
             x + line_x / scale
         };
-        let bar_w = 276.;
+        // As wide as the bar is drawn: the styles and Comment, or, on a
+        // read-only note, Comment alone.
+        let bar_w = if self.read_only { 102. } else { 276. };
         Some([
             (anchor_x - bar_w / 2.)
                 .clamp(8., (f64::from(w) - bar_w - 8.).max(8.))
@@ -150,14 +152,17 @@ pub(super) fn FormatBar(writing: Writing) -> Element {
         return rsx! {};
     };
     rsx! {
-        Toolbar { id: "format-bar", class: "fixed z-[9] w-auto min-w-[190px] max-w-[calc(100vw-16px)]", label: "Format selection", look: ToolbarLook::Floating, keep_focus: true,
+        Toolbar { id: "format-bar", class: if writing.read_only { "fixed z-[9] w-auto max-w-[calc(100vw-16px)]" } else { "fixed z-[9] w-auto min-w-[190px] max-w-[calc(100vw-16px)]" }, label: "Format selection", look: ToolbarLook::Floating, keep_focus: true,
             style: "left:{x}px; top:{y}px;",
-            for (i, style) in Style::ALL.into_iter().enumerate() {
-                Button { key: "{i}", id: format!("format-{i}"), variant: Variant::Icon, label: style.label(), tip: tips[i].clone(),
-                    icon: [Icon::Bold, Icon::Italic, Icon::Strike, Icon::Code, Icon::Link][i], selected: active[i],
-                    onclick: move |_| { writing.format(style); } }
+            // A read-only note can only be commented on.
+            if !writing.read_only {
+                for (i, style) in Style::ALL.into_iter().enumerate() {
+                    Button { key: "{i}", id: format!("format-{i}"), variant: Variant::Icon, label: style.label(), tip: tips[i].clone(),
+                        icon: [Icon::Bold, Icon::Italic, Icon::Strike, Icon::Code, Icon::Link][i], selected: active[i],
+                        onclick: move |_| { writing.format(style); } }
+                }
+                ToolbarSep {}
             }
-            ToolbarSep {}
             Button { id: "format-comment", class: "!h-[30px] !px-2 !text-[#fde6b4] !bg-[rgba(236,179,76,0.16)] !type-hint !font-medium hover:!bg-warn hover:!text-on-accent", variant: Variant::Ghost, label: "Add comment", text: "Comment",
                 tip: comment_tip, icon: Icon::Comment, onclick: move |_| { writing.start_comment_from_selection(); } }
         }

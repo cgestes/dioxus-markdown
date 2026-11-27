@@ -39,11 +39,10 @@ pub(super) fn PageEditor(text: String, source: Option<PageSource>, options: Note
     margin_editor::notebook_view(&text, NotebookOptions { store, ..options })
 }
 
-/// A page in the editor, below the topic's header. It opens at once from the
-/// pages read with the workspace (or the demo's), then checks the server's
-/// version; a newer one replaces it before you type.
-#[component]
-pub(super) fn DocPane(path: String) -> Element {
+/// A page of the space as it opens: at once from the pages read with the
+/// workspace (or the demo's), then the server's version; a newer one
+/// replaces it before you type. `None` until there is something to show.
+fn use_page(path: String) -> Signal<Option<Result<Page, String>>> {
     let ui = use_context::<Ui>();
     let mut opened = use_signal({
         let path = path.clone();
@@ -52,29 +51,48 @@ pub(super) fn DocPane(path: String) -> Element {
             Some(_) => ui.pages.peek().get(&path).cloned().map(Ok),
         }
     });
-    {
-        let path = path.clone();
-        use_hook(move || {
-            let Some(live) = ui.live() else { return };
-            spawn(async move {
-                let space = live.space.clone();
-                let read = work(move || space.read(&path)).await;
-                let mut ui = ui;
-                match read {
-                    Ok(page) => {
-                        let changed = opened.peek().as_ref().is_none_or(|o| o.as_ref().map_or(true, |p| p.etag != page.etag));
-                        ui.pages.write().insert(page.path.clone(), page.clone());
-                        if changed {
-                            opened.set(Some(Ok(page)));
-                        }
+    use_hook(move || {
+        let Some(live) = ui.live() else { return };
+        spawn(async move {
+            let space = live.space.clone();
+            let read = work(move || space.read(&path)).await;
+            let mut ui = ui;
+            match read {
+                Ok(page) => {
+                    let changed = opened.peek().as_ref().is_none_or(|o| o.as_ref().map_or(true, |p| p.etag != page.etag));
+                    ui.pages.write().insert(page.path.clone(), page.clone());
+                    if changed {
+                        opened.set(Some(Ok(page)));
                     }
-                    // A copy from the load is still worth showing.
-                    Err(e) if opened.peek().is_none() => opened.set(Some(Err(e))),
-                    Err(_) => {}
                 }
-            });
+                // A copy from the load is still worth showing.
+                Err(e) if opened.peek().is_none() => opened.set(Some(Err(e))),
+                Err(_) => {}
+            }
         });
-    }
+    });
+    opened
+}
+
+/// The editor on an opened page, in Rich view: it saves through the space
+/// (unless `read_only`), and the comment agent answers its comments.
+fn page_editor(ui: &Ui, page: Page, bar: HostBar, read_only: bool) -> Element {
+    let comments = match ui.live() {
+        Some(live) if live.zc.paired() => Comments::Agent(CommentAgent { alias: live.endpoints.comment_agent.clone(), chat: Arc::new(live.zc.clone()) }),
+        Some(live) => Comments::Agent(CommentAgent::unavailable(&live.endpoints.comment_agent, "Osom is not paired with ZeroClaw: run `osom pair <code>`.")),
+        None => Comments::Empty,
+    };
+    let source = ui.live().map(|live| PageSource { path: page.path.clone(), files: Arc::new(live.space.clone()), etag: page.etag.clone() });
+    let key = format!("{}@{}", page.path, page.etag.clone().unwrap_or_default());
+    let options = NotebookOptions { view: View::Rich, comments, host: Host { bar: Some(bar), ..Default::default() }, read_only, ..Default::default() };
+    rsx! { PageEditor { key: "{key}", text: page.text, source, options } }
+}
+
+/// A page in the editor, below the topic's header.
+#[component]
+pub(super) fn DocPane(path: String) -> Element {
+    let ui = use_context::<Ui>();
+    let opened = use_page(path.clone());
     let back_to = back_label(&ui);
     let onback = use_callback(move |_| ui.open(Pane::Tab));
     // Under a topic, the header's SilverBullet button already opens this page.
@@ -84,25 +102,42 @@ pub(super) fn DocPane(path: String) -> Element {
         move |_| if let Some(url) = &web { open_url(url) }
     });
     let host = HostBar {
-        back: back_to.into(),
-        onback,
+        back: Some(HostAction { label: back_to.into(), icon: Icon::Back, onclick: onback }),
         crumb: model::basename(&path).into(),
         actions: web.map(|_| HostAction { label: "SilverBullet".into(), icon: Icon::Open, onclick: open_web }).into_iter().collect(),
     };
     match opened() {
         None => rsx! { div { class: PANEBAR, Button { label: back_to, icon: Icon::Back, text: back_to, variant: Variant::Ghost, onclick: move |_| ui.open(Pane::Tab) } span { class: PANEBAR_CRUMB, "{host.crumb}" } } },
         Some(Err(e)) => rsx! { Banner { text: e, tone: Tone::Alert } },
-        Some(Ok(page)) => {
-            let comments = match ui.live() {
-                Some(live) if live.zc.paired() => Comments::Agent(CommentAgent { alias: live.endpoints.comment_agent.clone(), chat: Arc::new(live.zc.clone()) }),
-                Some(live) => Comments::Agent(CommentAgent::unavailable(&live.endpoints.comment_agent, "Osom is not paired with ZeroClaw: run `osom pair <code>`.")),
-                None => Comments::Empty,
-            };
-            let source = ui.live().map(|live| PageSource { path: page.path.clone(), files: Arc::new(live.space.clone()), etag: page.etag.clone() });
-            let key = format!("{}@{}", page.path, page.etag.clone().unwrap_or_default());
-            let options = NotebookOptions { view: View::Rich, comments, host: Host { bar: Some(host), ..Default::default() }, ..Default::default() };
-            rsx! { div { class: "min-h-[400px] bg-page [&_.notebook]:min-h-0 [&_#comments-pane]:top-0 [&_#comments-pane]:max-h-[calc(100vh-120px)]", PageEditor { key: "{key}", text: page.text.clone(), source, options } } }
-        }
+        Some(Ok(page)) => rsx! {
+            div { class: "min-h-[400px] bg-page [&_.notebook]:min-h-0 [&_#comments-pane]:top-0 [&_#comments-pane]:max-h-[calc(100vh-120px)]",
+                {page_editor(&ui, page, host, false)}
+            }
+        },
+    }
+}
+
+/// The topic's own page on its Overview: read-only, but you can select a
+/// passage and comment on it there; Edit opens it in the editor. Its bar is
+/// the card's header. The card is too narrow to hold the comments beside
+/// the page, so they open over the window's right side.
+#[component]
+pub(super) fn OverviewPage(path: String) -> Element {
+    let ui = use_context::<Ui>();
+    let opened = use_page(path.clone());
+    let edit = use_callback({
+        let path = path.clone();
+        move |_| ui.open(Pane::Doc(path.clone()))
+    });
+    let bar = HostBar { back: None, crumb: path, actions: vec![HostAction { label: "Edit".into(), icon: Icon::Pencil, onclick: edit }] };
+    match opened() {
+        None => rsx! { div { class: "py-6 text-faint", "Opening the page…" } },
+        Some(Err(e)) => rsx! { Banner { text: e, tone: Tone::Alert } },
+        Some(Ok(page)) => rsx! {
+            div { class: "[&_.notebook]:min-h-0 [&_#mode-bar]:bg-surface [&_#mode-bar]:-mt-1 [&_.paper]:mt-3 [&_.paper]:pb-2 [&_footer]:hidden [&_#comments-pane]:fixed [&_#comments-pane]:top-0 [&_#comments-pane]:right-0 [&_#comments-pane]:h-screen [&_#comments-pane]:z-[16] [&_#comments-pane]:max-h-none [&_#comments-pane]:shadow-side",
+                {page_editor(&ui, page, bar, true)}
+            }
+        },
     }
 }
 

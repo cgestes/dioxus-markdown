@@ -2177,6 +2177,62 @@ fn slash_menu_arrow_navigation_is_fast() {
     );
 }
 
+/// A read-only notebook is read, selected and commented on, never changed:
+/// keys, a committed IME text and a checkbox leave the note and the field as
+/// they were, and the agent's proposal waits for an editor.
+#[test]
+fn a_read_only_notebook_takes_comments_but_no_edits() {
+    fn reader() -> Element {
+        notebook_view(SAMPLE, NotebookOptions { view: View::Rich, read_only: true, ..Default::default() })
+    }
+    let config = dioxus_native::DocumentConfig {
+        font_ctx: Some(typefaces::fonts()),
+        viewport: Some(Viewport { window_size: (820, 520), ..Default::default() }),
+        ..Default::default()
+    };
+    let mut doc = DioxusDocument::new(VirtualDom::new(reader), config);
+    doc.initial_build();
+    render(&mut doc);
+    assert!(has(&doc, "toggle-comments"));
+    for gone in ["rich-mode", "insert-table", "undo", "toggle-debug"] {
+        assert!(!has(&doc, gone), "{gone} is for editing");
+    }
+
+    let open = SAMPLE.find("[ ]").unwrap();
+    open_body_at(&mut doc, [open + 1; 2]);
+    let field = field_showing(&doc, "Recorder packed").unwrap();
+    let shown = value(&doc, &field);
+    press(&mut doc, Key::Character(" ".into()), false);
+    press(&mut doc, Key::Character("q".into()), false);
+    click(&mut doc, &field);
+    commit_text(&mut doc, "typed");
+    press(&mut doc, Key::Named(NamedKey::Backspace), false);
+    press(&mut doc, Key::Named(NamedKey::Enter), false);
+    assert_eq!(markdown(&doc), SAMPLE);
+    assert_eq!(value(&doc, &field), shown);
+
+    // Selecting offers Comment alone, centred on the selection.
+    let quote = "Pack the windscreen";
+    let name = field_showing(&doc, quote).unwrap();
+    let start = value(&doc, &name).find(quote).unwrap();
+    click(&mut doc, &name);
+    select(&doc, &name, [start, start + quote.len()]);
+    send_key(&mut doc, Key::Named(NamedKey::Shift), KeyState::Released, false);
+    assert!(has(&doc, "format-comment") && !has(&doc, "format-0"), "only Comment");
+    let [field_x, ..] = bounds(&doc, &name);
+    let (first, last) = (glyph_position(&doc, &name, start).0, glyph_position(&doc, &name, start + quote.len()).0);
+    let middle = field_x + f64::from(first + last) / 2.0;
+    let [bar_x, _, bar_w, _] = bounds(&doc, "format-bar");
+    assert!((bar_x + bar_w / 2.0 - middle).abs() < 8.0, "bar {bar_x}+{bar_w} is centred on {middle}");
+
+    comment_on(&mut doc, quote, "Shorten this to a few words.");
+    let answered = |doc: &DioxusDocument| has(doc, "comment-thread-1") && text(doc, "comment-thread-1").contains("Open the page in the editor");
+    settle(&mut doc, std::time::Duration::from_secs(2), answered);
+    assert!(answered(&doc), "the stand-in answered with a proposal: {}", text(&doc, "comment-thread-1"));
+    assert!(!has(&doc, "comment-apply-1-1"), "no Apply in a read-only notebook");
+    assert_eq!(markdown(&doc), SAMPLE);
+}
+
 #[test]
 fn anchored_comments_create_reply_apply_undo_and_resolve() {
     let mut doc = editor();
@@ -3229,10 +3285,18 @@ fn the_host_supplies_its_menu_button_and_its_pane_bar() {
     // A pane of the app's window: the bar starts with the app's way back.
     // Being a pane does not choose the view: it is still Live unless asked.
     fn as_pane() -> Element {
-        let bar = HostBar { back: "Docs".into(), onback: EventHandler::new(|_| {}), crumb: "notes.md".into(), actions: vec![] };
+        let back = HostAction { label: "Docs".into(), icon: Icon::Back, onclick: EventHandler::new(|_| {}) };
+        let bar = HostBar { back: Some(back), crumb: "notes.md".into(), actions: vec![] };
         notebook_view(SAMPLE, NotebookOptions { host: Host { bar: Some(bar), ..Default::default() }, ..Default::default() })
     }
     let pane = open(VirtualDom::new(as_pane));
     assert!(has(&pane, "doc-back") && !has(&pane, "notes-menu"));
     assert_eq!(attribute(&pane, "live-mode", "aria-pressed").as_deref(), Some("true"));
+
+    // A page inside the app's own view has no way back.
+    fn in_place() -> Element {
+        let bar = HostBar { back: None, crumb: String::new(), actions: vec![] };
+        notebook_view(SAMPLE, NotebookOptions { host: Host { bar: Some(bar), ..Default::default() }, ..Default::default() })
+    }
+    assert!(!has(&open(VirtualDom::new(in_place)), "doc-back"));
 }

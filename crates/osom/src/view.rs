@@ -95,8 +95,8 @@ pub struct TopicView {
     /// Agent-maintained summary; hidden when empty.
     pub brief: String,
     pub brief_by: String,
-    /// The topic's own page (README or person page), rendered read-only.
-    pub overview: Option<String>,
+    /// The topic's own page (README or person page): the Overview shows it
+    /// read-only, open to comments; Edit opens it in the editor.
     pub overview_path: Option<String>,
     pub agenda: Vec<Agenda>,
     pub threads: Vec<ThreadRow>,

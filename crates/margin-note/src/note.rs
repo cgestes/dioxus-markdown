@@ -23,6 +23,7 @@ pub struct Note {
     undo: UndoManager,
     next_selection: Arc<Mutex<UndoItemMeta>>,
     restored_selection: Arc<Mutex<Option<[usize; 2]>>>,
+    read_only: bool,
 }
 
 impl Note {
@@ -67,7 +68,23 @@ impl Note {
             undo,
             next_selection,
             restored_selection,
+            read_only: false,
         }
+    }
+
+    /// Refuse every change from now on, or allow them again. A read-only
+    /// note answers each edit, undo and redo with Loro's own refusal to edit,
+    /// `LoroError::EditWhenDetached`; reading and comment anchors still work.
+    pub fn set_read_only(&mut self, read_only: bool) {
+        self.read_only = read_only;
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
+    fn writable(&self) -> LoroResult<()> {
+        if self.read_only { Err(loro::LoroError::EditWhenDetached) } else { Ok(()) }
     }
 
     pub fn document(&self) -> &LoroDoc {
@@ -117,6 +134,7 @@ impl Note {
                 Decision::PassThrough => continue,
                 Decision::Consume => return Ok(action),
                 Decision::SetChecked { at, checked } => {
+                    self.writable()?;
                     self.doc
                         .get_text("markdown")
                         .mark_utf8(at..at + 1, CHECKED, checked)?;
@@ -130,6 +148,7 @@ impl Note {
 
     /// Add `text` at the end of the note, in one commit.
     pub fn append(&self, text: &str) -> LoroResult<()> {
+        self.writable()?;
         let markdown = self.doc.get_text("markdown");
         markdown.insert_utf8(markdown.len_utf8(), text)?;
         self.doc.commit();
@@ -144,6 +163,7 @@ impl Note {
 
     /// Apply disjoint, source-ordered edits in one undoable Loro commit.
     pub fn splice(&self, edits: &[Splice]) -> LoroResult<()> {
+        self.writable()?;
         let before = self.markdown();
         let mut previous = 0;
         for edit in edits {
@@ -251,9 +271,11 @@ impl Note {
     }
 
     pub fn undo(&mut self) -> LoroResult<bool> {
+        self.writable()?;
         self.undo.undo()
     }
     pub fn redo(&mut self) -> LoroResult<bool> {
+        self.writable()?;
         self.undo.redo()
     }
 
@@ -293,6 +315,24 @@ mod tests {
         let restored = LoroDoc::new();
         restored.import(&saved).unwrap();
         assert_eq!(Note::from_doc(restored).markdown(), a.markdown());
+    }
+
+    #[test]
+    fn a_read_only_note_refuses_every_change_and_still_reads() {
+        let mut note = Note::new("- [ ] listen");
+        note.replace(0..0, "# ").unwrap();
+        note.set_read_only(true);
+        let refused = |r: LoroResult<()>| matches!(r, Err(loro::LoroError::EditWhenDetached));
+        assert!(refused(note.replace(0..0, "x")));
+        assert!(refused(note.append("x")));
+        assert!(refused(note.edit_source("changed")));
+        assert!(refused(note.edit_marker(5..5, Mode::Structured, Input::Type(' ')).map(|_| ())));
+        assert!(refused(note.undo().map(|_| ())));
+        assert_eq!(note.markdown(), "# - [ ] listen");
+        assert!(note.anchor_range(2..7).is_some());
+        note.set_read_only(false);
+        assert!(note.undo().unwrap());
+        assert_eq!(note.markdown(), "- [ ] listen");
     }
 
     #[test]

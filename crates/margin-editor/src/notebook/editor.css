@@ -271,3 +271,9 @@ textarea.body-editor {
 .notebook.embedded .paper { max-width: 760px; margin: var(--space-5) 0 0; padding: 0 0 64px; }
 .notebook.embedded .block-handle-anchor { left: -26px; width: 26px; padding-right: 6px; }
 .notebook.embedded .block-drop-line { left: 0; right: 0; }
+
+/* Read-only: nothing to drag, insert or reshape. */
+.notebook.read-only .block-handle-anchor,
+.notebook.read-only .ledger-col-handle-wrap,
+.notebook.read-only .ledger-row-handle-wrap,
+.notebook.read-only #empty-line-tools { display: none; }

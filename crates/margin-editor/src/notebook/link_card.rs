@@ -528,19 +528,21 @@ fn LinkPreviewBody(
                 span { class: "flex-auto min-w-0 overflow-hidden text-ellipsis whitespace-nowrap", "{preview.display_target}" }
             }
             div { class: "flex items-center gap-0.5 flex-none [&_.ui-btn.icon]:w-[26px] [&_.ui-btn.icon]:h-[26px] [&_.ui-btn.icon]:rounded-sm [&_.ui-btn.icon]:text-muted [&_.ui-btn.icon_.tool-icon]:w-[14px] [&_.ui-btn.icon_.tool-icon]:h-[14px] [&_.ui-btn.icon_.tool-icon_svg]:w-[14px] [&_.ui-btn.icon_.tool-icon_svg]:h-[14px]", role: "group", aria_label: "Link actions",
-                Button {
-                    id: "link-card-edit",
-                    variant: Variant::Icon,
-                    label: "Edit link",
-                    tip: "Edit link",
-                    icon: Icon::Pencil,
-                    onclick: move |_| {
-                        edit_label.set(start_edit_label.clone());
-                        edit_url.set(start_edit_url.clone());
-                        copied_url.set(None);
-                        let mut w = writing;
-                        w.links.editing.set(true);
-                    },
+                if !writing.read_only {
+                    Button {
+                        id: "link-card-edit",
+                        variant: Variant::Icon,
+                        label: "Edit link",
+                        tip: "Edit link",
+                        icon: Icon::Pencil,
+                        onclick: move |_| {
+                            edit_label.set(start_edit_label.clone());
+                            edit_url.set(start_edit_url.clone());
+                            copied_url.set(None);
+                            let mut w = writing;
+                            w.links.editing.set(true);
+                        },
+                    }
                 }
                 Button {
                     id: "link-card-copy",
