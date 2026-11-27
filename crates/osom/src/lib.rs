@@ -1,17 +1,13 @@
 //! Osom: the agent's topics, a window of their own over the editor. The
 //! Topics window shows the agent's space as a notebook.
 //!
-//! `osom` reads the live space (SilverBullet, over the tailnet) and the
-//! agent's conversations (ZeroClaw); `osom --demo` shows the same window
-//! with sample data and a stand-in agent. Both build a `view::Workspace`
-//! (`live`, `demo`), and the views render it from `ui` components, so the
-//! two modes share one interface. The window, its state and the sidebar
-//! are here; `today` has Today and the Inbox, `topic` a topic's page,
-//! `pages` a document or transcript in its own pane, and `chat` the
-//! agent's chat and pairing.
+//! `osom` reads the space and the agent's conversations (ZeroClaw) into a
+//! `view::Workspace`, and the views render it from `ui` components. The window,
+//! its state and the sidebar are here; `today` has Today and the Inbox, `topic`
+//! a topic's page, `pages` a document or transcript in its own pane, and `chat`
+//! the agent's chat and pairing.
 pub mod cli;
 pub mod commands;
-mod demo;
 mod live;
 mod view;
 mod chat;
@@ -19,7 +15,7 @@ mod pages;
 mod today;
 mod topic;
 use margin_editor::CommentAgent;
-use crate::live::{Backend, Live, load};
+use crate::live::{Live, load};
 use crate::view::*;
 use chat::*;
 use pages::*;
@@ -55,10 +51,9 @@ const PANEBAR_CRUMB: &str = "min-w-0 overflow-hidden text-muted type-mono-ui whi
 // ── Start ───────────────────────────────────────────────────────────────────
 
 /// Where the window opens:
-/// `osom [--demo] [--open <topic|today|inbox>] [--tab <name>] [--doc <path>]`.
+/// `osom [--open <topic|today|inbox>] [--tab <name>] [--doc <path>]`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Start {
-    demo: bool,
     place: Place,
     tab: Tab,
     doc: Option<String>,
@@ -67,19 +62,17 @@ pub struct Start {
 impl Start {
     /// The window's start, from the parsed `osom` command line.
     pub fn from_cli(args: &crate::cli::TopicsArgs) -> Self {
-        Self::build(args.demo, args.open.as_deref(), args.tab.unwrap_or(Tab::Overview), args.doc.as_deref())
+        Self::build(args.open.as_deref(), args.tab.unwrap_or(Tab::Overview), args.doc.as_deref())
     }
 
-    fn build(demo: bool, open: Option<&str>, tab: Tab, doc: Option<&str>) -> Self {
+    fn build(open: Option<&str>, tab: Tab, doc: Option<&str>) -> Self {
         let place = match open.filter(|s| !s.is_empty()) {
             Some("today") => Place::Today,
             Some("inbox") => Place::Inbox,
             Some(id) => Place::Topic(id.into()),
-            None if demo => Place::Topic("house".into()),
             None => Place::Today,
         };
         Self {
-            demo,
             place,
             tab,
             doc: doc.filter(|d| !d.is_empty()).map(String::from),
@@ -87,12 +80,12 @@ impl Start {
     }
 
     #[cfg(test)]
-    fn new(demo: bool, open: Option<&str>, tab: Option<&str>, doc: Option<&str>) -> Self {
+    fn new(open: Option<&str>, tab: Option<&str>, doc: Option<&str>) -> Self {
         use clap::ValueEnum;
         let tab = tab
             .and_then(|s| Tab::from_str(s, true).ok())
             .unwrap_or(Tab::Overview);
-        Self::build(demo, open, tab, doc)
+        Self::build(open, tab, doc)
     }
 }
 
@@ -150,7 +143,7 @@ struct ChatState {
 #[derive(Clone, Copy)]
 struct Ui {
     /// What the window talks to; `None` when Osom is not set up.
-    backend: Signal<Option<Backend>>,
+    live: Signal<Option<Live>>,
     ws: Signal<Option<Workspace>>,
     place: Signal<Place>,
     tab: Signal<Tab>,
@@ -170,11 +163,7 @@ struct Ui {
 
 impl Ui {
     fn live(&self) -> Option<Live> {
-        self.backend.read().as_ref()?.live().cloned()
-    }
-
-    fn demo(&self) -> bool {
-        matches!(*self.backend.read(), Some(Backend::Demo))
+        self.live.read().clone()
     }
 
     /// The current topic's title and chat context.
@@ -264,18 +253,12 @@ impl From<&TopicView> for TopicTag {
 
 #[component]
 pub fn Shell(start: Start) -> Element {
-    // No connection in the demo, or when Osom is not set up.
-    let boot = use_hook(|| {
-        if start.demo {
-            return Ok(Backend::Demo);
-        }
-        Endpoints::load().map(|e| Backend::Live(Live::new(e)))
-    });
+    let boot = use_hook(|| Endpoints::load().map(Live::new));
     let (request, refreshes) = use_hook(|| watch::channel(()));
     let ui = Ui {
-        ws: use_signal(|| boot.as_ref().ok().and_then(Backend::initial)),
+        ws: use_signal(|| None),
         error: use_signal(|| boot.clone().err()),
-        backend: use_signal(|| boot.clone().ok()),
+        live: use_signal(|| boot.clone().ok()),
         place: use_signal(|| start.place.clone()),
         tab: use_signal(|| start.tab),
         pane: use_signal(|| start.doc.clone().map_or(Pane::Tab, Pane::Doc)),
@@ -297,15 +280,7 @@ pub fn Shell(start: Start) -> Element {
             return;
         }
         let key = model::session_key(&session);
-        let known = if ui.demo() {
-            let ws = ui.ws.peek();
-            match (ui.place)() {
-                Place::Topic(id) => ws.as_ref().and_then(|w| w.find(&id)).map(|t| t.chat.clone()),
-                _ => ws.as_ref().map(|w| w.general_chat.clone()),
-            }
-        } else {
-            ui.turns.read().get(&key).cloned()
-        };
+        let known = ui.turns.read().get(&key).cloned();
         let fetch = known.is_none();
         chat.set(ChatState {
             session: session.clone(),
@@ -404,8 +379,8 @@ fn Sidebar() -> Element {
                 onclick: move |_| ui.go(Place::Topic(id.clone())) }
         }
     };
-    let footer = match (ui.live(), ws.as_ref()) {
-        (Some(l), _) => {
+    let footer = match ui.live() {
+        Some(l) => {
             let paired = l.zc.paired();
             let zc_dot = if paired { "bg-ok" } else { "bg-alert" };
             rsx! {
@@ -415,12 +390,7 @@ fn Sidebar() -> Element {
                 if paired { {format!("{} · paired", host(&l.endpoints.zeroclaw))} } else { "not paired" }
             }
         }
-        (None, Some(w)) => rsx! {
-            strong { "ZeroClaw" } " · agent " strong { "{w.agent}" } br {}
-            "{w.host}" br {}
-            "demo data · not connected"
-        },
-        (None, None) => rsx! {},
+        None => rsx! {},
     };
     rsx! {
         aside { class: "flex flex-col gap-0.5 flex-[0_0_220px] w-[220px] h-full pt-4 px-2.5 pb-3 overflow-hidden bg-rail border-0 border-r border-solid border-line",
@@ -492,42 +462,25 @@ mod tests {
         assert_eq!(fit("Sebag-Peyrelevade-Kergozou", 10), "Sebag-Pey…");
     }
 
-    /// Paint the window for each view into `target/topics-shots`.
+    /// Paint the live window for each view into `target/topics-shots`.
     /// `cargo test -p osom topics_shots -- --ignored --nocapture`
-    /// Set `MARGIN_TOPICS_LIVE=1` to shoot the live space instead of the demo.
     #[test]
     #[ignore = "writes screenshots; live mode needs the tailnet"]
     fn topics_shots() {
         use blitz_dom::Document;
         use blitz_traits::shell::Viewport;
         use dioxus_native::DioxusDocument;
-        let live = std::env::var("MARGIN_TOPICS_LIVE").is_ok_and(|v| v == "1");
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2).expect("crates/<name> sits two levels below the workspace").join("target/topics-shots");
         std::fs::create_dir_all(&dir).unwrap();
-        let views: &[(&str, &str, &str, &str)] = if live {
-            &[
-                ("live-today", "today", "", ""),
-                ("live-car", "car", "", ""),
-                ("live-wedding-questions", "wedding", "questions", ""),
-                ("live-unfiled", "inbox", "", ""),
-                ("live-doc", "car", "", "car/maintenance.md"),
-            ]
-        } else {
-            &[
-                ("demo-house", "house", "", ""),
-                ("demo-mazda", "mazda", "", ""),
-                ("demo-today", "today", "", ""),
-                ("demo-inbox", "inbox", "", ""),
-                ("demo-mazda-calendar", "mazda", "calendar", ""),
-                ("demo-nikki-lists", "nikki", "lists", ""),
-                ("demo-hot-water-code", "house/hot-water", "code", ""),
-                ("demo-wedding-discussions", "wedding", "discussions", ""),
-                ("demo-house-docs", "house", "docs", ""),
-                ("demo-doc", "house", "docs", "topics/house/house-systems.md"),
-            ]
-        };
+        let views: &[(&str, &str, &str, &str)] = &[
+            ("live-today", "today", "", ""),
+            ("live-car", "car", "", ""),
+            ("live-wedding-questions", "wedding", "questions", ""),
+            ("live-unfiled", "inbox", "", ""),
+            ("live-doc", "car", "", "car/maintenance.md"),
+        ];
         for (name, open, tab, doc) in views {
-            let start = Start::new(!live, Some(open), Some(tab), Some(doc));
+            let start = Start::new(Some(open), Some(tab), Some(doc));
             let (w, h) = (1320u32, 860u32);
             let config = dioxus_native::DocumentConfig {
                 font_ctx: Some(margin_ui::typefaces::fonts()),
@@ -536,7 +489,7 @@ mod tests {
             };
             let mut doc = DioxusDocument::new(VirtualDom::new_with_props(Shell, ShellProps { start }), config);
             doc.initial_build();
-            let settle = Duration::from_millis(if live { 4000 } else { 300 });
+            let settle = Duration::from_millis(4000);
             let started = std::time::Instant::now();
             while started.elapsed() < settle {
                 doc.poll(None);
@@ -559,9 +512,9 @@ mod tests {
 
     #[test]
     fn start_options_choose_where_the_window_opens() {
-        let s = Start::new(true, None, None, None);
-        assert_eq!((s.place, s.tab, s.doc), (Place::Topic("house".into()), Tab::Overview, None));
-        let s = Start::new(false, Some("inbox"), Some("questions"), Some("car/log.md"));
+        let s = Start::new(None, None, None);
+        assert_eq!((s.place, s.tab, s.doc), (Place::Today, Tab::Overview, None));
+        let s = Start::new(Some("inbox"), Some("questions"), Some("car/log.md"));
         assert_eq!((s.place, s.tab, s.doc.as_deref()), (Place::Inbox, Tab::Questions, Some("car/log.md")));
     }
 
@@ -569,7 +522,7 @@ mod tests {
     fn returning_to_today_requests_a_refresh_once_per_navigation() {
         use dioxus_native::DioxusDocument;
 
-        let start = Start::new(true, Some("today"), None, None);
+        let start = Start::new(Some("today"), None, None);
         let dom = VirtualDom::new_with_props(Shell, ShellProps { start });
         let mut doc = DioxusDocument::new(dom, Default::default());
         doc.initial_build();
@@ -606,14 +559,37 @@ mod tests {
     }
 
     #[test]
-    fn demo_workspace_has_every_designed_topic() {
-        let w = crate::demo::workspace();
-        let ids: Vec<_> = w.all().map(|t| t.id.clone()).collect();
-        for id in ["mazda", "wedding", "house", "house/hot-water", "house/gutters", "modular", "people", "nikki"] {
-            assert!(ids.contains(&id.to_string()), "missing {id}");
-        }
-        assert_eq!(w.inbox.len(), 3);
+    fn workspace_flattens_nested_topics_and_deduplicates_primary_agenda() {
+        let w = Workspace {
+            today: "2026-11-26".into(),
+            topics: vec![
+                TopicView {
+                    id: "house".into(),
+                    title: "House".into(),
+                    agenda: vec![Agenda { title: "Plumber".into(), sort: "2026-11-28".into(), primary: true, ..Default::default() }],
+                    children: vec![TopicView {
+                        id: "house/hot-water".into(),
+                        title: "Hot water".into(),
+                        agenda: vec![
+                            Agenda { title: "Plumber".into(), sort: "2026-11-28".into(), primary: false, ..Default::default() },
+                            Agenda { title: "Cylinder check".into(), sort: "2026-11-30".into(), primary: true, ..Default::default() },
+                        ],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                TopicView {
+                    id: "car".into(),
+                    title: "Car".into(),
+                    agenda: vec![Agenda { title: "WOF".into(), sort: "2026-12-20".into(), primary: true, ..Default::default() }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let ids: Vec<_> = w.all().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids, ["house", "house/hot-water", "car"]);
         let soon: Vec<_> = upcoming(&w, 7).into_iter().map(|(a, _)| a.title).collect();
-        assert_eq!(soon.len(), 4, "plumber, Black Friday, flowers, cylinder check, once each: {soon:?}");
+        assert_eq!(soon, ["Plumber", "Cylinder check"]);
     }
 }

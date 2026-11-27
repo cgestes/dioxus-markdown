@@ -1,5 +1,5 @@
-//! What the Topics window shows, whatever it came from: the live space
-//! (SilverBullet + ZeroClaw) or the demo data in `demo`.
+//! What the Osom window shows, built from the space and ZeroClaw into a
+//! shared `Workspace` view model.
 pub use osom_topics::{KeyDate, Question as QuestionRow, Source, Turn as ChatLine};
 
 pub use margin_ui::{Channel, Hue, Icon};
@@ -34,7 +34,7 @@ pub struct Agenda {
 /// A conversation: a Telegram group, a Slack thread, a Margin chat.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ThreadRow {
-    /// Unique: the ZeroClaw session key, or a demo id.
+    /// Unique ZeroClaw session key.
     pub key: String,
     pub source: Source,
     pub title: String,

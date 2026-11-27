@@ -1,13 +1,11 @@
-//! Where the Topics window's data comes from: the live space and agent, or
-//! the demo. Both end as a `view::Workspace`.
-use crate::demo;
+//! Where the Topics window's data comes from: the live space and agent,
+//! built into a `view::Workspace`.
 use crate::view::*;
 use margin_core::{dates, heading};
-use osom_hub::{AgentChat, Canned, Endpoints, Page, Space, ZeroClaw};
+use osom_hub::{AgentChat, Endpoints, Page, Space, ZeroClaw};
 use osom_topics::{self as model, Kind, Origin, Reminder, Session, Topic, calendar};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 #[cfg(test)]
 mod tests;
@@ -28,56 +26,20 @@ impl Live {
             endpoints,
         }
     }
-}
-
-/// What the window talks to: the sample data and a stand-in agent, or the
-/// live space and ZeroClaw. The only place the two differ.
-#[derive(Clone)]
-pub(super) enum Backend {
-    Demo,
-    Live(Live),
-}
-
-impl Backend {
-    pub fn live(&self) -> Option<&Live> {
-        match self {
-            Self::Live(l) => Some(l),
-            Self::Demo => None,
-        }
-    }
 
     /// Who answers the topic chat.
     pub fn agent(&self) -> Arc<dyn AgentChat> {
-        match self {
-            Self::Live(l) => Arc::new(l.zc.clone()),
-            Self::Demo => Arc::new(Canned {
-                reply: Box::new(|ask| {
-                    format!(
-                        "(Demo) In Margin this goes over **/ws/chat** as session **{}**; the reply streams back as **chunk** frames and is kept when **done** arrives.",
-                        ask.session
-                    )
-                }),
-                pause: Some(Duration::from_millis(40)),
-            }),
-        }
+        Arc::new(self.zc.clone())
     }
 
     /// The topic chat's agent alias.
     pub fn alias(&self) -> String {
-        match self {
-            Self::Live(l) => l.endpoints.agent.clone(),
-            Self::Demo => "home".into(),
-        }
+        self.endpoints.agent.clone()
     }
 
-    /// Whether the agent can be reached: always in the demo.
+    /// Whether this device has paired with ZeroClaw.
     pub fn paired(&self) -> bool {
-        self.live().is_none_or(|l| l.zc.paired())
-    }
-
-    /// The workspace to show before anything loads.
-    pub fn initial(&self) -> Option<Workspace> {
-        matches!(self, Self::Demo).then(demo::workspace)
+        self.zc.paired()
     }
 }
 

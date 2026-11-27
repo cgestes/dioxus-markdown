@@ -64,10 +64,6 @@ pub(super) fn TopicPage(topic: TopicView) -> Element {
             if let Some(url) = web {
                 Button { label: "SilverBullet", icon: Icon::Open, text: "SilverBullet", onclick: move |_| open_url(&url) }
             }
-            if ui.demo() {
-                Button { label: "Note", icon: Icon::Plus, text: "Note", onclick: move |_| {} }
-                Button { label: "Reminder", icon: Icon::Calendar, text: "Reminder", variant: Variant::Primary, onclick: move |_| {} }
-            }
         }
         div { class: "my-4", Tabs { items, selected, onselect: move |i: usize| ui.set_tab(keys[i]) } }
         // A doc or a conversation replaces the tab's content; the header and

@@ -1,6 +1,7 @@
 use super::*;
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::net::TcpListener;
+use std::time::Duration;
 
 fn load_with_failed_page(failed: &str, status: &str) -> Loaded {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

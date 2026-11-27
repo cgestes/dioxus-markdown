@@ -9,7 +9,7 @@ pub(super) fn send(ui: Ui, text: String) {
     if text.is_empty() || pending.peek().is_some() {
         return;
     }
-    let Some(backend) = ui.backend.peek().clone() else {
+    let Some(live) = ui.live() else {
         return;
     };
     let session = ui.session();
@@ -27,14 +27,14 @@ pub(super) fn send(ui: Ui, text: String) {
     }
     pending.set(Some(ChatLine::default()));
     let ask = Ask {
-        agent: backend.alias(),
+        agent: live.alias(),
         session: session.clone(),
-        name: format!("Margin · {name}"),
+        name: format!("Osom · {name}"),
         content: text,
         // The agent learns what a fresh topic chat is about before its first message.
         preamble: (!context.is_empty()).then(|| model::preamble(&context)),
     };
-    let mut events = turn(backend.agent(), ask, move || {
+    let mut events = turn(live.agent(), ask, move || {
         decisions.recv_timeout(Duration::from_secs(300)).unwrap_or(false)
     });
     spawn(async move {
@@ -102,7 +102,7 @@ pub(super) fn ChatPanel() -> Element {
     let session = use_memo(move || ui.session());
     let (name, context) = brief().unwrap_or_else(|| ("General".into(), "General · all topics".into()));
     let agent = ui.ws.read().as_ref().map(|w| w.agent.clone()).unwrap_or_default();
-    let paired = ui.backend.read().as_ref().is_some_and(Backend::paired);
+    let paired = ui.live.read().as_ref().is_some_and(Live::paired);
     let busy = ui.pending.read().is_some();
     let actions: &[&str] = if brief.read().is_some() {
         &["Summarize this week", "Add reminder", "What’s next?"]
@@ -177,8 +177,8 @@ pub(super) fn Pairing() -> Element {
             let endpoints = l.endpoints.clone();
             match work(move || hub::pair(&endpoints, &c)).await {
                 Ok(zc) => {
-                    let mut backend = ui.backend;
-                    if let Some(Backend::Live(l)) = backend.write().as_mut() {
+                    let mut live_sig = ui.live;
+                    if let Some(l) = live_sig.write().as_mut() {
                         l.zc = zc;
                     }
                     chat.set(ChatState::default());

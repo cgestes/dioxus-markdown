@@ -54,12 +54,8 @@ pub enum Command {
 
 #[derive(Clone, Debug, Default, Args)]
 pub struct TopicsArgs {
-    /// Run offline with sample topics and a stand-in agent.
-    #[arg(long)]
-    pub demo: bool,
-
     /// Print a text summary of the live topics to stdout without opening a window.
-    #[arg(long, conflicts_with_all = ["demo", "open", "tab", "doc"])]
+    #[arg(long, conflicts_with_all = ["open", "tab", "doc"])]
     pub print: bool,
 
     /// Place to open: `today`, `inbox`, or a topic id (e.g. `house`).
@@ -107,17 +103,15 @@ mod tests {
     #[test]
     fn parses_window_flags_and_headless_commands() {
         let default = parse(&["osom"]).unwrap();
-        assert!(!default.topics_args().demo && default.command.is_none());
+        assert!(!default.topics_args().print && default.command.is_none());
 
-        let direct = parse(&["osom", "--demo", "--open", "house", "--tab", "docs", "--doc", "car/log.md"]).unwrap();
+        let direct = parse(&["osom", "--open", "house", "--tab", "docs", "--doc", "car/log.md"]).unwrap();
         let t = direct.topics_args();
-        assert!(t.demo);
         assert_eq!(t.open.as_deref(), Some("house"));
         assert_eq!(t.tab, Some(Tab::Docs));
         assert_eq!(t.doc.as_deref(), Some("car/log.md"));
 
-        let sub = parse(&["osom", "topics", "--demo", "--tab", "calendar"]).unwrap();
-        assert!(sub.topics_args().demo);
+        let sub = parse(&["osom", "topics", "--tab", "calendar"]).unwrap();
         assert_eq!(sub.topics_args().tab, Some(Tab::Calendar));
         assert!(parse(&["osom", "topics", "--print"]).unwrap().topics_args().print);
         assert!(parse(&["osom", "--print"]).unwrap().topics_args().print);
@@ -132,8 +126,8 @@ mod tests {
             Some(Command::CommentTest { .. })
         ));
 
-        assert!(parse(&["osom", "--demo", "topics"]).is_err());
-        assert!(parse(&["osom", "topics", "--print", "--demo"]).is_err());
+        assert!(parse(&["osom", "--demo"]).is_err());
+        assert!(parse(&["osom", "topics", "--print", "--open", "car"]).is_err());
         assert!(parse(&["osom", "--tab", "bogus"]).is_err());
     }
 }

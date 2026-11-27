@@ -55,7 +55,7 @@ On **Today**, **Key dates** shows the next three weeks of entries from the `Key 
 
 | Command | What it does |
 | --- | --- |
-| `cargo run --locked -p osom -- topics --demo` | The designed window with sample data. No network. |
+| `cargo run --locked -p osom` | Launch the Osom workspace window. |
 | `osom setup <silverbullet-url> <zeroclaw-url> <agent>` | Writes `~/.config/margin/topics.json`. |
 | `osom pair <code>` | Exchanges a code from `zeroclaw gateway get-paircode --new` (run on the agent's host) for a device token. Release builds keep it in the macOS Keychain; dev builds keep it in `~/.config/margin/token-<host>` (readable only by you), so rebuilding never triggers a Keychain prompt. `ZEROCLAW_TOKEN` overrides both. |
 | `osom` (or `osom topics`) | The live window. `--open <topic\|today\|inbox>`, `--tab <name>` and `--doc <path>` choose where it starts. |

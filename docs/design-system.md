@@ -6,7 +6,7 @@ Margin's windows (the notebook, its comments, the Topics window) are built from 
 
 ## Principles
 
-These follow the product principles in `SPEC.md` §1.
+These follow the product principles in `crates/margin-editor/SPEC.md` §1.
 
 1. **Calm paper.** A warm page, thin rules, one accent (pine). No heavy chrome: a control appears where it is used, and quiet actions stay quiet (ghost and link buttons) until hovered.
 2. **One source for each look.** A colour, radius, space or type size is a token in `theme.css`. A button, card, row, checkbox or block of Markdown looks the same wherever it appears, because it is the same component.

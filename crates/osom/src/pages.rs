@@ -30,9 +30,9 @@ impl NoteStore for SpacePage {
     }
 }
 
-/// The notebook on a page of the space (or a demo page, kept nowhere). A
-/// component, so it keeps its state while the pane around it re-renders;
-/// the pane gives it a new key for each version of the page.
+/// The notebook on a page of the space. A component, so it keeps its state
+/// while the pane around it re-renders; the pane gives it a new key for each
+/// version of the page.
 #[component]
 pub(super) fn PageEditor(text: String, source: Option<PageSource>, options: NotebookOptions) -> Element {
     let store = use_hook(move || source.map(|page| Store::new(SpacePage(page))));
@@ -40,16 +40,13 @@ pub(super) fn PageEditor(text: String, source: Option<PageSource>, options: Note
 }
 
 /// A page of the space as it opens: at once from the pages read with the
-/// workspace (or the demo's), then the server's version; a newer one
-/// replaces it before you type. `None` until there is something to show.
+/// workspace, then the server's version; a newer one replaces it before you
+/// type. `None` until there is something to show.
 fn use_page(path: String) -> Signal<Option<Result<Page, String>>> {
     let ui = use_context::<Ui>();
     let mut opened = use_signal({
         let path = path.clone();
-        move || match ui.live() {
-            None => Some(demo::page(&path).map(|text| Page { path: path.clone(), text: text.into(), etag: None }).ok_or_else(|| "This demo document has no content.".to_string())),
-            Some(_) => ui.pages.peek().get(&path).cloned().map(Ok),
-        }
+        move || ui.pages.peek().get(&path).cloned().map(Ok)
     });
     use_hook(move || {
         let Some(live) = ui.live() else { return };
