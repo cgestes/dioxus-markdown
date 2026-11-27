@@ -61,7 +61,7 @@ On **Today**, **Key dates** shows the next three weeks of entries from the `Key 
 | `osom` (or `osom topics`) | The live window. `--open <topic\|today\|inbox>`, `--tab <name>` and `--doc <path>` choose where it starts. |
 | `osom comment-test <page> "<quote>" "<request>"` | Asks the comment agent about a passage of a page, as a new comment thread would, and prints its reply and proposed edit. Uses a throwaway session. |
 | `osom topics --print` | Lists topics with their reminder, discussion, question and doc counts. |
-| `scripts/bundle-osom.sh` | Builds `target/Osom.app`, the Topics window as a double-clickable macOS app. |
+| `scripts/bundle-osom.sh` | Builds `target/Osom.app`, the Topics window as a double-clickable macOS app. Its icon is drawn at build time by `scripts/osom-icon.swift`. |
 | `margin ui` | The design system's gallery: every component in every state, and Markdown as the editor crate draws it. `cargo test -p margin-ui ui_gallery_shot -- --ignored` paints the components to `target/ui-gallery.png`. [Design system](docs/design-system.md) |
 | `cargo test -p osom topics_shots -- --ignored` | Paints each view to `target/topics-shots`. Add `MARGIN_TOPICS_LIVE=1` for the live space. |
 
