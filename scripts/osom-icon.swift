@@ -1,6 +1,7 @@
-// Draws Osom's app icon: the topics rail as a paper card on the accent
-// squircle, with the agent's sparkle at its corner. Writes the iconset's
-// PNGs into the directory it is given; `scripts/osom-icon.sh` packs them.
+// Draws Osom's app icon: a New Zealand brushtail possum peeking over a
+// card of topics, on a sunrise squircle, with the agent's sparkle for a
+// star. Writes the iconset's PNGs into the directory it is
+// given; scripts/bundle-osom.sh packs them with iconutil.
 //
 //   swift scripts/osom-icon.swift OUT.iconset
 import AppKit
@@ -46,6 +47,10 @@ func rounded(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ r: CGFloa
     CGPath(roundedRect: CGRect(x: x, y: y, width: w, height: h), cornerWidth: r, cornerHeight: r, transform: nil)
 }
 
+func ellipse(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat) -> CGPath {
+    CGPath(ellipseIn: CGRect(x: cx - rx, y: cy - ry, width: 2 * rx, height: 2 * ry), transform: nil)
+}
+
 func draw(_ ctx: CGContext, px: Int) {
     let s = CGFloat(px) / canvas
     // Draw in a 1024-point space with y pointing down. Shadow offsets and
@@ -55,80 +60,142 @@ func draw(_ ctx: CGContext, px: Int) {
     func shadow(_ dy: CGFloat, _ blur: CGFloat, _ c: CGColor) {
         ctx.setShadow(offset: CGSize(width: 0, height: -dy * s), blur: blur * s, color: c)
     }
+    func fill(_ path: CGPath, _ c: CGColor) {
+        ctx.addPath(path)
+        ctx.setFillColor(c)
+        ctx.fillPath()
+    }
+    func gradient(_ path: CGPath, _ colors: [CGColor], from: CGPoint, to: CGPoint) {
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.clip()
+        let g = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: nil)!
+        ctx.drawLinearGradient(g, start: from, end: to, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        ctx.restoreGState()
+    }
     let space = CGColorSpace(name: CGColorSpace.sRGB)!
     let shape = squircle()
 
-    // The squircle, lit from the top left.
+    // The sky: a sunrise squircle, gold to coral.
     ctx.saveGState()
     shadow(10, 22, color(0x000000, 0.28))
-    ctx.addPath(shape)
-    ctx.setFillColor(color(0x4b4ac2))
-    ctx.fillPath()
+    fill(shape, color(0xff7d52))
     ctx.restoreGState()
-
     ctx.saveGState()
     ctx.addPath(shape)
     ctx.clip()
-    let bg = CGGradient(colorsSpace: space, colors: [color(0x8080ec), color(0x5b5bd6), color(0x37369a)] as CFArray, locations: [0, 0.45, 1])!
-    ctx.drawLinearGradient(bg, start: CGPoint(x: 220, y: 100), end: CGPoint(x: 804, y: 924), options: [])
-    let sheen = CGGradient(colorsSpace: space, colors: [color(0xffffff, 0.16), color(0xffffff, 0)] as CFArray, locations: [0, 1])!
-    ctx.drawLinearGradient(sheen, start: CGPoint(x: 512, y: 100), end: CGPoint(x: 512, y: 520), options: [])
+    let sky = CGGradient(colorsSpace: space, colors: [color(0xffcf5c), color(0xff9a4d), color(0xff5f6d)] as CFArray, locations: [0, 0.5, 1])!
+    ctx.drawLinearGradient(sky, start: CGPoint(x: 300, y: 100), end: CGPoint(x: 724, y: 924), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
 
-    // A second card behind, the rest of the topics.
+    // The agent's sparkle, a star over the possum's shoulder.
     ctx.saveGState()
-    ctx.translateBy(x: 482, y: 520)
-    ctx.rotate(by: -8 * .pi / 180)
-    ctx.addPath(rounded(-220, -236, 440, 472, 58))
-    ctx.setFillColor(color(0xffffff, 0.2))
-    ctx.fillPath()
+    shadow(0, 26, color(0xffffff, 0.7))
+    fill(sparkle(770, 236, 82), color(0xfff6e0))
     ctx.restoreGState()
+    gradient(sparkle(770, 236, 82), [color(0xffffff), color(0xfff3d6), color(0xffe2a8)], from: CGPoint(x: 720, y: 160), to: CGPoint(x: 820, y: 320))
+    fill(sparkle(842, 344, 26), color(0xfffaf0))
 
-    // The card: three topics, each a tile and two lines; the middle one open.
-    let (x0, y0, w, h): (CGFloat, CGFloat, CGFloat, CGFloat) = (262, 300, 440, 440)
+    // A brushtail possum peeking over the card: tall ears, a pointed pale
+    // snout, big night eyes, pink fingers on the card's edge, and the bushy
+    // black-tipped tail sweeping up behind it.
+    let fur = [color(0xb5ada6), color(0x908882), color(0x6f6862)]
+    let (x0, y0, w, h): (CGFloat, CGFloat, CGFloat, CGFloat) = (242, 676, 540, 204)
+    func tailPoint(_ t: CGFloat) -> CGPoint {
+        let (p0, p1, p2) = (CGPoint(x: 330, y: 830), CGPoint(x: 150, y: 830), CGPoint(x: 214, y: 540))
+        let u = 1 - t
+        return CGPoint(x: u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x, y: u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y)
+    }
     ctx.saveGState()
-    shadow(20, 44, color(0x14134a, 0.42))
-    ctx.addPath(rounded(x0, y0, w, h, 58))
-    ctx.setFillColor(color(0xfcfbf8))
-    ctx.fillPath()
+    shadow(10, 24, color(0x7a2a1a, 0.35))
+    for i in 0...40 {
+        let t = CGFloat(i) / 40
+        let p = tailPoint(t)
+        let r = 56 - 14 * t + 10 * sin(t * .pi)
+        fill(ellipse(p.x, p.y, r, r), t > 0.86 ? color(0x24201f) : color(0x5a534e))
+    }
     ctx.restoreGState()
-
-    let rows: [(tile: UInt32, title: CGFloat, hint: CGFloat)] = [
-        (0xcf8558, 210, 150), (0x5b5bd6, 180, 196), (0x3f9a6e, 222, 128),
-    ]
-    for (i, row) in rows.enumerated() {
-        let y = y0 + 52 + CGFloat(i) * 122
-        if i == 1 {
-            ctx.addPath(rounded(x0 + 22, y - 18, w - 44, 120, 30))
-            ctx.setFillColor(color(0xe9e8fb))
-            ctx.fillPath()
-        }
-        ctx.addPath(rounded(x0 + 50, y, 84, 84, 24))
-        ctx.setFillColor(color(row.tile))
-        ctx.fillPath()
-        ctx.addPath(rounded(x0 + 160, y + 12, row.title, 28, 14))
-        ctx.setFillColor(color(0x34322e))
-        ctx.fillPath()
-        ctx.addPath(rounded(x0 + 160, y + 54, row.hint, 20, 10))
-        ctx.setFillColor(color(0xc8c4bc))
-        ctx.fillPath()
+    for i in 0...40 {
+        let t = CGFloat(i) / 40
+        let p = tailPoint(t)
+        let r = 56 - 14 * t + 10 * sin(t * .pi)
+        fill(ellipse(p.x + 6, p.y - 8, r * 0.68, r * 0.68), t > 0.86 ? color(0x35302d) : color(0x7a726c))
     }
 
-    // The agent's sparkle, glowing over the card's corner.
+    for side: CGFloat in [-1, 1] {
+        ctx.saveGState()
+        ctx.translateBy(x: 512 + side * 150, y: 262)
+        ctx.rotate(by: side * 18 * .pi / 180)
+        gradient(ellipse(0, 0, 66, 116), fur, from: CGPoint(x: 0, y: -116), to: CGPoint(x: 0, y: 116))
+        fill(ellipse(0, 16, 38, 80), color(0xe6a1a0))
+        ctx.restoreGState()
+    }
+    let head = CGMutablePath()
+    head.addPath(ellipse(512, 440, 214, 178))
+    head.addPath(ellipse(512, 560, 128, 104))
     ctx.saveGState()
-    shadow(0, 34, color(0xffcf5a, 0.75))
-    ctx.addPath(sparkle(716, 306, 132))
-    ctx.setFillColor(color(0xffd66b))
-    ctx.fillPath()
+    shadow(14, 30, color(0x7a2a1a, 0.35))
+    fill(head, color(0x908882))
     ctx.restoreGState()
+    gradient(head, fur, from: CGPoint(x: 512, y: 262), to: CGPoint(x: 512, y: 664))
+    // The pale snout and cheeks.
     ctx.saveGState()
-    ctx.addPath(sparkle(716, 306, 132))
+    ctx.addPath(head)
     ctx.clip()
-    let gold = CGGradient(colorsSpace: space, colors: [color(0xfffaea), color(0xffd46a), color(0xf4ad2f)] as CFArray, locations: [0, 0.5, 1])!
-    ctx.drawLinearGradient(gold, start: CGPoint(x: 640, y: 180), end: CGPoint(x: 800, y: 440), options: [])
+    fill(ellipse(512, 590, 116, 104), color(0xeee7de))
+    fill(ellipse(412, 548, 70, 46), color(0xe2dad1))
+    fill(ellipse(612, 548, 70, 46), color(0xe2dad1))
     ctx.restoreGState()
-    ctx.addPath(sparkle(812, 446, 40))
-    ctx.setFillColor(color(0xfff1c4))
-    ctx.fillPath()
+    // Big night eyes in a soft dark mask.
+    for side: CGFloat in [-1, 1] {
+        let (x, y): (CGFloat, CGFloat) = (512 + side * 98, 446)
+        fill(ellipse(x, y + 4, 68, 64), color(0x4a4440, 0.38))
+        fill(ellipse(x, y, 52, 54), color(0x141216))
+        fill(ellipse(x + 16, y - 19, 17, 17), color(0xffffff, 0.95))
+        fill(ellipse(x - 17, y + 19, 7, 7), color(0xffffff, 0.55))
+    }
+    // A pink nose at the snout's tip, and whiskers.
+    let nose = CGMutablePath()
+    nose.move(to: CGPoint(x: 476, y: 600))
+    nose.addQuadCurve(to: CGPoint(x: 548, y: 600), control: CGPoint(x: 512, y: 576))
+    nose.addQuadCurve(to: CGPoint(x: 512, y: 644), control: CGPoint(x: 546, y: 632))
+    nose.addQuadCurve(to: CGPoint(x: 476, y: 600), control: CGPoint(x: 478, y: 632))
+    fill(nose, color(0xe0828f))
+    fill(ellipse(502, 606, 11, 7), color(0xffffff, 0.55))
+    ctx.setStrokeColor(color(0xf7f3ee, 0.75))
+    ctx.setLineWidth(4)
+    ctx.setLineCap(.round)
+    for side: CGFloat in [-1, 1] {
+        for (dy, reach) in [(CGFloat(-14), CGFloat(150)), (6, 160), (26, 140)] {
+            ctx.move(to: CGPoint(x: 512 + side * 64, y: 622 + dy * 0.4))
+            ctx.addQuadCurve(to: CGPoint(x: 512 + side * (64 + reach), y: 610 + dy * 1.6), control: CGPoint(x: 512 + side * (64 + reach * 0.5), y: 612 + dy))
+        }
+    }
+    ctx.strokePath()
+
+    // The card it holds: the topics, a tile and two lines each.
+    ctx.saveGState()
+    shadow(18, 40, color(0x7a2a1a, 0.45))
+    fill(rounded(x0, y0, w, h, 50), color(0xfcfbf8))
+    ctx.restoreGState()
+    let rows: [(tile: UInt32, title: CGFloat, hint: CGFloat)] = [(0xcf8558, 250, 170), (0x3f9a6e, 210, 200)]
+    for (i, row) in rows.enumerated() {
+        let y = y0 + 52 + CGFloat(i) * 84
+        fill(rounded(x0 + 54, y, 60, 60, 18), color(row.tile))
+        fill(rounded(x0 + 144, y + 8, row.title, 22, 11), color(0x34322e))
+        fill(rounded(x0 + 144, y + 40, row.hint, 16, 8), color(0xc8c4bc))
+    }
+    // Hands on the card's edge: grey palms, four pink fingers each.
+    for side: CGFloat in [-1, 1] {
+        let x = 512 + side * 128
+        ctx.saveGState()
+        shadow(6, 10, color(0x7a2a1a, 0.25))
+        gradient(ellipse(x, y0 - 6, 54, 34), [fur[0], fur[1]], from: CGPoint(x: x, y: y0 - 40), to: CGPoint(x: x, y: y0 + 28))
+        ctx.restoreGState()
+        for f in 0..<4 {
+            let fx = x - 36 + CGFloat(f) * 24
+            fill(ellipse(fx, y0 + 18, 11, 17), color(0xe9a5a6))
+        }
+    }
 
     ctx.restoreGState()
 }
